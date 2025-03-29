@@ -18,6 +18,15 @@
 #include "taf_pa_voicecall.h"
 #include "tafSvcIF.hpp"
 
+struct taf_pa_voicecall_CallInfo_t
+{
+    int8_t phoneId;
+    char destId[PA_MAX_DESTINATION_LEN_BYTE];
+    taf_pa_voicecall_dir_t direction;
+    taf_pa_voicecall_Ref_t reference;
+    le_dls_Link_t link;
+};
+
 #define MAX_INIT_TIMEOUT 5
 
 #define VoiceCallInfoConfFile "/tmp/.VoiceCallInfo"
@@ -853,7 +862,8 @@ le_result_t taf_pa_voicecall_Stop
         auto cbObj = std::make_shared<VoiceCallPAController::CommandCallback>(callMgr, reference, callback, contextPtr);
     
         if ((strncmp((*iCall)->getRemotePartyNumber().c_str(), callInfoPtr->destId, PA_MAX_DESTINATION_LEN_BYTE) == 0) &&
-            ((*iCall)->getPhoneId() == callInfoPtr->phoneId))
+            ((*iCall)->getPhoneId() == callInfoPtr->phoneId) &&
+            (pACtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfoPtr->direction))
         {
             if((*iCall)->getCallState() == telux::tel::CallState::CALL_INCOMING)
             {
@@ -903,7 +913,8 @@ le_result_t taf_pa_voicecall_Hold
         LE_INFO("Holding call status: %s", pACtrl->stateToStr((*iCall)->getCallState()));
 
         if ((strncmp((*iCall)->getRemotePartyNumber().c_str(), callInfoPtr->destId, PA_MAX_DESTINATION_LEN_BYTE) == 0) &&
-            ((*iCall)->getPhoneId() == callInfoPtr->phoneId))
+            ((*iCall)->getPhoneId() == callInfoPtr->phoneId) &&
+            (pACtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfoPtr->direction))
         {
             status = (*iCall)->hold(cbObj);
             if ((status == telux::common::Status::SUCCESS) && (cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS))
@@ -942,7 +953,8 @@ le_result_t taf_pa_voicecall_Resume
 
     for (auto iCall = std::begin(activeCall); iCall != std::end(activeCall); iCall++) {
         if ((strncmp((*iCall)->getRemotePartyNumber().c_str(), callInfoPtr->destId, PA_MAX_DESTINATION_LEN_BYTE) == 0) &&
-            ((*iCall)->getPhoneId() == callInfoPtr->phoneId))
+            ((*iCall)->getPhoneId() == callInfoPtr->phoneId) &&
+            (pACtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfoPtr->direction))
         {
             auto cbObj = std::make_shared<VoiceCallPAController::CommandCallback>(callMgr, reference, callback, contextPtr);
             status = (*iCall)->resume(cbObj);
@@ -984,7 +996,8 @@ le_result_t taf_pa_voicecall_Answer
     for (auto iCall = std::begin(activeCall); iCall != std::end(activeCall); iCall++)
     {
         if ((strncmp((*iCall)->getRemotePartyNumber().c_str(), callInfoPtr->destId, PA_MAX_DESTINATION_LEN_BYTE) == 0) &&
-            ((*iCall)->getPhoneId() == callInfoPtr->phoneId))
+            ((*iCall)->getPhoneId() == callInfoPtr->phoneId) &&
+            (pACtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfoPtr->direction))
         {
             auto cbObj = std::make_shared<VoiceCallPAController::CommandCallback>(callMgr, reference, callback, contextPtr);
             status = (*iCall)->answer(cbObj);
