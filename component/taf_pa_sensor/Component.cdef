@@ -1,0 +1,26 @@
+sources:
+{
+    taf_pa_sensor.cpp
+}
+
+cxxflags:
+{
+    -I$TELAF_ROOT/include
+    -I$TELAF_PA_DEFAULT/include
+    -ltelux_sensor
+}
+
+cflags:
+{
+    -I$TELAF_ROOT/include
+    -I$TELAF_PA_DEFAULT/include
+}
+
+requires:
+{
+    lib:
+    {
+        lib/libtelux_sensor.so
+    }
+
+}

@@ -29,6 +29,7 @@ args_sa525m=(
     "${CURDIR}/component/taf_pa_voicecall/"
     "${CURDIR}/component/taf_pa_keystore/"
     "${CURDIR}/component/taf_pa_fscrypt/"
+    "${CURDIR}/component/taf_pa_sensor/"
 )
 
 case "${TARGET}" in
