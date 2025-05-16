@@ -1,6 +1,6 @@
 /*
- *  Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
- *  SPDX-License-Identifier: BSD-3-Clause-Clear
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <cstring>
@@ -994,7 +994,7 @@ le_result_t taf_pa_voicecall_Stop
 
     auto activeCall = callMgr->getInProgressCalls();
     if (activeCall.size() == 0) {
-        LE_ERROR("No call is in progress");
+        LE_ERROR("Cannot found any valid call");
         return LE_NOT_FOUND;
     }
 
@@ -1005,6 +1005,13 @@ le_result_t taf_pa_voicecall_Stop
             ((*iCall)->getPhoneId() == callInfoPtr->phoneId) &&
             (pACtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfoPtr->direction))
         {
+            if ((*iCall)->getCallState() == telux::tel::CallState::CALL_ENDED)
+            {
+                LE_ERROR("Call for phone %d, dest: %s is already ended",
+                    callInfoPtr->phoneId, callInfoPtr->destId);
+                return LE_DUPLICATE;
+            }
+
             if((*iCall)->getCallState() == telux::tel::CallState::CALL_INCOMING)
             {
                 status = (*iCall)->reject(cbObj);
