@@ -1,6 +1,6 @@
 /*
- *  Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
- *  SPDX-License-Identifier: BSD-3-Clause-Clear
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
 #include <cstring>
@@ -23,6 +23,7 @@ struct taf_pa_voicecall_CallInfo_t
     int8_t phoneId;
     char destId[PA_MAX_DESTINATION_LEN_BYTE];
     taf_pa_voicecall_dir_t direction;
+    taf_pa_voicecall_termination_t termination;
     taf_pa_voicecall_Ref_t reference;
     le_dls_Link_t link;
 };
@@ -298,6 +299,10 @@ public:
 
     const char* stateToStr(telux::tel::CallState state);
 
+    le_result_t setTermination(taf_pa_voicecall_Ref_t reference, taf_pa_voicecall_termination_t termination);
+
+    taf_pa_voicecall_termination_t convertToPaTermination(telux::tel::CallEndCause endCause);
+
     taf_pa_voicecall_dir_t directionToPaDirection(telux::tel::CallDirection direction);
 
     taf_pa_voicecall_event_t stateToEvent(telux::tel::CallState state);
@@ -499,6 +504,121 @@ const char* VoiceCallPAController::stateToStr(telux::tel::CallState state)
     }
 }
 
+le_result_t VoiceCallPAController::setTermination(taf_pa_voicecall_Ref_t reference, taf_pa_voicecall_termination_t termination)
+{
+    taf_pa_voicecall_CallInfo_t* callInfoPtr = getCallInfo(reference);
+    if (callInfoPtr == NULL)
+    {
+        LE_ERROR("Cannot found call info from reference: %p", reference);
+        return LE_NOT_FOUND;
+    }
+
+    callInfoPtr->termination = termination;
+    return LE_OK;
+}
+
+taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(telux::tel::CallEndCause endCause)
+{
+    taf_pa_voicecall_termination_t termination = TAF_PA_VOICECALL_TERM_UNDEFINED;
+
+    switch(endCause) {
+        case telux::tel::CallEndCause::UNOBTAINABLE_NUMBER:
+        case telux::tel::CallEndCause::NUMBER_CHANGED:
+        case telux::tel::CallEndCause::DESTINATION_OUT_OF_ORDER:
+        case telux::tel::CallEndCause::INVALID_NUMBER_FORMAT:
+        case telux::tel::CallEndCause::INCOMPATIBLE_DESTINATION:
+        case telux::tel::CallEndCause::SIP_BAD_ADDRESS:
+            termination = TAF_PA_VOICECALL_TERM_UNOBTAINABLE_NUMBER;
+        break;
+
+        case telux::tel::CallEndCause::NO_ROUTE_TO_DESTINATION:
+        case telux::tel::CallEndCause::CHANNEL_UNACCEPTABLE:
+        case telux::tel::CallEndCause::RESP_TO_STATUS_ENQUIRY:
+        case telux::tel::CallEndCause::REQUESTED_FACILITY_NOT_SUBSCRIBED:
+        case telux::tel::CallEndCause::BEARER_CAPABILITY_NOT_AUTHORIZED:
+        case telux::tel::CallEndCause::BEARER_CAPABILITY_UNAVAILABLE:
+        case telux::tel::CallEndCause::SERVICE_OPTION_NOT_AVAILABLE:
+        case telux::tel::CallEndCause::BEARER_SERVICE_NOT_IMPLEMENTED:
+        case telux::tel::CallEndCause::REQUESTED_FACILITY_NOT_IMPLEMENTED:
+        case telux::tel::CallEndCause::SERVICE_OR_OPTION_NOT_IMPLEMENTED:
+        case telux::tel::CallEndCause::INVALID_TRANSACTION_IDENTIFIER:
+        case telux::tel::CallEndCause::USER_NOT_MEMBER_OF_CUG:
+        case telux::tel::CallEndCause::CALL_BARRED:
+        case telux::tel::CallEndCause::FDN_BLOCKED:
+        case telux::tel::CallEndCause::IMSI_UNKNOWN_IN_VLR:
+        case telux::tel::CallEndCause::IMEI_NOT_ACCEPTED:
+        case telux::tel::CallEndCause::DIAL_MODIFIED_TO_USSD:
+        case telux::tel::CallEndCause::DIAL_MODIFIED_TO_SS:
+        case telux::tel::CallEndCause::DIAL_MODIFIED_TO_DIAL:
+        case telux::tel::CallEndCause::OPERATOR_DETERMINED_BARRING:
+        case telux::tel::CallEndCause::NETWORK_OUT_OF_ORDER:
+            termination = TAF_PA_VOICECALL_TERM_NETWORK_FAIL;
+        break;
+
+        case telux::tel::CallEndCause::NORMAL:
+        case telux::tel::CallEndCause::NORMAL_UNSPECIFIED:
+            termination = TAF_PA_VOICECALL_TERM_NORMAL;
+        break;
+
+        case telux::tel::CallEndCause::BUSY:
+        case telux::tel::CallEndCause::NO_ANSWER_FROM_USER:
+        case telux::tel::CallEndCause::PREEMPTION:
+        case telux::tel::CallEndCause::FACILITY_REJECTED:
+        case telux::tel::CallEndCause::CONGESTION:
+        case telux::tel::CallEndCause::SWITCHING_EQUIPMENT_CONGESTION:
+        case telux::tel::CallEndCause::REQUESTED_CIRCUIT_OR_CHANNEL_NOT_AVAILABLE:
+        case telux::tel::CallEndCause::RESOURCES_UNAVAILABLE_OR_UNSPECIFIED:
+            termination = TAF_PA_VOICECALL_TERM_BUSY;
+        break;
+
+        case telux::tel::CallEndCause::CALL_REJECTED:
+            termination = TAF_PA_VOICECALL_TERM_REJECTED;
+        break;
+
+        case telux::tel::CallEndCause::NO_USER_RESPONDING:
+            termination = TAF_PA_VOICECALL_TERM_NORESPONSE;
+        break;
+
+        case telux::tel::CallEndCause::TEMPORARY_FAILURE:
+        case telux::tel::CallEndCause::ACCESS_INFORMATION_DISCARDED:
+        case telux::tel::CallEndCause::QOS_UNAVAILABLE:
+        case telux::tel::CallEndCause::INCOMING_CALLS_BARRED_WITHIN_CUG:
+        case telux::tel::CallEndCause::ACM_LIMIT_EXCEEDED:
+        case telux::tel::CallEndCause::ONLY_DIGITAL_INFORMATION_BEARER_AVAILABLE:
+        case telux::tel::CallEndCause::INVALID_TRANSIT_NW_SELECTION:
+        case telux::tel::CallEndCause::SEMANTICALLY_INCORRECT_MESSAGE:
+        case telux::tel::CallEndCause::INVALID_MANDATORY_INFORMATION:
+        case telux::tel::CallEndCause::MESSAGE_TYPE_NON_IMPLEMENTED:
+        case telux::tel::CallEndCause::MESSAGE_TYPE_NOT_COMPATIBLE_WITH_PROTOCOL_STATE:
+        case telux::tel::CallEndCause::INFORMATION_ELEMENT_NON_EXISTENT:
+        case telux::tel::CallEndCause::CONDITIONAL_IE_ERROR:
+        case telux::tel::CallEndCause::MESSAGE_NOT_COMPATIBLE_WITH_PROTOCOL_STATE:
+        case telux::tel::CallEndCause::RECOVERY_ON_TIMER_EXPIRED:
+        case telux::tel::CallEndCause::PROTOCOL_ERROR_UNSPECIFIED:
+        case telux::tel::CallEndCause::INTERWORKING_UNSPECIFIED:
+        case telux::tel::CallEndCause::CDMA_LOCKED_UNTIL_POWER_CYCLE:
+        case telux::tel::CallEndCause::CDMA_DROP:
+        case telux::tel::CallEndCause::CDMA_INTERCEPT:
+        case telux::tel::CallEndCause::CDMA_REORDER:
+        case telux::tel::CallEndCause::CDMA_SO_REJECT:
+        case telux::tel::CallEndCause::CDMA_RETRY_ORDER:
+        case telux::tel::CallEndCause::CDMA_ACCESS_FAILURE:
+        case telux::tel::CallEndCause::CDMA_PREEMPTED:
+        case telux::tel::CallEndCause::CDMA_NOT_EMERGENCY:
+        case telux::tel::CallEndCause::CDMA_ACCESS_BLOCKED:
+        case telux::tel::CallEndCause::ERROR_UNSPECIFIED:
+            termination = TAF_PA_VOICECALL_TERM_NETWORK_FAIL;
+        break;
+
+        default:
+            termination = TAF_PA_VOICECALL_TERM_UNDEFINED;
+        break;
+    }
+
+    LE_INFO("iCall end cause: %d, PA end cause: %d", (int)endCause, termination);
+    return termination;
+}
+
 taf_pa_voicecall_dir_t VoiceCallPAController::directionToPaDirection(telux::tel::CallDirection direction)
 {
     switch (direction)
@@ -689,6 +809,11 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
             pACtrl->directionToPaDirection(iCall->getCallDirection())
         );
 
+        if (state == telux::tel::CallState::CALL_ENDED)
+        {
+            pACtrl->setTermination(reference, pACtrl->convertToPaTermination(iCall->getCallEndCause()));
+        }
+
         controller_->eventListener_(reference, pACtrl->stateToEvent(state), controller_->eventListenerContext_);
     }
     else
@@ -810,6 +935,21 @@ le_result_t taf_pa_voicecall_GetCallDestination(taf_pa_voicecall_Ref_t reference
     return LE_NOT_FOUND;
 }
 
+le_result_t taf_pa_voicecall_GetCallTermination(taf_pa_voicecall_Ref_t reference, taf_pa_voicecall_termination_t *termination)
+{
+    auto pACtrl = VoiceCallPAController::getInstance();
+    taf_pa_voicecall_CallInfo_t* callInfoPtr = pACtrl->getCallInfo(reference);
+
+    if (callInfoPtr == NULL)
+    {
+        LE_ERROR("Cannot get call info from reference");
+        return LE_NOT_FOUND;
+    }
+
+    *termination = callInfoPtr->termination;
+    return LE_OK;
+}
+
 /* Implementation */
 le_result_t taf_pa_voicecall_Make
 (
@@ -854,7 +994,7 @@ le_result_t taf_pa_voicecall_Stop
 
     auto activeCall = callMgr->getInProgressCalls();
     if (activeCall.size() == 0) {
-        LE_ERROR("No call is in progress");
+        LE_ERROR("Cannot found any valid call");
         return LE_NOT_FOUND;
     }
 
@@ -865,6 +1005,13 @@ le_result_t taf_pa_voicecall_Stop
             ((*iCall)->getPhoneId() == callInfoPtr->phoneId) &&
             (pACtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfoPtr->direction))
         {
+            if ((*iCall)->getCallState() == telux::tel::CallState::CALL_ENDED)
+            {
+                LE_ERROR("Call for phone %d, dest: %s is already ended",
+                    callInfoPtr->phoneId, callInfoPtr->destId);
+                return LE_DUPLICATE;
+            }
+
             if((*iCall)->getCallState() == telux::tel::CallState::CALL_INCOMING)
             {
                 status = (*iCall)->reject(cbObj);
@@ -1074,7 +1221,6 @@ le_result_t taf_pa_voicecall_Swap
     LE_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfoPtr->phoneId, callInfoPtr->destId);
     return LE_NOT_FOUND;
 }
-
 
 le_result_t taf_pa_voicecall_RegisterEventListener
 (
