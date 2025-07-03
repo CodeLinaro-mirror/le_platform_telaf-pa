@@ -48,8 +48,6 @@ case "${TARGET}" in
                        -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
                        -i "${TELAF_ROOT}/interfaces/" ${comp}
             fi
-			
-			
         done
         ;;
     *)

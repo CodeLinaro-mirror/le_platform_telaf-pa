@@ -19,6 +19,7 @@ set(MODULE_LIST
     component/taf_pa_voicecall
     component/taf_pa_sms
     component/taf_pa_deviceinfo
+    component/taf_pa_time
 )
 
 foreach(module ${MODULE_LIST})
