@@ -971,12 +971,11 @@ le_result_t taf_pa_voicecall_Make
 
     if ((status == telux::common::Status::SUCCESS) && (errorCode == telux::common::ErrorCode::SUCCESS))
     {
-        LE_INFO("Success to make call");
+        LE_INFO("Success to make call for %s", callInfoPtr->destId);
         return LE_OK;
     }
 
-    LE_ERROR("Failed to make call, status: %d, error: %s", static_cast<int>(status),
-        pACtrl->paErrorToString(errorCode).c_str());
+    LE_ERROR("Failed to make call for %s, status: %d", callInfoPtr->destId, static_cast<int>(status));
     return LE_FAULT;
 }
 
@@ -1057,12 +1056,17 @@ le_result_t taf_pa_voicecall_Hold
 
     for (auto iCall = std::begin(activeCall); iCall != std::end(activeCall); iCall++) {
         auto cbObj = std::make_shared<VoiceCallPAController::CommandCallback>(callMgr, reference, callback, contextPtr);
-        LE_INFO("Holding call status: %s", pACtrl->stateToStr((*iCall)->getCallState()));
 
         if ((strncmp((*iCall)->getRemotePartyNumber().c_str(), callInfoPtr->destId, PA_MAX_DESTINATION_LEN_BYTE) == 0) &&
             ((*iCall)->getPhoneId() == callInfoPtr->phoneId) &&
             (pACtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfoPtr->direction))
         {
+            if ((*iCall)->getCallState() == telux::tel::CallState::CALL_ON_HOLD)
+            {
+                LE_INFO("This call is already held: %s", pACtrl->stateToStr((*iCall)->getCallState()));
+                return LE_DUPLICATE;
+            }
+
             status = (*iCall)->hold(cbObj);
             if ((status == telux::common::Status::SUCCESS) && (cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS))
             {
@@ -1247,13 +1251,13 @@ le_result_t VoiceCallPAController::initialize()
     callInfoRefMap_ = le_ref_CreateMap("taf_pa_voicecall_CallInfo_map", 10);
 
     auto& phoneFactory = telux::tel::PhoneFactory::getInstance();
-    std::promise<telux::common::ServiceStatus> promise;
+    auto promise = std::make_shared<std::promise<telux::common::ServiceStatus>>();
 
-    callManager_ = phoneFactory.getCallManager([&](telux::common::ServiceStatus status) {
+    callManager_ = phoneFactory.getCallManager([promise](telux::common::ServiceStatus status) {
         LE_INFO("Getting status: %d from call manager", static_cast<int>(status));
         if (status != telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
         {
-            promise.set_value(status);
+            promise->set_value(status);
         }
     });
 
@@ -1262,7 +1266,7 @@ le_result_t VoiceCallPAController::initialize()
         return LE_FAULT;
     }
 
-    auto initFuture = promise.get_future();
+    auto initFuture = promise->get_future();
     auto waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
     if (waitStatus == std::future_status::timeout) {
         LE_CRIT("*** ERROR - Timeout to get call manager ready");
