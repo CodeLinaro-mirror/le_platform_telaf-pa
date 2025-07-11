@@ -21,17 +21,32 @@ fi
 LOCAL_BUILD_DIR="${LEGATO_ROOT}/build/${TARGET}/telaf-pa"
 mkdir -p $LOCAL_BUILD_DIR; cd $LOCAL_BUILD_DIR
 
+stub_args_sa525m=(
+    "${CURDIR}/component/stub/taf_prop_keystore/"
+    "${CURDIR}/component/stub/taf_prop_fscrypt/"
+)
 args_sa525m=(
     "${CURDIR}/component/taf_pa_voicecall/"
+    "${CURDIR}/component/taf_pa_keystore/"
+    "${CURDIR}/component/taf_pa_fscrypt/"
 )
 
 case "${TARGET}" in
     "sa525m")
-        for ((i=0; i<${#args_sa525m[@]}; i++))
+        for ((i=0; i<${#stub_args_sa525m[@]} + ${#args_sa525m[@]}; i++))
         do
-            mkcomp ${LOCAL_MKCOMP_FLAGS} -t "${TARGET}" \
-                   -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
-                   -i "${TELAF_ROOT}/interfaces/" ${args_sa525m[$i]}
+            if [ $i -lt ${#stub_args_sa525m[@]} ]; then
+                comp=${stub_args_sa525m[$i]}
+                mkcomp ${LOCAL_MKCOMP_FLAGS} -t "${TARGET}" \
+                       -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
+                       -i "${TELAF_ROOT}/interfaces/" ${comp}
+            else
+                j=$((i - ${#stub_args_sa525m[@]}))
+                comp=${args_sa525m[$j]}
+                mkcomp ${LOCAL_MKCOMP_FLAGS} -t "${TARGET}" \
+                       -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
+                       -i "${TELAF_ROOT}/interfaces/" ${comp}
+            fi
         done
         ;;
     *)
@@ -39,4 +54,3 @@ case "${TARGET}" in
         exit 1
         ;;
 esac
-

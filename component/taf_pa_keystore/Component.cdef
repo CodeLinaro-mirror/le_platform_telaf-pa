@@ -1,0 +1,33 @@
+sources:
+{
+    taf_pa_keystore.c
+}
+
+cxxflags:
+{
+    -I$TELAF_ROOT/include
+    -I$TELAF_PA_DEFAULT/include
+    -I$TELAF_PA_DEFAULT/include/keyStore
+    -I$TELAF_PA/include/keyStore
+}
+
+cflags:
+{
+    -I$TELAF_ROOT/include
+    -I$TELAF_PA_DEFAULT/include
+    -I$TELAF_PA_DEFAULT/include/keyStore
+    -I$TELAF_PA/include/keyStore
+}
+
+requires:
+{
+    api:
+    {
+        taf_ks.api [types-only]
+    }
+}
+
+ldflags:
+{
+    -lComponent_taf_prop_keystore
+}
