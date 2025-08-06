@@ -494,11 +494,6 @@ void taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback
 
     TAF_ERROR_IF_RET_NIL(nullptr == iDataCall, "iDataCall is NULL, drop this event");
 
-    if (telux::common::ErrorCode::SUCCESS != errorCode)
-    {
-        LE_ERROR("Starting data session failed with error code: %d", TO_INT(errorCode));
-    }
-
     // Log the call data
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.LogDataCallInfo(iDataCall, __func__);
@@ -507,13 +502,51 @@ void taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback
     DataCallEventInfo_t eventInfo;
     taf::pa::data::PhoneId_e phoneId;
     eventInfo.slotId = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
+    telux::data::IpFamilyInfo IPv4Info = iDataCall->getIpv4Info();
+    telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
 
     auto &teluxPaData    = TafPaTeluxData::GetInstance();
     teluxPaData.PaGetPhoneIdFromSimSlotId(eventInfo.slotId, phoneId);
 
     eventInfo.phoneId    = phoneId;
     eventInfo.profileId  = static_cast<taf::pa::data::ProfileId_e>(iDataCall->getProfileId());
-    eventInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(iDataCall->getDataCallStatus());
+
+    eventInfo.maxRxBitRate = 0;
+    eventInfo.maxTxBitRate = 0;
+
+    if (telux::common::ErrorCode::SUCCESS != errorCode)
+    {
+        LE_ERROR("Starting data session failed with error code: %d", TO_INT(errorCode));
+        // Set the call status to DISCONNECTED
+        eventInfo.callStatus                  = DataCallStatus_e::DISCONNECTED;
+        eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
+        eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
+    }
+    else
+    {
+        /**
+         * In some cases, getDataCallStatus() returns NET_NO_NET even in success.
+         * Set status to NET_CONNECTING.
+        */
+        if (telux::data::DataCallStatus::NET_NO_NET == iDataCall->getDataCallStatus())
+        {
+            LE_WARN("TelSDK returned NET_NOT_NET");
+            eventInfo.callStatus                  = DataCallStatus_e::CONNECTING;
+            eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::CONNECTING;
+            eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::CONNECTING;
+        }
+        else
+        {
+            // Update status with TelSDK status.
+            eventInfo.callStatus                  = taf::pa::data::Utils::ConvertCallStatus(
+                                                                    iDataCall->getDataCallStatus());
+            eventInfo.ipv4DataCallInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(
+                                                                                IPv4Info.status);
+            eventInfo.ipv6DataCallInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(
+                                                                                IPv6Info.status);
+        }
+    }
+
     eventInfo.ipType     = taf::pa::data::Utils::ConvertIpType(iDataCall->getIpFamilyType());
 
     // Send the data call event info to registered clients
@@ -582,12 +615,16 @@ void taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback
     DataCallEventInfo_t eventInfo;
     taf::pa::data::PhoneId_e phoneId;
     eventInfo.slotId = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
+    telux::data::IpFamilyInfo IPv4Info = iDataCall->getIpv4Info();
+    telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     teluxPaData.PaGetPhoneIdFromSimSlotId(eventInfo.slotId, phoneId);
     eventInfo.phoneId = phoneId;
     eventInfo.profileId = static_cast<taf::pa::data::ProfileId_e>(iDataCall->getProfileId());
     eventInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(iDataCall->getDataCallStatus());
+    eventInfo.ipv4DataCallInfo.callStatus=taf::pa::data::Utils::ConvertCallStatus(IPv4Info.status);
+    eventInfo.ipv6DataCallInfo.callStatus=taf::pa::data::Utils::ConvertCallStatus(IPv6Info.status);
     eventInfo.ipType     = taf::pa::data::Utils::ConvertIpType(iDataCall->getIpFamilyType());
 
     // Send the data call event info to registered clients

@@ -54,6 +54,108 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::fillCallEndReason
     }
 }
 
+le_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
+(
+    const std::shared_ptr<telux::data::IDataCall> &dataCall,
+    telux::data::BitRateInfo &bitRate
+)
+{
+    telux::data::DataCallStatus datacallStatus = dataCall->getDataCallStatus();
+    // For debugging
+    void *rawPtr = static_cast<void *>(dataCall.get());
+
+    bitRate.maxRxRate = 0;
+    bitRate.maxTxRate = 0;
+
+    // Check if this IDataCall object exists in the map
+    {
+        // Use this block for RAII locking and unlocking
+        std::lock_guard<std::mutex> lock(listenerMtx_);
+        if (callStatusMap_.find(dataCall) == callStatusMap_.end())
+        {
+            LE_DEBUG("IDataCall %p not found in callStatusMap_", rawPtr);
+            // First call. Proceed to get the bit rate
+        }
+        else
+        {
+            LE_DEBUG("IDataCall %p found in callStatusMap_", rawPtr);
+            // Check if the data call status is the same or has changed.
+            if (callStatusMap_[dataCall] == datacallStatus)
+            {
+                LE_DEBUG("IDataCall %p data call status has not changed.", rawPtr);
+                return LE_DUPLICATE;
+            }
+        }
+    }
+
+    // Promise and future used for synchronization.
+    dataCallBitratePromise_ = std::promise<bool>();
+    std::future<bool> fut = dataCallBitratePromise_.get_future();
+    std::chrono::seconds span(dataCallBitRateCmdSpan_); // 1 seconds
+
+    // requestDataCallBitRate callback lambda
+    auto respCb = [&bitRate, this](telux::data::BitRateInfo &cbkBitRate,
+                                                            telux::common::ErrorCode errorCode)
+    {
+        SET_SDK_THREAD_NAME();
+        bool bResult = false;
+        if (telux::common::ErrorCode::SUCCESS == errorCode)
+        {
+            // Success
+            LE_DEBUG("maxRxRate: %" PRIu64 "", cbkBitRate.maxRxRate);
+            LE_DEBUG("maxTxRate: %" PRIu64 "", cbkBitRate.maxTxRate);
+            bitRate.maxRxRate = cbkBitRate.maxRxRate;
+            bitRate.maxTxRate = cbkBitRate.maxTxRate;
+            bResult = true;
+        }
+        else
+        {
+            LE_WARN("requestDataCallBitRateCb error: %d", static_cast<int>(errorCode));
+        }
+        if (bWaitingForDataCallBitratePromise_.load())
+        {
+            LE_DEBUG("dataCallBitratePromise_.set_value(%s)", bResult ? "true" :"false");
+            dataCallBitratePromise_.set_value(bResult);
+        }
+        else
+        {
+            LE_DEBUG("dataCallBitratePromise_.set_value() skipped");
+        }
+    };
+    // Mark that future is waiting for promise
+    bWaitingForDataCallBitratePromise_.store(true);
+    telux::common::Status status = dataCall->requestDataCallBitRate(respCb);
+    if (telux::common::Status::SUCCESS == status)
+    {
+        LE_DEBUG("requestDataCallBitRate SUCCESS. Wait for cbk");
+        std::future_status waitStatus = fut.wait_for(span);
+        if (std::future_status::timeout == waitStatus)
+        {
+            // Mark that future is not waiting for promise
+            bWaitingForDataCallBitratePromise_.store(false);
+            LE_ERROR("requestDataCallBitRate promise timeout");
+            return LE_TIMEOUT;
+        }
+        bool bFutResult;
+        FUTURE_GET_RET_VAL(fut, bFutResult, LE_FAULT);
+        if (bFutResult)
+        {
+            // Mark that future is not waiting for promise
+            bWaitingForDataCallBitratePromise_.store(false);
+            LE_DEBUG("requestDataCallBitRate SUCCESS");
+            return LE_OK;
+        }
+    }
+    else
+    {
+        // Mark that future is not waiting for promise
+        bWaitingForDataCallBitratePromise_.store(false);
+        LE_WARN("requestDataCallBitRate failed: %d", static_cast<int>(status));
+    }
+    LE_DEBUG("requestDataCallBitRate failed");
+    return LE_FAULT;
+}
+
 void taf::pa::data::TafPaTeluxDataConnectionListener::onDataCallInfoChanged
 (
     const std::shared_ptr<telux::data::IDataCall> &iDataCall
@@ -94,7 +196,7 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onDataCallInfoChanged
     }
 
     // Fill in IPv4 call information.
-    eventInfo.ipv4DataCallInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(IPv4Info.status);
+    eventInfo.ipv4DataCallInfo.callStatus=taf::pa::data::Utils::ConvertCallStatus(IPv4Info.status);
     if (telux::data::DataCallStatus::NET_CONNECTED    == IPv4Info.status ||
         telux::data::DataCallStatus::NET_RECONFIGURED == IPv4Info.status ||
         telux::data::DataCallStatus::NET_NEWADDR      == IPv4Info.status
@@ -117,7 +219,7 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onDataCallInfoChanged
     }
 
     // Fill in IPv6 call information.
-    eventInfo.ipv6DataCallInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(IPv6Info.status);
+    eventInfo.ipv6DataCallInfo.callStatus=taf::pa::data::Utils::ConvertCallStatus(IPv6Info.status);
     if (telux::data::DataCallStatus::NET_CONNECTED == IPv6Info.status ||
         telux::data::DataCallStatus::NET_RECONFIGURED == IPv6Info.status ||
         telux::data::DataCallStatus::NET_NEWADDR == IPv6Info.status)
@@ -146,50 +248,41 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onDataCallInfoChanged
         telux::data::DataCallStatus::NET_CONNECTED == IPv6Info.status)
     {
         LE_DEBUG("Get max data bit rate");
-        // Promise and future used for synchronization.
-        std::promise<bool> prom;
-        std::future<bool> fut = prom.get_future();
-
-        // requestDataCallBitRate callback lambda
-        auto respCb = [&eventInfo, &prom](telux::data::BitRateInfo &bitRate,
-                                       telux::common::ErrorCode errorCode)
+        telux::data::BitRateInfo bitRate;
+        if (LE_OK == updateBitRate(iDataCall, bitRate))
         {
-            if (telux::common::ErrorCode::SUCCESS == errorCode)
-            {
-                // Success
-                LE_DEBUG("maxRxRate: %" PRIu64 "", bitRate.maxRxRate);
-                LE_DEBUG("maxTxRate: %" PRIu64 "", bitRate.maxTxRate);
-                eventInfo.maxRxBitRate = bitRate.maxRxRate;
-                eventInfo.maxTxBitRate = bitRate.maxTxRate;
-                prom.set_value(true);
-            }
-            else
-            {
-                LE_WARN("requestDataCallBitRateCb error: %d", static_cast<int>(errorCode));
-                prom.set_value(true);
-            }
-        };
-        telux::common::Status status = iDataCall->requestDataCallBitRate(respCb);
-        if (telux::common::Status::SUCCESS == status)
-        {
-            LE_DEBUG("requestDataCallBitRate SUCCESS. Wait for cbk");
-            // Just to use our macro
-            bool bFutResult;
-            FUTURE_GET_RET_NIL(fut, bFutResult);
-            LE_UNUSED(bFutResult);
-        }
-        else
-        {
-            LE_WARN("requestDataCallBitRate failed: %d", static_cast<int>(status));
+            LE_DEBUG("maxRxRate: %" PRIu64 "", bitRate.maxRxRate);
+            LE_DEBUG("maxTxRate: %" PRIu64 "", bitRate.maxTxRate);
+            eventInfo.maxRxBitRate = bitRate.maxRxRate;
+            eventInfo.maxTxBitRate = bitRate.maxTxRate;
         }
     }
 
-    // Fill the data bearer technology.
+    // Fill the data bearer technology and update the IDataCall call status map.
     if (telux::data::DataCallStatus::NET_NO_NET != datacallStatus)
     {
         // TODO: getCurrentBearerTech() is deprecated. Update the Telux API.
         eventInfo.bearerTech = taf::pa::data::Utils::ConvertBearerTech(
                                                                 iDataCall->getCurrentBearerTech());
+        LE_DEBUG("Bearer tech obtained");
+
+        // For debugging
+        void *rawPtr = static_cast<void *>(iDataCall.get());
+        //Lock and updated call status in map
+        std::lock_guard<std::mutex> lock(listenerMtx_);
+        callStatusMap_[iDataCall] = datacallStatus;
+        LE_DEBUG("iDataCall(%p) updated in callStatusMap_. Size: %zu", rawPtr,
+                                                                        callStatusMap_.size());
+    }
+    else
+    {
+        // For debugging
+        void *rawPtr = static_cast<void *>(iDataCall.get());
+        // NET_NO_NET. iDataCall is not valid anymore. Lock and remove from map
+        std::lock_guard<std::mutex> lock(listenerMtx_);
+        callStatusMap_.erase(iDataCall);
+        LE_DEBUG("iDataCall(%p) removed from callStatusMap_. Size: %zu", rawPtr,
+                                                                        callStatusMap_.size());
     }
 
     // Send the data call event info to registered clients

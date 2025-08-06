@@ -24,6 +24,8 @@
 #include <map>
 #include <mutex>
 #include <future>
+#include <atomic>
+#include <chrono>
 
 namespace taf
 {
@@ -81,13 +83,25 @@ namespace data
 
     private:
         SlotId slotId_;
-        // Mutex declared static to have one mutex across all objects.
-        static std::mutex mtx_;
+        // Mutex
+        std::mutex listenerMtx_;
+        // Promise for getting data call bit rate
+        std::promise<bool> dataCallBitratePromise_;
+        std::atomic<bool> bWaitingForDataCallBitratePromise_ = {false};
+        const int dataCallBitRateCmdSpan_ = 1; // 1 second
 
+        // The current calls status of IDataCall objects
+        std::map<
+                std::shared_ptr<telux::data::IDataCall>, telux::data::DataCallStatus
+                > callStatusMap_;
+
+        // Functions
         void fillCallEndReason(const telux::common::DataCallEndReason&, DataCallEndReason_t &);
-
-        //Functions
-
+        le_result_t updateBitRate
+        (
+            const std::shared_ptr<telux::data::IDataCall> &dataCall,
+            telux::data::BitRateInfo &bitRate
+        );
     };
 
     class TafPaTeluxDataConnection
