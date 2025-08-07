@@ -26,7 +26,6 @@ stub_args_sa525m=(
     "${CURDIR}/component/stub/taf_prop_fscrypt/"
 )
 args_sa525m=(
-    "${CURDIR}/component/taf_pa_voicecall/"
     "${CURDIR}/component/taf_pa_keystore/"
     "${CURDIR}/component/taf_pa_fscrypt/"
     "${CURDIR}/component/taf_pa_sensor/"
@@ -49,6 +48,8 @@ case "${TARGET}" in
                        -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
                        -i "${TELAF_ROOT}/interfaces/" ${comp}
             fi
+			
+			
         done
         ;;
     *)
