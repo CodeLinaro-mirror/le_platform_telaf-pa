@@ -30,6 +30,11 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
 
 add_library(${TARGET_NAME} SHARED ${TAF_PA_NET_SOURCES})
 
+# link glib-2.0
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+target_link_libraries(${TARGET_NAME} PRIVATE PkgConfig::GLIB)
+
 set_target_properties(${TARGET_NAME} PROPERTIES
     VERSION ${LIBRARY_VERSION}
     SOVERSION ${LIBRARY_SOVERSION}
