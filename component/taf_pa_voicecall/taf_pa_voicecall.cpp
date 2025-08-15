@@ -528,6 +528,7 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::INVALID_NUMBER_FORMAT:
         case telux::tel::CallEndCause::INCOMPATIBLE_DESTINATION:
         case telux::tel::CallEndCause::SIP_BAD_ADDRESS:
+        case telux::tel::CallEndCause::NOT_REACHABLE:
             termination = TAF_PA_VOICECALL_TERM_UNOBTAINABLE_NUMBER;
         break;
 
@@ -572,6 +573,7 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         break;
 
         case telux::tel::CallEndCause::CALL_REJECTED:
+        case telux::tel::CallEndCause::SIP_REQUEST_CANCELLED:
             termination = TAF_PA_VOICECALL_TERM_REJECTED;
         break;
 
