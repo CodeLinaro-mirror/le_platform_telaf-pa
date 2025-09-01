@@ -17,10 +17,10 @@ set(CMAKE_INSTALL_RPATH "$ORIGIN:")
 set(MODULE_LIST
     component/taf_pa_common
     component/taf_pa_voicecall
+    component/taf_pa_sms
 )
 
 foreach(module ${MODULE_LIST})
     message(STATUS "Including module: ${module}")
     add_subdirectory(${module})
 endforeach()
-
