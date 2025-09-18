@@ -3,309 +3,330 @@
  *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "legato.h"
-#include "interfaces.h"
 #include <chrono>
 #include <mutex>
 #include <future>
-#include <memory>
-#include <time.h>
+#include <map>
+#include <algorithm>
+#include <thread>
+#include <bitset>
+
 #include "telux/sensor/SensorManager.hpp"
 #include "telux/common/CommonDefines.hpp"
 #include "telux/sensor/SensorDefines.hpp"
 #include "telux/sensor/SensorClient.hpp"
 #include "telux/sensor/SensorFactory.hpp"
+
 #include "taf_pa_sensor.hpp"
-#include "tafSvcIF.hpp"
 
 #define MAX_INIT_TIMEOUT 5
 #define SEC_TO_NANOS 1000000000
 
 using namespace telux::sensor;
 using namespace telux::common;
+using namespace tafpa::sensor;
 
-class SensorPAController{
+class ReusableIdGenerator {
 public:
-    static std::shared_ptr<SensorPAController> getInstance()
-    {
-        static std::shared_ptr<SensorPAController> instance(new SensorPAController());
-        return instance;
+    static constexpr size_t MAX_SENSOR_IDS = 64;
+    static constexpr taf_pa_sensor_SensorId INVALID_SENSOR_ID = 0;
+
+    ReusableIdGenerator() : idMask_() {
     }
 
-    std::shared_ptr<telux::sensor::ISensorManager> getSensorManager()
-    {
-        return sensorManager_;
+    taf_pa_sensor_SensorId acquireId() {
+        std::lock_guard<std::mutex> lock(mtx_);
+        for (size_t i = 0; i < MAX_SENSOR_IDS; ++i) {
+            if (!idMask_.test(i)) {
+                idMask_.set(i);
+                return static_cast<taf_pa_sensor_SensorId>(i + 1);
+            }
+        }
+        PA_ERROR("No free sensor IDs available. Maximum %zu IDs reached.", MAX_SENSOR_IDS);
+        return INVALID_SENSOR_ID;
     }
 
-    size_t getSensorListSize(){
-        return sList.size();
+    void releaseId(taf_pa_sensor_SensorId id) {
+        if (id == INVALID_SENSOR_ID || id > MAX_SENSOR_IDS) {
+            PA_ERROR("Attempted to release invalid sensor ID: %llu", id);
+            return;
+        }
+        std::lock_guard<std::mutex> lock(mtx_);
+        size_t index = static_cast<size_t>(id - 1);
+        if (!idMask_.test(index)) {
+            PA_DEBUG("Sensor ID %llu was already released or not in use.", id);
+        }
+        idMask_.reset(index);
+        PA_DEBUG("Sensor ID %llu released.", id);
     }
 
-    telux::sensor::SensorInfo getSensorInfo(int index){
-        return sList[index];
-    }
+private:
+    std::mutex mtx_;
+    std::bitset<MAX_SENSOR_IDS> idMask_;
+};
 
-    le_result_t initialize();
-    le_result_t MapStatus(telux::common::Status status);
-    le_result_t MapErrorCode(telux::common::ErrorCode errorCode);
-
+class SensorPAController {
+public:
     class PASensorClient : public telux::sensor::ISensorEventListener,
-        public std::enable_shared_from_this<PASensorClient> {
+                           public std::enable_shared_from_this<PASensorClient> {
     public:
-        PASensorClient(
-            std::shared_ptr<telux::sensor::ISensorClient> sensorClient_,bool isCalibrated_)
-            : sensorClient_(sensorClient_),isCalibrated_(isCalibrated_),isActivated_(false){}
+        PASensorClient(std::shared_ptr<telux::sensor::ISensorClient> sensorClient_, bool isCalibrated_)
+            : sensorClient_(sensorClient_), isCalibrated_(isCalibrated_), isActivated_(false),eventListenerContext_(),sensorId_(0) {}
+
         void onEvent(std::shared_ptr<std::vector<SensorEvent>> events) override;
         void onConfigurationUpdate(SensorConfiguration configuration) override;
-        void onSelfTestFailed();
+        void onSelfTestFailed() override;
+
         telux::common::Status Activate();
         telux::common::Status Deactivate();
         telux::common::Status Configure(SensorConfiguration config);
-        telux::common::Status SelfTest(taf_pa_sensor_Ref_t ref,
-            SelfTestType type,taf_pa_sensor_SelfTestResultCb callback,void* contextPtr);
+        telux::common::Status SelfTest(taf_pa_sensor_SensorId sensorId,
+                                      SelfTestType type,
+                                      taf_pa_sensor_SelfTestResultCb callback,
+                                      std::any context);
         void Init();
         void CleanUp();
 
-        le_result_t RegisterEventListener(taf_pa_sensor_Ref_t reference,
-            taf_pa_sensor_EventListener* listener,void *contextPtr)
-        {
-            reference_ = reference;
-            if (listener != nullptr)
-            {
-                eventListener_ = listener;
-            }
-            else
-            {
-                LE_ERROR("Listener is NULL");
-                return LE_NOT_FOUND;
-            }
+        pa_result_t RegisterEventListener(
+            taf_pa_sensor_SensorId sensorId,
+            taf_pa_sensor_EventListener* listener,
+            std::any context);
 
-            if (contextPtr != nullptr)
-            {
-                eventListenerContext = contextPtr;
-            }
-
-            return LE_OK;
-        }
-
-        bool isActivated(){
+        bool isActivated() {
             return isActivated_;
         }
 
     private:
         std::shared_ptr<telux::sensor::ISensorClient> sensorClient_;
         bool isCalibrated_;
-        bool isActivated_ ;
-        std::mutex mtx_ ;
-        taf_pa_sensor_EventListener* eventListener_ ;
-        taf_pa_sensor_Ref_t reference_;
-        void* eventListenerContext;
+        bool isActivated_;
+        std::mutex mtx_;
+        taf_pa_sensor_EventListener* eventListener_;
+        taf_pa_sensor_SensorId sensorId_;
+        std::any eventListenerContext_;
     };
 
-    struct taf_pa_sensor_client_t
-    {
-        std::shared_ptr<SensorPAController::PASensorClient> paSensorClient;
-        taf_pa_sensor_Ref_t reference;
-    };
+    static std::shared_ptr<SensorPAController> getInstance() {
+        static std::shared_ptr<SensorPAController> instance(new SensorPAController());
+        return instance;
+    }
 
-    taf_pa_sensor_client_t* GetClientPtr(taf_pa_sensor_Ref_t ref);
-    taf_pa_sensor_Ref_t CreateReference(const char* sensorName);
-    le_result_t DeleteReference(taf_pa_sensor_Ref_t ref);
+    std::shared_ptr<telux::sensor::ISensorManager> getSensorManager() {
+        return sensorManager_;
+    }
+
+    size_t getSensorListSize() {
+        return sList.size();
+    }
+
+    telux::sensor::SensorInfo getSensorInfo(int index) {
+        return sList[index];
+    }
+
+    pa_result_t initialize();
+    pa_result_t MapStatus(telux::common::Status status);
+    pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
+
+    std::shared_ptr<PASensorClient> GetClientPtr(taf_pa_sensor_SensorId id);
+    taf_pa_sensor_SensorId CreateSensorClient(const std::string& sensorName);
+    pa_result_t ReleaseSensorClient(taf_pa_sensor_SensorId id);
     SensorPAController() = default;
     ~SensorPAController() = default;
 private:
     SensorPAController(const SensorPAController&) = delete;
     SensorPAController& operator=(const SensorPAController&) = delete;
+
     std::shared_ptr<telux::sensor::ISensorManager> sensorManager_;
     std::vector<telux::sensor::SensorInfo> sList;
-    static std::shared_ptr<SensorPAController> instance;
-    le_mem_PoolRef_t sensorClientPool_ = nullptr;
-    le_ref_MapRef_t sensorClientRefMap_ = nullptr;
+
+    std::map<taf_pa_sensor_SensorId, std::shared_ptr<PASensorClient>> sensorClients_;
+    ReusableIdGenerator id_generator_;
 };
 
-
-
-LE_MEM_DEFINE_STATIC_POOL(taf_pa_sensor_Client_pool, 20,
-    sizeof(SensorPAController::taf_pa_sensor_client_t));
-
-le_result_t SensorPAController::initialize()
-{
+pa_result_t SensorPAController::initialize() {
     std::chrono::time_point<std::chrono::system_clock> startTime, endTime;
     startTime = std::chrono::system_clock::now();
     std::promise<telux::common::ServiceStatus> prom;
-    //  Get the SensorFactory and SensorManager instances.
+
     auto &sensorFactory = telux::sensor::SensorFactory::getInstance();
     sensorManager_ = sensorFactory.getSensorManager(
         [&prom](telux::common::ServiceStatus status) { prom.set_value(status); });
 
     if (!sensorManager_) {
-        LE_CRIT("Failed to get SensorManager");
-        return LE_FAULT;
+        PA_CRIT("Failed to get SensorManager");
+        return PA_FAULT;
     }
 
-    //  Check if sensor subsystem is ready
-    //  If sensor subsystem is not ready, wait for it to be ready
     telux::common::ServiceStatus managerStatus = sensorManager_->getServiceStatus();
     if (managerStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-        LE_INFO("Sensor subsystem is not ready, Please wait ...");
+        PA_INFO("Sensor subsystem is not ready, Please wait ...");
     }
 
     auto initFuture = prom.get_future();
     auto waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
-    //  Exit the application, if SDK is unable to initialize sensor subsystems
     if (waitStatus == std::future_status::timeout) {
-        LE_CRIT("*** ERROR - Timeout to get sensor manager ready");
-        return LE_TIMEOUT;
-    }
-    else{
+        PA_CRIT("*** ERROR - Timeout to get sensor manager ready");
+        return PA_TIMEOUT;
+    } else {
         managerStatus = initFuture.get();
         if (managerStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
             endTime = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsedTime = endTime - startTime;
-            LE_INFO("Elapsed Time for Sensor Subsystems to ready : %lf",elapsedTime.count());
+            PA_INFO("Elapsed Time for Sensor Subsystems to ready : %lf", elapsedTime.count());
         } else {
-            LE_CRIT("ERROR - Unable to initialize sensor subsystem");
-            return LE_FAULT;
+            PA_CRIT("ERROR - Unable to initialize sensor subsystem");
+            return PA_FAULT;
         }
     }
 
-    if(sensorManager_){
+    if (sensorManager_) {
         telux::common::Status status = sensorManager_->getAvailableSensorInfo(sList);
-        if(status != telux::common::Status::SUCCESS){
-            LE_ERROR("Unable to get available sensors list");
+        if (status != telux::common::Status::SUCCESS) {
+            PA_ERROR("Unable to get available sensors list");
+            return MapStatus(status);
         }
     }
-    sensorClientPool_ = le_mem_InitStaticPool(taf_pa_sensor_Client_pool, 20, sizeof(taf_pa_sensor_client_t));
-    sensorClientRefMap_ = le_ref_CreateMap("taf_pa_sensor_client_map", 20);
-    return LE_OK;
+    return PA_OK;
 }
 
 // register sensor for notifications
-void SensorPAController::PASensorClient::Init(){
+void SensorPAController::PASensorClient::Init() {
     sensorClient_->registerListener(shared_from_this());
 }
 
 // deregister sensor for notifications
-void SensorPAController::PASensorClient::CleanUp(){
+void SensorPAController::PASensorClient::CleanUp() {
     sensorClient_->deregisterListener(shared_from_this());
 }
 
-le_result_t SensorPAController::MapStatus(telux::common::Status status){
-    switch(status)
-    {
+pa_result_t SensorPAController::MapStatus(telux::common::Status status) {
+    switch (status) {
         case telux::common::Status::SUCCESS:
-            LE_INFO("Operation processed successfully");
-            return LE_OK;
+            PA_INFO("Operation processed successfully");
+            return PA_OK;
         case telux::common::Status::FAILED:
-            LE_INFO("Operation processing failed");
-            return LE_FAULT;
+            PA_INFO("Operation processing failed");
+            return PA_FAULT;
         case telux::common::Status::INVALIDPARAM:
-            LE_INFO("Input parameters are invalid");
-            return LE_BAD_PARAMETER;
+            PA_INFO("Input parameters are invalid");
+            return PA_BAD_PARAMETER;
         case telux::common::Status::NOTALLOWED:
-            LE_INFO("Operation not allowed");
-            return LE_NOT_PERMITTED;
+            PA_INFO("Operation not allowed");
+            return PA_NOT_PERMITTED;
         case telux::common::Status::NOTIMPLEMENTED:
-            LE_INFO("Feature not supported");
-            return LE_NOT_IMPLEMENTED ;
+            PA_INFO("Feature not supported");
+            return PA_NOT_IMPLEMENTED;
         case telux::common::Status::CONNECTIONLOST:
-            LE_INFO("Connection to Socket server lost");
-            return LE_NOT_FOUND;
+            PA_INFO("Connection to Socket server lost");
+            return PA_COMM_ERROR;
         case telux::common::Status::EXPIRED:
-            LE_INFO("Operation has expired");
-            return LE_TERMINATED;
+            PA_INFO("Operation has expired");
+            return PA_TIMEOUT;
         case telux::common::Status::NOTSUPPORTED:
-            LE_INFO("Not supported on target platform");
-            return LE_UNSUPPORTED;
+            PA_INFO("Not supported on target platform");
+            return PA_UNSUPPORTED;
         default:
-           return LE_FAULT;
+            return PA_FAULT;
     }
 }
 
-le_result_t SensorPAController::MapErrorCode(telux::common::ErrorCode errorCode)
-{
-    switch(errorCode)
-    {
+pa_result_t SensorPAController::MapErrorCode(telux::common::ErrorCode errorCode) {
+    switch (errorCode) {
         case telux::common::ErrorCode::SUCCESS:
-            LE_INFO("Operation processed successfully");
-            return LE_OK;
+            PA_INFO("Operation processed successfully");
+            return PA_OK;
         case telux::common::ErrorCode::GENERIC_FAILURE:
-            LE_ERROR("Operation processing failed");
-            return LE_FAULT;
+            PA_ERROR("Operation processing failed");
+            return PA_FAULT;
         case telux::common::ErrorCode::INVALID_ARGUMENTS:
-            LE_ERROR("Input parameters are invalid");
-            return LE_BAD_PARAMETER;
+            PA_ERROR("Input parameters are invalid");
+            return PA_BAD_PARAMETER;
         case telux::common::ErrorCode::OPERATION_NOT_ALLOWED:
-            LE_ERROR("Operation not allowed");
-            return LE_NOT_PERMITTED;
+            PA_ERROR("Operation not allowed");
+            return PA_NOT_PERMITTED;
         case telux::common::ErrorCode::TIMEOUT_ERROR:
-            LE_ERROR("TimeOut Error");
-            return LE_TIMEOUT;
+            PA_ERROR("TimeOut Error");
+            return PA_TIMEOUT;
         case telux::common::ErrorCode::INFO_UNAVAILABLE:
-            LE_ERROR("Information not available");
-            return LE_UNAVAILABLE;
+            PA_ERROR("Information not available");
+            return PA_UNAVAILABLE;
         case telux::common::ErrorCode::SUBSYSTEM_UNAVAILABLE:
-            LE_ERROR("Subsystem Not Available");
-            return LE_UNAVAILABLE;
+            PA_ERROR("Subsystem Not Available");
+            return PA_UNAVAILABLE;
         case telux::common::ErrorCode::REQUEST_NOT_SUPPORTED:
-            LE_ERROR("Request Not supported");
-            return LE_UNSUPPORTED;
+            PA_ERROR("Request Not supported");
+            return PA_UNSUPPORTED;
         default:
-           return LE_FAULT;
+            return PA_FAULT;
     }
 }
 
-//Create a reference for sensor
-taf_pa_sensor_Ref_t SensorPAController::CreateReference(const char* sensorName)
-{
-    auto paCtrl = SensorPAController::getInstance();
-    taf_pa_sensor_client_t *clientInfo = nullptr;
+// Create a client for a sensor and return a unique ID
+taf_pa_sensor_SensorId SensorPAController::CreateSensorClient(const std::string& sensorName) {
     std::shared_ptr<telux::sensor::ISensorClient> sdkSensorClient;
-    auto sensorMngr = paCtrl->getSensorManager();
-    telux::common::Status status = sensorMngr->getSensorClient(sdkSensorClient,sensorName);
-    if(status != telux::common::Status::SUCCESS){
-        LE_ERROR("Unable to create client for given sensor %s",sensorName);
-        return NULL;
+    auto sensorMngr = getSensorManager();
+    telux::common::Status status = sensorMngr->getSensorClient(sdkSensorClient, sensorName);
+    if (status != telux::common::Status::SUCCESS) {
+        PA_ERROR("Unable to create client for given sensor %s", sensorName.c_str());
+        return ReusableIdGenerator::INVALID_SENSOR_ID;
     }
-    SensorType type  = sdkSensorClient->getSensorInfo().type;
+
+    SensorType type = sdkSensorClient->getSensorInfo().type;
     bool isCalibrated = true;
-    if(type == telux::sensor::SensorType::GYROSCOPE_UNCALIBRATED ||
-        type == telux::sensor::SensorType::ACCELEROMETER_UNCALIBRATED){
+    if (type == telux::sensor::SensorType::GYROSCOPE_UNCALIBRATED ||
+        type == telux::sensor::SensorType::ACCELEROMETER_UNCALIBRATED) {
         isCalibrated = false;
     }
-    clientInfo =  (taf_pa_sensor_client_t*)le_mem_ForceAlloc(paCtrl->sensorClientPool_);
-    clientInfo->paSensorClient =
-        std::make_shared<SensorPAController::PASensorClient>(sdkSensorClient,isCalibrated);
-    clientInfo->reference =
-        (taf_pa_sensor_Ref_t)le_ref_CreateRef(paCtrl->sensorClientRefMap_ , (void*)clientInfo);
-    clientInfo->paSensorClient->Init();
-    return clientInfo->reference;
-}
 
-le_result_t SensorPAController::DeleteReference(taf_pa_sensor_Ref_t reference)
-{
-    LE_DEBUG("Delete Reference %p",reference);
-    TAF_ERROR_IF_RET_VAL(reference == NULL,LE_BAD_PARAMETER,"Null reference");
-    taf_pa_sensor_client_t* ptr =
-        (taf_pa_sensor_client_t*)le_ref_Lookup(sensorClientRefMap_ , reference);
-    TAF_ERROR_IF_RET_VAL(ptr == NULL, LE_BAD_PARAMETER, "Invalid para(null reference ptr)");
-    if(ptr->paSensorClient){
-        ptr->paSensorClient->CleanUp();
+    taf_pa_sensor_SensorId newId = id_generator_.acquireId();
+    if (newId == ReusableIdGenerator::INVALID_SENSOR_ID) {
+        PA_ERROR("Failed to acquire a new sensor ID for %s. Max IDs reached.", sensorName.c_str());
+        return ReusableIdGenerator::INVALID_SENSOR_ID;
     }
-    le_ref_DeleteRef(sensorClientRefMap_,reference);
-    le_mem_Release(ptr);
-    return LE_OK;
+
+    std::shared_ptr<PASensorClient> paSensorClient =
+        std::make_shared<PASensorClient>(sdkSensorClient, isCalibrated);
+
+    paSensorClient->Init();
+
+    sensorClients_[newId] = paSensorClient;
+    PA_DEBUG("Created sensor client for %s with ID %llu", sensorName.c_str(), newId);
+    return newId;
 }
 
-SensorPAController::taf_pa_sensor_client_t*
-    SensorPAController::GetClientPtr(taf_pa_sensor_Ref_t ref)
-{
-    taf_pa_sensor_client_t* clientPtr =
-        (taf_pa_sensor_client_t*)le_ref_Lookup(sensorClientRefMap_ , ref);
-    return clientPtr;
+pa_result_t SensorPAController::ReleaseSensorClient(taf_pa_sensor_SensorId id) {
+    PA_DEBUG("Release Sensor Client with ID %llu", id);
+    auto it = sensorClients_.find(id);
+    if (it == sensorClients_.end()) {
+        PA_ERROR("Invalid sensor ID (%llu) provided for release!", id);
+        return PA_BAD_PARAMETER;
+    }
+
+    if (it->second) {
+        if (it->second->isActivated()) {
+            it->second->Deactivate();
+        }
+        it->second->CleanUp();
+    }
+    sensorClients_.erase(it);
+
+    id_generator_.releaseId(id);
+
+    PA_INFO("Sensor client with ID %llu released.", id);
+    return PA_OK;
 }
 
-telux::common::Status SensorPAController::PASensorClient::Activate(){
+std::shared_ptr<SensorPAController::PASensorClient>
+SensorPAController::GetClientPtr(taf_pa_sensor_SensorId id) {
+    auto it = sensorClients_.find(id);
+    if (it != sensorClients_.end()) {
+        return it->second;
+    }
+    PA_ERROR("No sensor client found for ID %llu", id);
+    return nullptr;
+}
+
+telux::common::Status SensorPAController::PASensorClient::Activate() {
     telux::common::Status status = sensorClient_->activate();
     if (status == telux::common::Status::SUCCESS) {
         isActivated_ = true;
@@ -313,7 +334,7 @@ telux::common::Status SensorPAController::PASensorClient::Activate(){
     return status;
 }
 
-telux::common::Status SensorPAController::PASensorClient::Deactivate(){
+telux::common::Status SensorPAController::PASensorClient::Deactivate() {
     telux::common::Status status = sensorClient_->deactivate();
     if (status == telux::common::Status::SUCCESS) {
         isActivated_ = false;
@@ -321,148 +342,133 @@ telux::common::Status SensorPAController::PASensorClient::Deactivate(){
     return status;
 }
 
-telux::common::Status SensorPAController::PASensorClient::Configure(SensorConfiguration config)
-{
+telux::common::Status SensorPAController::PASensorClient::Configure(SensorConfiguration config) {
     telux::common::Status status = sensorClient_->configure(config);
     return status;
 }
 
-telux::common::Status SensorPAController::PASensorClient::SelfTest(taf_pa_sensor_Ref_t ref,
-    SelfTestType type,taf_pa_sensor_SelfTestResultCb callback,void* contextPtr){
-    auto promisePtr = std::make_shared<std::promise<le_result_t>>();
+telux::common::Status SensorPAController::PASensorClient::SelfTest(
+    taf_pa_sensor_SensorId sensorId,
+    SelfTestType type,
+    taf_pa_sensor_SelfTestResultCb callback,
+    std::any context)
+{
     auto paCtrl = SensorPAController::getInstance();
-    auto timestamp = std::make_shared<uint64_t>(0);
-    //Sdk Callback
-    auto cb1 = [promisePtr,timestamp,&paCtrl](telux::common::ErrorCode error,
-        SelfTestResultParams selfTestResultParams) {
-        try{
+    auto cb = [sensorId,callback,context,paCtrl](telux::common::ErrorCode error,
+        SelfTestResultParams selfTestResultParams){
+            pa_result_t result;
+            uint64_t timestamp=0;
             if(error == telux::common::ErrorCode::SUCCESS) {
-                *timestamp = selfTestResultParams.timestamp_;
+                timestamp = selfTestResultParams.timestamp_;
                 if(selfTestResultParams.sensorResultType_ == SensorResultType::CURRENT){
-                    promisePtr->set_value(LE_OK);
+                    result = PA_OK;
                 }
                 else{
-                    promisePtr->set_value(LE_BUSY);
+                    result = PA_BUSY;
                 }
             }
             else{
-                le_result_t res = paCtrl->MapErrorCode(error);
-                promisePtr->set_value(res);
+                result = paCtrl->MapErrorCode(error);
             }
-        }
-        catch (const std::future_error& e)
-        {
-            LE_ERROR("Future error in callback: %s", e.what());
-        }
-        catch (const std::exception& e)
-        {
-            LE_ERROR("Exception in callback: %s", e.what());
-        }
-        catch (...)
-        {
-            LE_ERROR("Unknown error in self test callback.");
-        }
-    };
+            if(callback){
+                callback(sensorId,result,timestamp,context);
+            }
+        };
     telux::common::Status status = telux::common::Status::FAILED;
-    status =  sensorClient_->selfTest(type,cb1);
-    if(status == telux::common::Status::SUCCESS){
-        auto futResult = promisePtr->get_future();
-        if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
-            == std::future_status::ready){
-            le_result_t selfResult = futResult.get();
-            if(callback){
-                callback(ref,selfResult,*timestamp,contextPtr);
-            }
-        }else{
-            if(callback){
-                callback(ref,LE_TIMEOUT,0,contextPtr);
-            }
-            LE_ERROR("Timeout waiting for result..");
-        }
-    }
+    status =  sensorClient_->selfTest(type,cb);
     return status;
 }
 
-//Create a reference for sensor
-taf_pa_sensor_Ref_t taf_pa_sensor_CreateReference(const char* sensorName)
-{
+taf_pa_sensor_SensorId tafpa::sensor::taf_pa_sensor_GetSensorClient(const std::string& sensorName) {
     auto paCtrl = SensorPAController::getInstance();
-    return paCtrl->CreateReference(sensorName);
+    return paCtrl->CreateSensorClient(sensorName);
 }
 
-//Return the sensor Information
-le_result_t taf_pa_sensor_GetSensorInfo(int8_t index,taf_pa_sensor_basicInfo_t& basicInfo,
-    taf_pa_sensor_configInfo_t& configInfo,taf_pa_sensor_capabilities_t& Capabilities)
-{
+pa_result_t tafpa::sensor::taf_pa_sensor_ReleaseSensorClient(taf_pa_sensor_SensorId sensorId) {
     auto paCtrl = SensorPAController::getInstance();
-    if(index >= static_cast<int8_t>(paCtrl->getSensorListSize())){
-        return LE_OUT_OF_RANGE;
+    return paCtrl->ReleaseSensorClient(sensorId);
+}
+
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_GetSensorInfo(
+    int8_t index,
+    taf_pa_sensor_BasicInfo& basicInfo,
+    taf_pa_sensor_ConfigInfo& configInfo,
+    taf_pa_sensor_Capabilities& Capabilities) {
+
+    auto paCtrl = SensorPAController::getInstance();
+    if (index < 0 || static_cast<size_t>(index) >= paCtrl->getSensorListSize()) {
+        PA_ERROR("Sensor index %d is out of range (max %zu)", index, paCtrl->getSensorListSize());
+        return PA_OUT_OF_RANGE;
     }
+
     telux::sensor::SensorInfo sInfo = paCtrl->getSensorInfo(index);
     basicInfo.id = sInfo.id;
     basicInfo.version = sInfo.version;
-    snprintf(basicInfo.sensorName,sizeof(basicInfo.sensorName),
-        "%s",sInfo.name.c_str());
-    snprintf(basicInfo.vendorName,sizeof(basicInfo.vendorName),
-        "%s",sInfo.vendor.c_str());
-    // Add bounds checking for sampling rates
-    size_t maxRates = sizeof(configInfo.samplingRate) / sizeof(configInfo.samplingRate[0]);
-    size_t ratesToCopy = std::min(sInfo.samplingRates.size(), maxRates);
-    for(size_t j=0; j < ratesToCopy; j++){
-        configInfo.samplingRate[j] = sInfo.samplingRates[j];
-    }
-    configInfo.sampleRateListSize = ratesToCopy;
+    basicInfo.sensorName = sInfo.name;
+    basicInfo.vendorName = sInfo.vendor;
+
+    configInfo.samplingRateList = sInfo.samplingRates;
     configInfo.maxSamplingRate = sInfo.maxSamplingRate;
     configInfo.minBatchCount = sInfo.minBatchCountSupported;
     configInfo.maxBatchCount = sInfo.maxBatchCountSupported;
+
     Capabilities.range = sInfo.range;
     Capabilities.resolution = sInfo.resolution;
     Capabilities.maxRange = sInfo.maxRange;
+
     telux::sensor::SensorType type = sInfo.type;
-    if(type == telux::sensor::SensorType::ACCELEROMETER ||
-        type == telux::sensor::SensorType::ACCELEROMETER_UNCALIBRATED){
-        basicInfo.sensorType = taf_pa_sensor_type_t::TAF_PA_SENSOR_ACCELEROMETER;
-    } else if(type == telux::sensor::SensorType::GYROSCOPE ||
-        type == telux::sensor::SensorType::GYROSCOPE_UNCALIBRATED) {
-        basicInfo.sensorType = taf_pa_sensor_type_t::TAF_PA_SENSOR_GYROSCOPE;
+    if (type == telux::sensor::SensorType::ACCELEROMETER ||
+        type == telux::sensor::SensorType::ACCELEROMETER_UNCALIBRATED) {
+        basicInfo.sensorType = taf_pa_sensor_SensorType::ACCELEROMETER;
+    } else if (type == telux::sensor::SensorType::GYROSCOPE ||
+               type == telux::sensor::SensorType::GYROSCOPE_UNCALIBRATED) {
+        basicInfo.sensorType = taf_pa_sensor_SensorType::GYROSCOPE;
     } else {
-        basicInfo.sensorType = taf_pa_sensor_type_t::TAF_PA_SENSOR_INVALID;
+        basicInfo.sensorType = taf_pa_sensor_SensorType::INVALID;
     }
-    return LE_OK;
+    return PA_OK;
 }
 
-//Set the mounting angle of IMU
-le_result_t taf_pa_sensor_SetEulerAngle(taf_pa_sensor_Ref_t reference,
-    double pitch,double roll, double yaw){
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_SetEulerAngle(
+    taf_pa_sensor_SensorId sensorId,
+    double pitch,
+    double roll,
+    double yaw) {
+
     auto paCtrl = SensorPAController::getInstance();
-    auto sensorMngr =  paCtrl->getSensorManager();
-    Status status = telux::common::Status::FAILED;
+    auto sensorMngr = paCtrl->getSensorManager();
+
     EulerAngleConfig eulerAngleConfig;
     eulerAngleConfig.pitch = pitch;
     eulerAngleConfig.roll = roll;
     eulerAngleConfig.yaw = yaw;
-    status =  sensorMngr->setEulerAngleConfig(eulerAngleConfig);
-    if(status != telux::common::Status::SUCCESS){
-        LE_ERROR("Not able to set euler angle with status code %d",static_cast<int>(status));
-        return LE_FAULT;
+
+    Status status = sensorMngr->setEulerAngleConfig(eulerAngleConfig);
+    if (status != telux::common::Status::SUCCESS) {
+        PA_ERROR("Not able to set euler angle with status code %d", static_cast<int>(status));
+        return paCtrl->MapStatus(status);
     }
-    return LE_OK;
+    return PA_OK;
 }
 
-//Activate the sensor for given configuration
-le_result_t taf_pa_sensor_Activate(taf_pa_sensor_Ref_t reference,double sampleRate,
-    uint32_t batchCount,bool isRotated)
-{
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Activate(
+    taf_pa_sensor_SensorId sensorId,
+    double sampleRate,
+    uint32_t batchCount,
+    bool isRotated) {
+
     auto paCtrl = SensorPAController::getInstance();
-    SensorPAController::taf_pa_sensor_client_t* clientPtr = paCtrl->GetClientPtr(reference);
-    TAF_ERROR_IF_RET_VAL(clientPtr == NULL, LE_FAULT,
-        "Invalid reference (%p) provided!",clientPtr);
-    TAF_ERROR_IF_RET_VAL(clientPtr->paSensorClient == NULL, LE_FAULT,
-        "Invalid reference for sensor Client");
-    if(clientPtr->paSensorClient->isActivated()){
-        LE_ERROR("Sensor Already activated!!");
-        return LE_UNAVAILABLE;
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
     }
+
+    if (clientPtr->isActivated()) {
+        PA_ERROR("Sensor with ID %llu already activated!", sensorId);
+        return PA_UNAVAILABLE;
+    }
+
     SensorConfiguration s;
     s.samplingRate = sampleRate;
     s.batchCount = batchCount;
@@ -470,177 +476,185 @@ le_result_t taf_pa_sensor_Activate(taf_pa_sensor_Ref_t reference,double sampleRa
     s.validityMask.set(SensorConfigParams::SAMPLING_RATE);
     s.validityMask.set(SensorConfigParams::BATCH_COUNT);
     s.validityMask.set(SensorConfigParams::ROTATE);
-    telux::common::Status status = clientPtr->paSensorClient->Configure(s);
-    if(status != telux::common::Status::SUCCESS){
-        LE_DEBUG("Sensor Configuration failed with status code %d",static_cast<int>(status));
-        return LE_FAULT;
+
+    telux::common::Status status = clientPtr->Configure(s);
+    if (status != telux::common::Status::SUCCESS) {
+        PA_ERROR("Sensor Configuration failed for ID %llu with status code %d", sensorId, static_cast<int>(status));
+        return paCtrl->MapStatus(status);
     }
-    LE_INFO("Sensor Configuration done for %p",clientPtr);
-    le_thread_Sleep(1);
-    status = clientPtr->paSensorClient->Activate();
-    if(status != telux::common::Status::SUCCESS){
-        LE_DEBUG("Sensor activation failed with status code %d",static_cast<int>(status));
-        return LE_FAULT;
+    PA_INFO("Sensor Configuration done for ID %llu", sensorId);
+
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    status = clientPtr->Activate();
+    if (status != telux::common::Status::SUCCESS) {
+        PA_ERROR("Sensor activation failed for ID %llu with status code %d", sensorId, static_cast<int>(status));
+        return paCtrl->MapStatus(status);
     }
-    LE_INFO("Sensor Activation done for %p",clientPtr);
-    return LE_OK;
+    PA_INFO("Sensor Activation done for ID %llu", sensorId);
+    return PA_OK;
 }
 
-//Deactivate the sensor
-le_result_t taf_pa_sensor_Deactivate(taf_pa_sensor_Ref_t reference)
-{
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Deactivate(taf_pa_sensor_SensorId sensorId) {
     auto paCtrl = SensorPAController::getInstance();
-    SensorPAController::taf_pa_sensor_client_t* clientPtr = paCtrl->GetClientPtr(reference);
-    TAF_ERROR_IF_RET_VAL(clientPtr == NULL, LE_FAULT,
-        "Invalid reference (%p) provided!",clientPtr);
-    TAF_ERROR_IF_RET_VAL(clientPtr->paSensorClient == NULL, LE_FAULT,
-        "Invalid reference for sensor Client");
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
+    }
 
-    if(!clientPtr->paSensorClient->isActivated()){
-        LE_ERROR("Sensor Already deactivated!!");
-        return LE_UNAVAILABLE;
+    if (!clientPtr->isActivated()) {
+        PA_ERROR("Sensor with ID %llu already deactivated!", sensorId);
+        return PA_UNAVAILABLE;
     }
-    telux::common::Status status = clientPtr->paSensorClient->Deactivate();
-    if(status != telux::common::Status::SUCCESS){
-        LE_DEBUG("Sensor Deactivation failed with status code %d",static_cast<int>(status));
-        return LE_FAULT;
+
+    telux::common::Status status = clientPtr->Deactivate();
+    if (status != telux::common::Status::SUCCESS) {
+        PA_ERROR("Sensor Deactivation failed for ID %llu with status code %d", sensorId, static_cast<int>(status));
+        return paCtrl->MapStatus(status);
     }
-    LE_INFO("Sensor Deactivation done for %p",clientPtr);
-    return LE_OK;
+    PA_INFO("Sensor Deactivation done for ID %llu", sensorId);
+    return PA_OK;
 }
 
-//Perform Self Test for given Sensor Ref
-le_result_t taf_pa_sensor_SelfTest(taf_pa_sensor_Ref_t reference,taf_pa_sensor_testmode_t mode,
-    taf_pa_sensor_SelfTestResultCb callback,void* contextPtr)
-{
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_SelfTest(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_SelfTestMode mode,
+    taf_pa_sensor_SelfTestResultCb callback,
+    std::any context) {
+
     auto paCtrl = SensorPAController::getInstance();
-    SensorPAController::taf_pa_sensor_client_t* clientPtr = paCtrl->GetClientPtr(reference);
-    TAF_ERROR_IF_RET_VAL(clientPtr == NULL, LE_FAULT,
-        "Invalid reference (%p) provided!",clientPtr);
-    TAF_ERROR_IF_RET_VAL(clientPtr->paSensorClient == NULL, LE_FAULT,
-        "Invalid reference for sensor Client");
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
+    }
+
     SelfTestType type;
-    if(mode == TAF_PA_SENSOR_POSITIVE){
-        type  = SelfTestType::POSITIVE;
+    switch (mode) {
+        case taf_pa_sensor_SelfTestMode::POSITIVE:
+            type = SelfTestType::POSITIVE;
+            break;
+        case taf_pa_sensor_SelfTestMode::NEGATIVE:
+            type = SelfTestType::NEGATIVE;
+            break;
+        case taf_pa_sensor_SelfTestMode::BOTH:
+        default:
+            type = SelfTestType::ALL;
+            break;
     }
-    else if(mode == TAF_PA_SENSOR_NEGATIVE){
-        type  = SelfTestType::NEGATIVE;
-    }
-    else{
-        type = SelfTestType::ALL;
-    }
-    telux::common::Status status =
-        clientPtr->paSensorClient->SelfTest(reference,type,callback,contextPtr);
+
+    telux::common::Status status = clientPtr->SelfTest(sensorId, type, callback, context);
     return paCtrl->MapStatus(status);
 }
 
-//Registered the Event Listener
-le_result_t taf_pa_sensor_RegisterListener(taf_pa_sensor_Ref_t reference,
-    taf_pa_sensor_EventListener* eventListener,void *contextPtr)
-{
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_RegisterListener(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_EventListener* eventListener,
+    std::any context) {
+
     auto paCtrl = SensorPAController::getInstance();
-    SensorPAController::taf_pa_sensor_client_t* clientPtr = paCtrl->GetClientPtr(reference);
-    TAF_ERROR_IF_RET_VAL(clientPtr == NULL, LE_FAULT,
-        "Invalid reference (%p) provided!",clientPtr);
-    TAF_ERROR_IF_RET_VAL(clientPtr->paSensorClient == NULL, LE_FAULT,
-        "Invalid reference for sensor Client");
-    if(clientPtr->paSensorClient->RegisterEventListener(reference,eventListener,contextPtr) == LE_OK){
-        LE_INFO("Register Event Listenr successfully");
-        return LE_OK;
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
     }
-    LE_ERROR("Failed to register event listener");
-    return LE_FAULT;
+
+    pa_result_t result = clientPtr->RegisterEventListener(sensorId, eventListener, context);
+    if (result == PA_OK) {
+        PA_INFO("Register Event Listener successfully for ID %llu", sensorId);
+        return PA_OK;
+    }
+    PA_ERROR("Failed to register event listener for ID %llu", sensorId);
+    return PA_FAULT;
 }
 
-//Report Sensor Event
-void SensorPAController::PASensorClient::onEvent(std::shared_ptr<std::vector<SensorEvent>> events)
-{
-    std::lock_guard<std::mutex> lock(mtx_);
-    int n = events->size();
-    taf_pa_sensor_event_t* paEvent = new taf_pa_sensor_event_t[n];
-    for(int i=0;i<n;i++){
-        paEvent[i].timestamp = (*events)[i].timestamp;
-        if(!isCalibrated_){
-            paEvent[i].x = (*events)[i].uncalibrated.data.x;
-            paEvent[i].y = (*events)[i].uncalibrated.data.y;
-            paEvent[i].z = (*events)[i].uncalibrated.data.z;
-            paEvent[i].xb = (*events)[i].uncalibrated.bias.x;
-            paEvent[i].yb = (*events)[i].uncalibrated.bias.y;
-            paEvent[i].zb = (*events)[i].uncalibrated.bias.z;
-        }
-        else{
-            paEvent[i].x = (*events)[i].calibrated.x;
-            paEvent[i].y = (*events)[i].calibrated.y;
-            paEvent[i].z = (*events)[i].calibrated.z;
-            paEvent[i].xb = 0;
-            paEvent[i].yb = 0;
-            paEvent[i].zb = 0;
-        }
-    }
-
-    if(eventListener_ && eventListener_->onEvent){
-        eventListener_->onEvent(reference_,paEvent,n,eventListenerContext);
-    }
-    else{
-        LE_ERROR("unable to find event Listener for onEvent");
-    }
-}
-
-//Report configuration for which sensor is configured.
-void SensorPAController::PASensorClient::onConfigurationUpdate(SensorConfiguration configuration)
-{
-    if(sensorClient_){
-        LE_INFO("%s is configured for :[%f %d %d]",sensorClient_->getSensorInfo().name.c_str(),
-        configuration.samplingRate,configuration.batchCount,
-        static_cast<int>(configuration.isRotated));
-    }
-    else{
-        LE_ERROR("SensorClient null");
-    }
-}
-
-//Report if voluntary self test failed on suspend
-void SensorPAController::PASensorClient::onSelfTestFailed()
-{
-    timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    uint64_t timestamp = (uint64_t)ts.tv_sec * SEC_TO_NANOS + (uint64_t)ts.tv_nsec;
-    if(eventListener_ && eventListener_->onSelfTestFailed){
-        eventListener_->onSelfTestFailed(reference_,timestamp,eventListenerContext);
-    }
-    else{
-        LE_ERROR("Not able to find event Listener for onSelfTestFailed");
-    }
-}
-
-le_result_t taf_pa_sensor_DeleteReference(taf_pa_sensor_Ref_t reference)
-{
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Init(int8_t& listSize) {
     auto paCtrl = SensorPAController::getInstance();
-    le_result_t res = paCtrl->DeleteReference(reference);
-    if(res == LE_OK){
-        LE_INFO("Reference deleted.");
-    }
-    else{
-        LE_ERROR("Failed to delete reference");
-    }
-    return res;
-}
-
-//Initialize the sensor subsystem
-le_result_t taf_pa_sensor_Init(int8_t& listSize)
-{
-    auto paCtrl = SensorPAController::getInstance();
-    le_result_t res = paCtrl->initialize();
-    if(res == LE_OK){
-        LE_INFO("Sensor Platform adapter intialization done.");
+    pa_result_t res = paCtrl->initialize();
+    if (res == PA_OK) {
+        PA_INFO("Sensor Platform adapter initialization done.");
         listSize = static_cast<int8_t>(paCtrl->getSensorListSize());
-    }
-    else{
-        LE_CRIT("Sensor Platform adapter intialization failed.");
+    } else {
+        PA_CRIT("Sensor Platform adapter initialization failed.");
     }
     return res;
 }
 
-COMPONENT_INIT{
-    LE_INFO("Sensor platform adaptor component_init done");
+void SensorPAController::PASensorClient::onEvent(std::shared_ptr<std::vector<SensorEvent>> events) {
+    std::lock_guard<std::mutex> lock(mtx_);
+
+    if (!eventListener_ || !eventListener_->onEvent) {
+        PA_ERROR("Unable to find event listener for onEvent for ID %llu", sensorId_);
+        return;
+    }
+
+    auto paEvents = std::make_shared<std::vector<taf_pa_sensor_Event>>();
+    paEvents->reserve(events->size());
+
+    for (const auto& sdkEvent : *events) {
+        taf_pa_sensor_Event paEvent;
+        paEvent.timestamp = sdkEvent.timestamp;
+        if (!isCalibrated_) {
+            paEvent.x = sdkEvent.uncalibrated.data.x;
+            paEvent.y = sdkEvent.uncalibrated.data.y;
+            paEvent.z = sdkEvent.uncalibrated.data.z;
+            paEvent.xb = sdkEvent.uncalibrated.bias.x;
+            paEvent.yb = sdkEvent.uncalibrated.bias.y;
+            paEvent.zb = sdkEvent.uncalibrated.bias.z;
+        } else {
+            paEvent.x = sdkEvent.calibrated.x;
+            paEvent.y = sdkEvent.calibrated.y;
+            paEvent.z = sdkEvent.calibrated.z;
+            paEvent.xb = 0;
+            paEvent.yb = 0;
+            paEvent.zb = 0;
+        }
+        paEvents->push_back(paEvent);
+    }
+
+    eventListener_->onEvent(sensorId_, paEvents, eventListenerContext_);
+}
+
+void SensorPAController::PASensorClient::onConfigurationUpdate(SensorConfiguration configuration) {
+    if (sensorClient_) {
+        PA_INFO("%s is configured for :[%f %d %d]", sensorClient_->getSensorInfo().name.c_str(),
+                    configuration.samplingRate, configuration.batchCount,
+                    static_cast<int>(configuration.isRotated));
+    } else {
+        PA_ERROR("SensorClient null in onConfigurationUpdate");
+    }
+}
+
+void SensorPAController::PASensorClient::onSelfTestFailed() {
+    uint64_t timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             std::chrono::high_resolution_clock::now().time_since_epoch())
+                             .count();
+
+    if (eventListener_ && eventListener_->onSelfTestFailed) {
+        eventListener_->onSelfTestFailed(sensorId_, timestamp, eventListenerContext_);
+    } else {
+        PA_ERROR("Not able to find event Listener for onSelfTestFailed for ID %llu", sensorId_);
+    }
+}
+
+pa_result_t SensorPAController::PASensorClient::RegisterEventListener(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_EventListener* listener,
+    std::any context) {
+
+    sensorId_ = sensorId;
+    if (listener != nullptr) {
+        eventListener_ = listener;
+    } else {
+        PA_ERROR("Listener is NULL for sensor ID %llu", sensorId_);
+        return PA_BAD_PARAMETER;
+    }
+
+    if (context.has_value())
+    {
+        eventListenerContext_ = std::move(context);
+    }
+
+    return PA_OK;
 }

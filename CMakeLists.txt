@@ -27,6 +27,7 @@ set(MODULE_LIST
     component/taf_pa_data
     component/taf_pa_location
     component/taf_pa_net
+    component/taf_pa_sensor
 )
 
 foreach(module ${MODULE_LIST})
