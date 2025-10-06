@@ -12,7 +12,6 @@
  *
  */
 
-#include "legato.h"
 #include "taf_pa_data.hpp"
 #include "taf_pa_data_TeluxData.hpp"
 #include "taf_pa_data_TeluxDataProfile.hpp"
@@ -23,23 +22,26 @@
  * Get the Telux data PA state.
  *
  * @return
- *  - LE_OK              PA completely initialized
- *  - LE_UNAVAILABLE     PA not completely initialized. A part of the PA maybe usable. Check state.
- *  - LE_FAULT           PA is not usable due to fatal failure.
- *  - LE_NOT_IMPLEMENTED API is not implemented.
+ *  - PA_OK              PA completely initialized
+ *  - PA_UNAVAILABLE     PA not completely initialized. A part of the PA maybe usable. Check state.
+ *  - PA_FAULT           PA is not usable due to fatal failure.
+ *  - PA_NOT_IMPLEMENTED API is not implemented.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::Init
+pa_result_t taf::pa::data::Init
 (
-    taf::pa::data::InitState_e &state
+    taf::pa::data::SubsystemState_e &state
         ///< [OUT] The Telux data PA initialization state.
 )
 {
-    LE_DEBUG("PA implementation.");
-
-    bool bTeluxDataState;
-    bool bTeluxDataProfileState;
-    bool bTeluxDataConnState;
+    PA_DEBUG("PA implementation.");
+    SubsystemState_e teluxPhoneManagerState = SubsystemState_e::FAILED;
+    SubsystemState_e teluxServingSystemState_slot1 = SubsystemState_e::FAILED;
+    SubsystemState_e teluxServingSystemState_slot2 = SubsystemState_e::FAILED;
+    SubsystemState_e teluxDataProfileState_slot1 = SubsystemState_e::FAILED;
+    SubsystemState_e teluxDataProfileState_slot2 = SubsystemState_e::FAILED;
+    SubsystemState_e teluxDataConnState_slot1 = SubsystemState_e::FAILED;
+    SubsystemState_e teluxDataConnState_slot2 = SubsystemState_e::FAILED;
 
     // Init data sub system
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
@@ -48,6 +50,7 @@ le_result_t taf::pa::data::Init
     // Get the slot count
     taf::pa::data::SlotCount_e slotCount;
     teluxPaData.PaGetSimSlotCount(slotCount);
+    PA_INFO("Num slots: %d", slotCount);
 
     // Init data profile sub system
     auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
@@ -58,16 +61,74 @@ le_result_t taf::pa::data::Init
     teluxPaDataConn.Init(slotCount);
 
     // Check the subsystem states
-    teluxPaData.PaGetInitState(bTeluxDataState);
-    teluxPaDataProfile.PaGetInitState(bTeluxDataProfileState);
-    teluxPaDataConn.PaGetInitState(bTeluxDataConnState);
-    if (bTeluxDataState && bTeluxDataProfileState && bTeluxDataConnState)
+    teluxPhoneManagerState = teluxPaData.PaGetPhoneManagerInitState();
+    if (SubsystemState_e::AVAILABLE != teluxPhoneManagerState)
     {
-        state = taf::pa::data::InitState_e::INIT_DONE;
-        return LE_OK;
+        state = taf::pa::data::SubsystemState_e::FAILED;
+        PA_ERROR("Phone manager is not initialized - complete failure.");
+        return PA_FAULT;
     }
-    state = taf::pa::data::InitState_e::INIT_FAILED;
-    return LE_FAULT;
+    if (taf::pa::data::SlotCount_e::ONE == slotCount)
+    {
+        teluxPaData.PaGetServingSystemInitState(taf::pa::data::SlotId_e::SLOT_1,
+                                                                teluxServingSystemState_slot1);
+        teluxPaDataProfile.PaGetSubsysState(taf::pa::data::SlotId_e::SLOT_1,
+                                                                teluxDataProfileState_slot1);
+        teluxPaDataConn.PaGetSubsysState(taf::pa::data::SlotId_e::SLOT_1,
+                                                                teluxDataConnState_slot1);
+        if (
+            SubsystemState_e::AVAILABLE == teluxServingSystemState_slot1 &&
+            SubsystemState_e::AVAILABLE == teluxDataProfileState_slot1 &&
+            SubsystemState_e::AVAILABLE == teluxDataConnState_slot1)
+        {
+            PA_INFO("Data PA ready.");
+            state = taf::pa::data::SubsystemState_e::AVAILABLE;
+            return PA_OK;
+        }
+    }
+    else if (taf::pa::data::SlotCount_e::TWO == slotCount)
+    {
+        teluxPaData.PaGetServingSystemInitState(taf::pa::data::SlotId_e::SLOT_1,
+                                                                teluxServingSystemState_slot1);
+        teluxPaDataProfile.PaGetSubsysState(taf::pa::data::SlotId_e::SLOT_1,
+                                                                teluxDataProfileState_slot1);
+        teluxPaDataConn.PaGetSubsysState(taf::pa::data::SlotId_e::SLOT_1,
+                                                                teluxDataConnState_slot1);
+
+        teluxPaData.PaGetServingSystemInitState(taf::pa::data::SlotId_e::SLOT_2,
+                                                                teluxServingSystemState_slot2);
+        teluxPaDataProfile.PaGetSubsysState(taf::pa::data::SlotId_e::SLOT_2,
+                                                                teluxDataProfileState_slot2);
+        teluxPaDataConn.PaGetSubsysState(taf::pa::data::SlotId_e::SLOT_2,
+                                                                teluxDataConnState_slot2);
+
+        bool slot1Ready = (SubsystemState_e::AVAILABLE == teluxServingSystemState_slot1 &&
+                           SubsystemState_e::AVAILABLE == teluxDataProfileState_slot1 &&
+                           SubsystemState_e::AVAILABLE == teluxDataConnState_slot1);
+
+        bool slot2Ready = (SubsystemState_e::AVAILABLE == teluxServingSystemState_slot2 &&
+                           SubsystemState_e::AVAILABLE == teluxDataProfileState_slot2 &&
+                           SubsystemState_e::AVAILABLE == teluxDataConnState_slot2);
+
+        if (slot1Ready && slot2Ready)
+        {
+            PA_INFO("Data PA ready for both slots.");
+            state = taf::pa::data::SubsystemState_e::AVAILABLE;
+            return PA_OK;
+        }
+        else if (slot1Ready || slot2Ready)
+        {
+            PA_WARN("Data PA partially ready. Slot1: %s, Slot2: %s",
+                    slot1Ready ? "READY" : "FAILED",
+                    slot2Ready ? "READY" : "FAILED"
+                    );
+            state = taf::pa::data::SubsystemState_e::UNAVAILABLE;
+            return PA_UNAVAILABLE;
+        }
+    }
+    PA_ERROR("Data PA init failed - complete failure.");
+    state = taf::pa::data::SubsystemState_e::FAILED;
+    return PA_FAULT;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -75,12 +136,12 @@ le_result_t taf::pa::data::Init
  * Deinitialize the Telux data PA state.
  *
  * @return
- *  - LE_OK              PA completely initialized
+ *  - PA_OK              PA completely initialized
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::Deinit()
+pa_result_t taf::pa::data::Deinit()
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     // Init data profile sub system
     auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
     teluxPaDataProfile.Deinit();
@@ -89,7 +150,11 @@ le_result_t taf::pa::data::Deinit()
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.Deinit();
 
-    return LE_OK;
+    // Deinit other subsystems.
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
+    teluxPaData.Deinit();
+
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -97,31 +162,65 @@ le_result_t taf::pa::data::Deinit()
  * Get the Telux data PA initialization state.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetInitState
+pa_result_t taf::pa::data::GetSubsystemState
 (
-    taf::pa::data::InitState_e &state///< [OUT] The Telux data PA initialization state.
+    taf::pa::data::PhoneId_e phoneId,
+    taf::pa::data::Subsystem_e subsystem,
+    taf::pa::data::SubsystemState_e &state
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
 
-    bool bTeluxDataState;
-    bool bTeluxDataProfileState;
-    bool bTeluxDataConnState;
-    auto &teluxPaData = TafPaTeluxData::GetInstance();
-    auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
-    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+    taf::pa::data::SlotId_e slotId;
 
-    // Check the subsystem states
-    teluxPaData.PaGetInitState(bTeluxDataState);
-    teluxPaDataProfile.PaGetInitState(bTeluxDataProfileState);
-    teluxPaDataConn.PaGetInitState(bTeluxDataConnState);
-    if (bTeluxDataState && bTeluxDataProfileState && bTeluxDataConnState)
+    // Initialize to FAILED state
+    state = taf::pa::data::SubsystemState_e::FAILED;
+
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
+    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotId);
+    if (PA_OK != result)
     {
-        state = taf::pa::data::InitState_e::INIT_DONE;
-        return LE_OK;
+        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        return result;
     }
-    state = taf::pa::data::InitState_e::INIT_FAILED;
-    return LE_FAULT;
+    PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotId));
+
+    switch (subsystem)
+    {
+    case Subsystem_e::PHONE_MANAGER:
+        {
+            state = teluxPaData.PaGetPhoneManagerInitState();
+            PA_INFO("Phone manager state: %s", Utils::SubsysStateToString(state));
+            break;
+        }
+        case Subsystem_e::DATACALL_MANAGER:
+        {
+            auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+            teluxPaDataConn.PaGetSubsysState(slotId, state);
+            PA_INFO("Call manager state: %s", Utils::SubsysStateToString(state));
+            break;
+        }
+        case Subsystem_e::PROFILE_MANAGER:
+        {
+            auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
+            teluxPaDataProfile.PaGetSubsysState(slotId, state);
+            PA_INFO("Profile manager state: %s", Utils::SubsysStateToString(state));
+            break;
+        }
+        case Subsystem_e::SERVING_SYSTEM_MANAGER:
+        {
+            teluxPaData.PaGetServingSystemInitState(slotId, state);
+            PA_INFO("Serving system manager state: %s", Utils::SubsysStateToString(state));
+            break;
+        }
+        default:
+        {
+            PA_WARN("Unknown subsystem: %d", TO_INT(subsystem));
+            return PA_FAULT;
+        }
+    };
+
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -129,13 +228,13 @@ le_result_t taf::pa::data::GetInitState
  * Get the SIM slot count.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetSimSlotCount
+pa_result_t taf::pa::data::GetSimSlotCount
 (
     taf::pa::data::SlotCount_e &slotCount
     ///< [OUT] The number of SIM slots.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     return teluxPaData.PaGetSimSlotCount(slotCount);
 }
@@ -145,13 +244,13 @@ le_result_t taf::pa::data::GetSimSlotCount
  * Get the phone Ids.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetPhoneIds
+pa_result_t taf::pa::data::GetPhoneIds
 (
     std::vector<taf::pa::data::PhoneId_e> &phoneIds
     ///< [OUT] The phone IDs.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     return teluxPaData.PaGetPhoneIds(phoneIds);
 }
@@ -161,7 +260,7 @@ le_result_t taf::pa::data::GetPhoneIds
  * Get the SIM slot count.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetPhoneIdFromSimSlotId
+pa_result_t taf::pa::data::GetPhoneIdFromSimSlotId
 (
     taf::pa::data::SlotId_e slotID,
     ///< [IN] The SIM slot ID.
@@ -169,9 +268,9 @@ le_result_t taf::pa::data::GetPhoneIdFromSimSlotId
     ///< [OUT] The phone ID.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = TafPaTeluxData::GetInstance();
-    return teluxPaData.PaGetPhoneIdFromSimSlotId(slotID, phoneID);
+    return teluxPaData.PaGetPhoneIdFromSlotId(slotID, phoneID);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -179,7 +278,7 @@ le_result_t taf::pa::data::GetPhoneIdFromSimSlotId
  * Get the SIM slot count.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetSimSlotIdFromPhoneId
+pa_result_t taf::pa::data::GetSimSlotIdFromPhoneId
 (
     taf::pa::data::PhoneId_e phoneID,
     ///< [IN] The phone ID.
@@ -187,9 +286,9 @@ le_result_t taf::pa::data::GetSimSlotIdFromPhoneId
     ///< [OUT] The SIM slot ID.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = TafPaTeluxData::GetInstance();
-    return teluxPaData.PaGetSimSlotIdFromPhoneId(phoneID, slotID);
+    return teluxPaData.PaGetSlotIdFromPhoneId(phoneID, slotID);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -200,16 +299,35 @@ le_result_t taf::pa::data::GetSimSlotIdFromPhoneId
  *
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetProfilesAsync
+pa_result_t taf::pa::data::GetProfilesAsync
 (
     taf::pa::data::PhoneId_e phoneId,
     taf_pa_data_profile_GetAllAsyncCb callback,
     void* contextPtr
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
     return teluxPaDataProfile.PaListProfiles(phoneId, callback, contextPtr);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get details of specified profile.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::GetProfileInfo
+(
+    PhoneId_e phoneId,
+    ///< [IN] The phone id.
+    ProfileInfo_t &profileInfo
+    ///< [OUT] The profile information.
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
+    return teluxPaDataProfile.PaGetProfileInfo(phoneId, profileInfo);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -218,7 +336,7 @@ le_result_t taf::pa::data::GetProfilesAsync
  *
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetDefaultProfile
+pa_result_t taf::pa::data::GetDefaultProfile
 (
     taf::pa::data::PhoneId_e phoneId,
     ///< [IN] The profile information.
@@ -226,7 +344,7 @@ le_result_t taf::pa::data::GetDefaultProfile
     ///< [OUT] The default profile ID.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaGetDefaultProfile(phoneId, profileId);
 }
@@ -237,7 +355,7 @@ le_result_t taf::pa::data::GetDefaultProfile
  *
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::SetDefaultProfile
+pa_result_t taf::pa::data::SetDefaultProfile
 (
     taf::pa::data::PhoneId_e phoneId,
     ///< [IN] The profile information.
@@ -245,7 +363,7 @@ le_result_t taf::pa::data::SetDefaultProfile
     ///< [IN] The default profile ID.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaSetDefaultProfile(phoneId, profileId);
 }
@@ -258,7 +376,7 @@ le_result_t taf::pa::data::SetDefaultProfile
  *
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::CreateProfile
+pa_result_t taf::pa::data::CreateProfile
 (
     taf::pa::data::PhoneId_e phoneId,
     ///< [IN] The phone id.
@@ -268,7 +386,7 @@ le_result_t taf::pa::data::CreateProfile
     ///< [OUT] The profile id on success.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
     return teluxPaDataProfile.PaCreateProfile(phoneId, profileInfo, profileId);
 }
@@ -280,7 +398,7 @@ le_result_t taf::pa::data::CreateProfile
  *
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::UpdateProfile
+pa_result_t taf::pa::data::UpdateProfile
 (
     taf::pa::data::PhoneId_e phoneId,
     ///< [IN] The phone id.
@@ -288,7 +406,7 @@ le_result_t taf::pa::data::UpdateProfile
     ///< [IN] The profile information.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
     return teluxPaDataProfile.PaUpdateProfile(phoneId, profileInfo);
 }
@@ -301,7 +419,7 @@ le_result_t taf::pa::data::UpdateProfile
  *
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::DeleteProfile
+pa_result_t taf::pa::data::DeleteProfile
 (
     taf::pa::data::PhoneId_e phoneId,
     ///< [IN] The phone id.
@@ -309,7 +427,7 @@ le_result_t taf::pa::data::DeleteProfile
     ///< [IN] The profile information.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
     return teluxPaDataProfile.PaDeleteProfile(phoneId, profileInfo);
 }
@@ -319,12 +437,12 @@ le_result_t taf::pa::data::DeleteProfile
  * Start a data session
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::StartDataSessionAsync
+pa_result_t taf::pa::data::StartDataSessionAsync
 (
     const taf::pa::data::DataCallStartStopParams_t& params ///< [IN] The IP type.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaStartDataSessionAsync(params);
 }
@@ -334,14 +452,29 @@ le_result_t taf::pa::data::StartDataSessionAsync
  * Stop a data session
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::StopDataSessionAsync
+pa_result_t taf::pa::data::StopDataSessionAsync
 (
     const taf::pa::data::DataCallStartStopParams_t& params ///< [IN] The IP type.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaStopDataSessionAsync(params);
+}
+
+pa_result_t taf::pa::data::RequestDataCallsListAsync
+(
+    PhoneId_e phoneId,
+                ///< [IN] The phone ID.
+    taf_pa_data_RequestCallListCb callBack,
+                ///< [IN] The callback function.
+    std::shared_ptr<void> context
+                ///< [IN] The context pointer.
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+    return teluxPaDataConn.PaRequestDataCallsListAsync(phoneId, callBack, context);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -353,7 +486,7 @@ le_result_t taf::pa::data::StopDataSessionAsync
  * Register for data call events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::AddDataCallEventsCallback
+pa_result_t taf::pa::data::AddDataCallEventsCallback
 (
     taf_pa_data_CallEventsCb callBack,
         ///< [IN] The callback function.
@@ -363,7 +496,7 @@ le_result_t taf::pa::data::AddDataCallEventsCallback
         ///< [OUT] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaAddDataCallEventsCallback(callBack, context, id);
 }
@@ -373,13 +506,13 @@ le_result_t taf::pa::data::AddDataCallEventsCallback
  * Removed a previously registered data call events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::RemoveDataCallEventsCallback
+pa_result_t taf::pa::data::RemoveDataCallEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaRemoveDataCallEventsCallback(id);
 }
@@ -389,7 +522,7 @@ le_result_t taf::pa::data::RemoveDataCallEventsCallback
  * Register roaming events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::AddRoamingEventsCallback
+pa_result_t taf::pa::data::AddRoamingEventsCallback
 (
     taf_pa_data_RoamingEventsCb callBack,
         ///< [IN] The callback function.
@@ -399,7 +532,7 @@ le_result_t taf::pa::data::AddRoamingEventsCallback
         ///< [OUT] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     return teluxPaData.PaAddRoamingEventsCallback(callBack, context, id);
 }
@@ -409,13 +542,13 @@ le_result_t taf::pa::data::AddRoamingEventsCallback
  * Removed a previously registered roaming events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::RemoveRoamingEventsCallback
+pa_result_t taf::pa::data::RemoveRoamingEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     return teluxPaData.PaRemoveRoamingEventsCallback(id);
 }
@@ -425,17 +558,16 @@ le_result_t taf::pa::data::RemoveRoamingEventsCallback
  * Get roaming status. Events will be provided via taf_pa_data_RoamingEventsCb that is registered
  * via AddRoamingEventsCallback()
  *
- * @return LE_OK on success. Wait for callback for final status.
+ * @return PA_OK on success. Wait for callback for final status.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetRoamingStatus
+pa_result_t taf::pa::data::GetRoamingStatus
 (
     const taf::pa::data::PhoneId_e phoneId,
     RoamingStatus_t &roamingStatus
 )
 {
-    LE_DEBUG("PA implementation.");
-    LE_UNUSED(phoneId);
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     return teluxPaData.PaGetRoamingStatus(phoneId, roamingStatus);
 }
@@ -444,7 +576,7 @@ le_result_t taf::pa::data::GetRoamingStatus
  * Register throttled APN events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::AddThrottledApnEventsCallback
+pa_result_t taf::pa::data::AddThrottledApnEventsCallback
 (
     taf_pa_data_ThrottledApnEventsCb callBack,
         ///< [IN] The callback function.
@@ -454,7 +586,7 @@ le_result_t taf::pa::data::AddThrottledApnEventsCallback
         ///< [OUT] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaAddThrottledApnEventsCallback(callBack, context, id);
 }
@@ -464,13 +596,13 @@ le_result_t taf::pa::data::AddThrottledApnEventsCallback
  * Removed a previously registered throttled APN events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::RemoveThrottledApnEventsCallback
+pa_result_t taf::pa::data::RemoveThrottledApnEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaRemoveThrottledApnEventsCallback(id);
 }
@@ -480,7 +612,7 @@ le_result_t taf::pa::data::RemoveThrottledApnEventsCallback
  * Get throttled APNs information.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::GetThrottledApnInfo
+pa_result_t taf::pa::data::GetThrottledApnInfo
 (
     const taf::pa::data::PhoneId_e phoneId,
         ///< [IN] The phone ID.
@@ -488,17 +620,18 @@ le_result_t taf::pa::data::GetThrottledApnInfo
         ///< [OUT] The list of throttled APNs info.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.paGetThrottledApnInfo(phoneId, throttledApnEventInfoList);
 }
+
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Register QoS TFT events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::AddQosTftEventsCallback
+pa_result_t taf::pa::data::AddQosTftEventsCallback
 (
     taf_pa_data_QosTftEventsCb callBack,
         ///< [IN] The callback function.
@@ -508,7 +641,7 @@ le_result_t taf::pa::data::AddQosTftEventsCallback
         ///< [OUT] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaAddQosTftEventsCallback(callBack, context, id);
 }
@@ -518,13 +651,13 @@ le_result_t taf::pa::data::AddQosTftEventsCallback
  * Removed a previously registered QoS TFT events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::RemoveQosTftEventsCallback
+pa_result_t taf::pa::data::RemoveQosTftEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaRemoveQosTftEventsCallback(id);
 }
@@ -534,7 +667,7 @@ le_result_t taf::pa::data::RemoveQosTftEventsCallback
  * Register HW acceleration change events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::AddHwAccelerationChangeEventsCallback
+pa_result_t taf::pa::data::AddHwAccelerationChangeEventsCallback
 (
     taf_pa_data_HwAccelerationEventsCb callBack,
     ///< [IN] The callback function.
@@ -544,7 +677,7 @@ le_result_t taf::pa::data::AddHwAccelerationChangeEventsCallback
     ///< [OUT] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaAddHwAccelerationChangeEventsCallback(callBack, context, id);
 }
@@ -554,15 +687,87 @@ le_result_t taf::pa::data::AddHwAccelerationChangeEventsCallback
  * Removed a previously registered HW acceleration change events callback
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::RemoveHwAccelerationChangeEventsCallback
+pa_result_t taf::pa::data::RemoveHwAccelerationChangeEventsCallback
 (
     uint16_t id
     ///< [IN] The ID of the registered callback.
 )
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaRemoveHwAccelerationChangeEventsCallback(id);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Register profile change events callback
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::AddProfileEventsCallback
+(
+    taf_pa_data_ProfileEventsCb callBack,
+        ///< [IN] The callback function.
+    std::shared_ptr<void> context,
+        ///< [IN] The context pointer.
+    uint16_t &id
+        ///< [OUT] The ID of the registered callback.
+)
+{
+        PA_DEBUG("PA implementation.");
+        auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
+        return teluxPaDataProfile.PaAddProfileEventsCallback(callBack, context, id);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Removed a previously registered profile  events callback
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::RemoveProfileEventsCallback
+(
+    uint16_t id
+        ///< [IN] The ID of the registered callback.
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
+    return teluxPaDataProfile.PaRemoveProfileEventsCallback(id);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Register roaming events callback
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::AddSubsystemStateChangeCallback
+(
+    taf_pa_data_SubsystemStateChangeCb callBack,
+    ///< [IN] The callback function.
+    std::shared_ptr<void> context,
+    ///< [IN] The context pointer.
+    uint16_t &id
+    ///< [OUT] The ID of the registered callback.
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
+    return teluxPaData.PaAddSubsystemStateChangeCallback(callBack, context, id);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Removed a previously registered subsystem state change callback
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::RemoveSubsystemStateChangeCallback
+(
+    uint16_t id
+        ///< [IN] The ID of the registered callback.
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
+    return teluxPaData.PaRemoveSubsystemStateChangeCallback(id);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -571,9 +776,9 @@ le_result_t taf::pa::data::RemoveHwAccelerationChangeEventsCallback
  * initialization.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::RegisterSDKCallbacks()
+pa_result_t taf::pa::data::RegisterSDKCallbacks()
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     teluxPaData.RegisterDataServingSystemListeners();
 
@@ -586,20 +791,12 @@ le_result_t taf::pa::data::RegisterSDKCallbacks()
  * Deregister SDK callbacks. This is to support the service to manage suspend/resume scenarios.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf::pa::data::DeregisterSDKCallbacks()
+pa_result_t taf::pa::data::DeregisterSDKCallbacks()
 {
-    LE_DEBUG("PA implementation.");
+    PA_DEBUG("PA implementation.");
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     teluxPaData.DeregisterDataServingSystemListeners();
 
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaDeregisterDataConnCallbacks();
-}
-
-/**
- * The component entry point.
- **/
-COMPONENT_INIT
-{
-    LE_INFO("DataCall PA Component Init");
 }

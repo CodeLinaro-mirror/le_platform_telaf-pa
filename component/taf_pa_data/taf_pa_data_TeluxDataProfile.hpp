@@ -12,20 +12,20 @@
 #ifndef __TAF_PA_DATA_TELUXDATAPROFILE_HPP__
 #define __TAF_PA_DATA_TELUXDATAPROFILE_HPP__
 
-#include "legato.h"
-
 #include "taf_pa_data.hpp"
 
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
 #include "telux/common/CommonDefines.hpp"
 #include "telux/common/Utils.hpp"
+#include "taf_pa_data_TeluxData.hpp"
 #include "taf_pa_data_Utils.hpp"
 
 #include <map>
 #include <atomic>
 #include <mutex>
 #include <future>
+#include <shared_mutex>
 
 namespace taf
 {
@@ -33,8 +33,34 @@ namespace pa
 {
 namespace data
 {
+    // Profile events entry
+    struct ProfileEventsCallbackEntry_t
+    {
+        uint16_t id;
+        taf_pa_data_ProfileEventsCb callBack;
+        std::shared_ptr<void> context;
+    };
 
-    // Class to handle TelSDK callbacks.
+    // Class to handle data profile related events
+    class TafPaTeluxDataProfileListener : public telux::data::IDataProfileListener
+    {
+    public:
+        // Constructor
+        TafPaTeluxDataProfileListener(SlotId slotId) : slotId_(slotId) {};
+        ~TafPaTeluxDataProfileListener(){};
+        void onServiceStatusChange(telux::common::ServiceStatus status) override;
+        void onProfileUpdate
+        (
+            int profileId,
+            telux::data::TechPreference techPreference,
+            telux::data::ProfileChangeEvent event
+        ) override;
+
+    private:
+        const SlotId slotId_;
+    };
+
+    // Class to handle TelSDK profile list callback.
     class TafPaTeluxDataProfileListCallback : public telux::data::IDataProfileListCallback
     {
     public:
@@ -65,6 +91,28 @@ namespace data
         std::atomic<bool> bListProfilesCmdInProgress_ = {false};
     };
 
+    // Class to handle requestProfile
+    class TafPaTeluxDataRequestProfile : public telux::data::IDataProfileCallback
+    {
+    public:
+        // Constructor
+        TafPaTeluxDataRequestProfile(
+            SlotId slotId,
+            std::shared_ptr<std::promise<std::tuple<telux::common::ErrorCode,
+                                           std::shared_ptr<telux::data::DataProfile>>>> promisePtr
+        ) : slotId_(slotId), promisePtr_(promisePtr) {};
+        ~TafPaTeluxDataRequestProfile() {};
+        void onResponse (
+            const std::shared_ptr<telux::data::DataProfile> &profile,
+            telux::common::ErrorCode error
+        ) override;
+
+    private:
+        const SlotId slotId_;
+        std::shared_ptr<std::promise<std::tuple<telux::common::ErrorCode,
+                                        std::shared_ptr<telux::data::DataProfile>>>> promisePtr_;
+    };
+
     // Create profile callback
     class TafPaTeluxDataProfileCreateCallback : public telux::data::IDataCreateProfileCallback
     {
@@ -83,8 +131,7 @@ namespace data
     class TafPaTeluxDataProfileModifyCallback : public telux::common::ICommandResponseCallback
     {
         public:
-            TafPaTeluxDataProfileModifyCallback
-            (
+            TafPaTeluxDataProfileModifyCallback (
                 std::shared_ptr<std::promise<telux::common::ErrorCode>> p
             ) : promise_ptr_(p) {}
             void commandResponse(telux::common::ErrorCode error) override;
@@ -116,41 +163,86 @@ namespace data
 
         void Init(taf::pa::data::SlotCount_e slotCount);
         void Deinit();
-        le_result_t PaGetInitState(bool &initState);
-        le_result_t PaListProfiles(taf::pa::data::PhoneId_e phoneId,
-                                taf_pa_data_profile_GetAllAsyncCb callback,
-                                void *contextPtr);
-        le_result_t PaCreateProfile
+        pa_result_t PaGetSubsysState(taf::pa::data::SlotId_e slotId, SubsystemState_e &sState);
+        pa_result_t SetSubsysState
         (
+            taf::pa::data::SlotId_e slotId,
+            SubsystemState_e sState,
+            bool bSendEvent=false
+        );
+        pa_result_t PaRegisterProfileCallbacks();
+        pa_result_t PaDeregisterProfileCallbacks();
+        pa_result_t PaListProfiles( taf::pa::data::PhoneId_e phoneId,
+                                    taf_pa_data_profile_GetAllAsyncCb callback,
+                                    void *contextPtr);
+        pa_result_t PaGetProfileInfo(PhoneId_e phoneId, ProfileInfo_t &profileInfo);
+        pa_result_t PaCreateProfile(
             PhoneId_e phoneId,
             const ProfileInfo_t &profileInfo,
-            ProfileId_e &profileId
+            ProfileId_e &profileId);
+        pa_result_t PaUpdateProfile(PhoneId_e phoneId, const ProfileInfo_t &profileInfo);
+        pa_result_t PaDeleteProfile(PhoneId_e phoneId, const ProfileInfo_t &profileInfo);
+        pa_result_t PaAddProfileEventsCallback
+        (
+            taf_pa_data_ProfileEventsCb callBack,
+            std::shared_ptr<void> context,
+            uint16_t &id
         );
-        le_result_t PaUpdateProfile(PhoneId_e phoneId, const ProfileInfo_t &profileInfo);
-        le_result_t PaDeleteProfile(PhoneId_e phoneId, const ProfileInfo_t &profileInfo);
+        pa_result_t PaRemoveProfileEventsCallback(uint16_t id);
+        // Handle profile events from onProfileUpdate
+        void PaUpdateProfileEventInfo
+        (
+            SlotId slotId,
+            int profileId,
+            telux::data::ProfileChangeEvent event,
+            telux::data::TechPreference techPreference
+        );
+        void PaSendProfileEventInfoToClients
+        (
+            PhoneId_e               phoneId,
+            ProfileEvent_e          event,
+            const ProfileInfo_t    &profileInfo
+        );
 
     private:
-
         // Variables
-        bool bDataProfileMngrInitialized_ = false;
         taf::pa::data::SlotCount_e slotCount_ = taf::pa::data::SlotCount_e::ONE; // 1
 
+        std::map<SlotId_e, SubsystemState_e> dataProfileManagersInitStateMap_ = {
+            {SlotId_e::SLOT_1, SubsystemState_e::FAILED},
+            {SlotId_e::SLOT_2, SubsystemState_e::FAILED}
+        };
         std::map<SlotId, std::shared_ptr<telux::data::IDataProfileManager>> dataProfileManagersMap_;
         std::map<SlotId, std::shared_ptr<taf::pa::data::TafPaTeluxDataProfileListCallback>>
                                                                     tafPaDataProfileListCbksMap_;
+        std::map<SlotId, std::shared_ptr<TafPaTeluxDataProfileListener>>
+                                                                    tafPaTeluxDataProfListenersMap_;
 
+        // Track the registration of data profile listeners
+        bool bProfileListenersRegistered_[MAX_SLOT_NUM] = {false,false};
 
         // Mutexes
         std::mutex dataProfileCreateMutex_;
         std::mutex dataProfileDeleteMutex_;
         std::mutex dataProfileUpdateMutex_;
+        std::mutex dataProfileGetDetailsMutex_;
 
-        // Used in initDataProfileManagers() to track whether a promise can be set or not
-        std::atomic<bool> bWaitingOnDataProfMngrProm_;
+        // Callbacks
+        std::shared_mutex dataProfileCallbacksMutex_;
+        // The callback for profile events
+        std::vector<ProfileEventsCallbackEntry_t> profileEventsCallbacks_;
+        uint16_t profileEventsCallbackId_ = 1;
 
         //Functions
         void initDataProfileManagers();
-        void deInitDataProfileManagers();
+        pa_result_t deInitDataProfileManagers();
+        pa_result_t getProfileDetails
+        (
+            SlotId slotId,
+            int profileId,
+            telux::data::TechPreference techPreference,
+            ProfileInfo_t &profileInfo
+        );
 
         TafPaTeluxDataProfile() {};
     };

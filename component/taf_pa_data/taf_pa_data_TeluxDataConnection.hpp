@@ -12,8 +12,6 @@
 #ifndef __TAF_PA_DATA_TELUX_DATA_CONNECTION_HPP__
 #define __TAF_PA_DATA_TELUX_DATA_CONNECTION_HPP__
 
-#include "legato.h"
-
 #include "taf_pa_data.hpp"
 
 #include "telux/data/DataDefines.hpp"
@@ -26,6 +24,7 @@
 #include <future>
 #include <atomic>
 #include <chrono>
+#include <shared_mutex>
 
 namespace taf
 {
@@ -64,7 +63,11 @@ namespace data
         std::shared_ptr<void> context;
     };
 
-    constexpr uint8_t MAX_SLOT_NUM = static_cast<uint8_t>(SlotCount_e::TWO);
+    struct RequestDataCallListCallbackEntry_t
+    {
+        taf_pa_data_RequestCallListCb callback;
+        std::shared_ptr<void> context;
+    };
 
     // Class to handle TelSDK callbacks.
     class TafPaTeluxDataConnectionListener : public telux::data::IDataConnectionListener
@@ -80,15 +83,16 @@ namespace data
             const std::shared_ptr<telux::data::IDataCall> &dataCall,
             const std::vector<std::shared_ptr<telux::data::TftChangeInfo>> &tft) override;
         void onHwAccelerationChanged(const telux::data::ServiceState state) override;
+        void onServiceStatusChange(telux::common::ServiceStatus status) override;
+        void ParseIDataCall(
+            const std::shared_ptr<telux::data::IDataCall> &iCall,
+            DataCallEventInfo_t &dataCallInfo);
 
     private:
         SlotId slotId_;
         // Mutex
         std::mutex listenerMtx_;
-        // Promise for getting data call bit rate
-        std::promise<bool> dataCallBitratePromise_;
         std::atomic<bool> bWaitingForDataCallBitratePromise_ = {false};
-        const int dataCallBitRateCmdSpan_ = 1; // 1 second
 
         // The current calls status of IDataCall objects
         std::map<
@@ -96,8 +100,8 @@ namespace data
                 > callStatusMap_;
 
         // Functions
-        void fillCallEndReason(const telux::common::DataCallEndReason&, DataCallEndReason_t &);
-        le_result_t updateBitRate
+        void fillCallEndReason(const telux::common::DataCallEndReason&,DataCallEndReason_t&);
+        pa_result_t updateBitRate
         (
             const std::shared_ptr<telux::data::IDataCall> &dataCall,
             telux::data::BitRateInfo &bitRate
@@ -111,7 +115,7 @@ namespace data
         TafPaTeluxDataConnection &operator=(const TafPaTeluxDataConnection &) = delete;
         static TafPaTeluxDataConnection &GetInstance();
 
-        void LogDataCallInfo
+        static void LogDataCallInfo
         (
             const std::shared_ptr<telux::data::IDataCall> &dataCall, const char *fromPtr
         );
@@ -119,29 +123,40 @@ namespace data
         // External APIs
         void Init(SlotCount_e slotCount);
         void Deinit();
-        le_result_t PaGetInitState(bool &initState);
-        le_result_t PaRegisterDataConnCallbacks();
-        le_result_t PaDeregisterDataConnCallbacks();
-        le_result_t PaGetDefaultProfile(const PhoneId_e phoneId, ProfileId_e &profileId);
-        le_result_t PaSetDefaultProfile(const PhoneId_e phoneId, const ProfileId_e profileId);
+        pa_result_t PaGetSubsysState(taf::pa::data::SlotId_e slotId, SubsystemState_e &sState);
+        pa_result_t SetSubsysState
+        (
+            taf::pa::data::SlotId_e slotId,
+            SubsystemState_e sState,
+            bool bSendEvent=false
+        );
+        pa_result_t PaRegisterDataConnCallbacks();
+        pa_result_t PaDeregisterDataConnCallbacks();
+        pa_result_t PaGetDefaultProfile(const PhoneId_e phoneId, ProfileId_e &profileId);
+        pa_result_t PaSetDefaultProfile(const PhoneId_e phoneId, const ProfileId_e profileId);
 
-        le_result_t PaStartDataSessionAsync
+        pa_result_t PaStartDataSessionAsync
         (
             const DataCallStartStopParams_t& params
         );
-        le_result_t PaStopDataSessionAsync
+        pa_result_t PaStopDataSessionAsync
         (
             const DataCallStartStopParams_t& params
         );
-        le_result_t paGetThrottledApnInfo
+        pa_result_t PaRequestDataCallsListAsync
         (
-            const taf::pa::data::PhoneId_e        phoneId,
-            std::vector<ThrottledApnEventInfo_t> &throttledApnEventInfoList
+            taf::pa::data::PhoneId_e phoneId,
+            taf::pa::data::taf_pa_data_RequestCallListCb callBack,
+            std::shared_ptr<void> context
         );
+
+        pa_result_t paGetThrottledApnInfo(
+            const taf::pa::data::PhoneId_e phoneId,
+            std::vector<ThrottledApnEventInfo_t> &throttledApnEventInfoList);
 
         // Data call events
         void PaSendDataCallEventInfoToClients(const DataCallEventInfo_t &dataCallEventInfo);
-        le_result_t PaAddDataCallEventsCallback
+        pa_result_t PaAddDataCallEventsCallback
         (
             taf_pa_data_CallEventsCb callBack,
             ///< [IN] The callback function.
@@ -150,7 +165,7 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        le_result_t PaRemoveDataCallEventsCallback
+        pa_result_t PaRemoveDataCallEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
@@ -161,7 +176,7 @@ namespace data
         (
             const std::vector<ThrottledApnEventInfo_t> &throttledApnEventList
         );
-        le_result_t PaAddThrottledApnEventsCallback
+        pa_result_t PaAddThrottledApnEventsCallback
         (
             taf_pa_data_ThrottledApnEventsCb callBack,
             ///< [IN] The callback function.
@@ -170,7 +185,7 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        le_result_t PaRemoveThrottledApnEventsCallback
+        pa_result_t PaRemoveThrottledApnEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
@@ -181,7 +196,7 @@ namespace data
         (
             const QosTftEventInfo_t &qosTftEventsList
         );
-        le_result_t PaAddQosTftEventsCallback
+        pa_result_t PaAddQosTftEventsCallback
         (
             taf_pa_data_QosTftEventsCb callBack,
             ///< [IN] The callback function.
@@ -190,7 +205,7 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        le_result_t PaRemoveQosTftEventsCallback
+        pa_result_t PaRemoveQosTftEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
@@ -201,7 +216,7 @@ namespace data
         (
             const HwAccelerationChangeEvent_t &hwAccelerationEventInfo
         );
-        le_result_t PaAddHwAccelerationChangeEventsCallback
+        pa_result_t PaAddHwAccelerationChangeEventsCallback
         (
             taf_pa_data_HwAccelerationEventsCb callBack,
             ///< [IN] The callback function.
@@ -210,15 +225,15 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        le_result_t PaRemoveHwAccelerationChangeEventsCallback
+        pa_result_t PaRemoveHwAccelerationChangeEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
         );
+        void resetCallListClientEntry();
 
     private:
         // Variables
-        bool bDataConnectionMngrInitialized_ = false;
         SlotCount_e slotCount_ = SlotCount_e::ONE; // 1
 
         // The callback for data call events
@@ -237,6 +252,10 @@ namespace data
         std::vector<HwAccelerationEventsCallbackEntry_t> hwAccelerationEventsCallbacks_;
         uint16_t hwAccelerationEventsCallbackId_ = 1;
 
+        std::map<SlotId_e, SubsystemState_e> dataConnectionManagersSubsysStateMap_ = {
+            {SlotId_e::SLOT_1, SubsystemState_e::FAILED},
+            {SlotId_e::SLOT_2, SubsystemState_e::FAILED}
+        };
         std::map<SlotId, std::shared_ptr<telux::data::IDataConnectionManager>>
                                                                          dataConnectionManagersMap_;
         std::map<SlotId, std::shared_ptr<telux::data::IDataConnectionListener>>
@@ -244,19 +263,27 @@ namespace data
         std::map<SlotId, std::shared_ptr<TafPaTeluxDataConnectionListener>>
                                                               tafPaTeluxDataConnectionListenersMap_;
 
-        // Used in initDataConnectionManagers()
-        std::atomic<bool> bWaitingOnDataConnMngrProm_;
+        // List data calls management.
+        static void onRequestDataCallList
+        (
+            const std::vector<std::shared_ptr<telux::data::IDataCall>> &dataCalls,
+            telux::common::ErrorCode error
+        );
+        std::atomic<bool> bRequestCallListInProgress_ = false;
+        RequestDataCallListCallbackEntry_t requestCallListClientEntry_ = {nullptr,nullptr};
+
         // Used to track if connection listeners are registered or not.
-        std::atomic<bool> bDataConnectionListenersRegistered_[MAX_SLOT_NUM] = {false};
-        // Mutex for synchronizing registering and deregistering callbacks.
-        std::mutex cbksMtx_;
+        bool bDataConnectionListenersRegistered_[MAX_SLOT_NUM] = {false,false};
+
+        // Use a share mutex for registering, deregistering and calling callbacks.
+        std::shared_mutex dataConnectionCbksMtx_;
 
         // Promise for PaGetDefaultProfile
-        std::promise<std::tuple<int, SlotId, telux::common::ErrorCode>> getDefProfilePromise;
+        std::promise<std::tuple<int, SlotId, telux::common::ErrorCode>> getDefProfilePromise_;
         // Mutex for PaGetDefaultProfile
         std::mutex getDefProfileMtx_;
         // Promise for setDefaultProfile
-        std::promise<telux::common::ErrorCode> setDefProfilePromise;
+        std::promise<telux::common::ErrorCode> setDefProfilePromise_;
         // Mutex for PaSetDefaultProfile
         std::mutex setDefProfileMtx_;
 
@@ -285,7 +312,7 @@ namespace data
         std::mutex requestThrottledApnInfoMtx_;
 
         void initDataConnectionManagers();
-        void deInitDataConnectionManagers();
+        pa_result_t deInitDataConnectionManagers();
         TafPaTeluxDataConnection() {};
     };
 

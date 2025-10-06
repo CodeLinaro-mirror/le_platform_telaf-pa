@@ -12,7 +12,7 @@
 #ifndef __TAF_PA_DATA_UTILS_HPP__
 #define __TAF_PA_DATA_UTILS_HPP__
 
-#include "legato.h"
+#include "taf_pa_common_defines.hpp"
 #include "taf_pa_dataTypes.hpp"
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
@@ -21,77 +21,6 @@
 #include <sstream>
 #include <future>
 #include <exception>
-
-/**
- * Convert a ENUM to an integer primarily for printing with LE log APIs.
- *
- * Consider using the to_int template for more complex use cases.
- */
-#define TO_INT(value) static_cast<int>(value)
-
-/**
- * @brief Use a try-catch when using future.get() and return the result.
- *
- * Use a future wait() or wait_for() before calling get() to handle long running tasks.
- *
- */
-#define FUTURE_GET_RET_VAL(future, futureResult, result) \
-    try                                                         \
-    {                                                           \
-        futureResult = future.get();                            \
-    }                                                           \
-    catch (const std::exception &e)                             \
-    {                                                           \
-        LE_WARN("Exception caught: %s", e.what());              \
-        return result;                                          \
-    }                                                           \
-    catch (...)                                                 \
-    {                                                           \
-        LE_WARN("Unknown exception caught");                    \
-        return result;                                          \
-    }
-
-/**
- * @brief Use a try-catch when using future.get() and simply return.
- *
- * Use a future wait() or wait_for() before calling get() to handle long running tasks.
- */
-#define FUTURE_GET_RET_NIL(future, futureResult) \
-    try                                                 \
-    {                                                   \
-        futureResult = future.get();                    \
-    }                                                   \
-    catch (const std::exception &e)                     \
-    {                                                   \
-        LE_WARN("Exception caught: %s", e.what());      \
-        return;                                         \
-    }                                                   \
-    catch (...)                                         \
-    {                                                   \
-        LE_WARN("Unknown exception caught");            \
-        return;                                         \
-    }
-
-/**
- * @brief Set the SDK thread name for easier debugging.
- */
-#define SET_SDK_THREAD_NAME()                                     \
-    do                                                            \
-    {                                                             \
-        std::ostringstream threadName;                            \
-        threadName << "SDK-" << std::this_thread::get_id();       \
-        le_thread_InitLegatoThreadData(threadName.str().c_str()); \
-    } while (0);
-
-/**
- * @brief Return true if the given "value" is within the specified range
- */
-template <typename T>
-bool isValueInRange(T value, T lowerBound, T upperBound)
-{
-    return value >= lowerBound && value <= upperBound;
-}
-
 namespace taf
 {
 namespace pa
@@ -149,24 +78,38 @@ class Utils
             telux::data::ServiceState
         );
 
-        static le_result_t ConvertProfileInfo
+        static pa_result_t ConvertProfileInfo
         (
-            telux::data::DataProfile  &dataProfile,
-            ProfileInfo_t    &profileInfo
+            telux::data::DataProfile  &dataProfile, // IN
+            ProfileInfo_t    &profileInfo           // OUT
         );
 
-        static le_result_t ConvertThrottledApnEvent
+        static pa_result_t ConvertThrottledApnEvent
         (
             const telux::data::APNThrottleInfo &sdkEvent,
             ThrottledApnEventInfo_t &paEvent
         );
+        static taf::pa::data::ProfileEvent_e ConvertProfileChangeEvent
+        (
+            const telux::data::ProfileChangeEvent sdkEvent
+        );
+        static taf::pa::data::BandIntPriority_e ConvertBandIntPriority
+        (
+            const telux::data::BandPriority bandPriority
+        );
+        static telux::data::BandPriority ConvertBandIntPriority
+        (
+            const taf::pa::data::BandIntPriority_e bandPriority
+        );
 
-        // TelSDK conversions
+        // String conversions
         static const char *CallStatusToString(telux::data::DataCallStatus status);
         static const char *IpFamilyTypeToString(telux::data::IpFamilyType ipType);
         static const char *TechPreferenceToString(telux::data::TechPreference techPref);
         static const char *DataBearerToString(telux::data::DataBearerTechnology techPref);
         static const char *CallEndReasonTypeToString(telux::common::EndReasonType endType);
+        static const char *ProfileChangeEventToString(telux::data::ProfileChangeEvent event);
+        static const char *SubsysStateToString(taf::pa::data::SubsystemState_e state);
 };
 
 } // data

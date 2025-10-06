@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <inttypes.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,6 +94,46 @@ PA_SHARED void taf_pa_common_LogMessage
 #define PA_CRIT(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_CRIT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define PA_ALERT(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_ALERT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define PA_EMERG(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_EMERG,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a variable as unused.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+#define PA_UNUSED(v) ((void)(v))
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Return from function if condition is true.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+#define TAF_PA_ERROR_IF_RET_NIL(condition, formatString, ...) \
+    do                                                        \
+    {                                                         \
+        if (condition)                                        \
+        {                                                     \
+            PA_ERROR(formatString, ##__VA_ARGS__);            \
+            return;                                           \
+        }                                                     \
+    } while (0);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Return specified value from function if condition is true.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+#define TAF_PA_ERROR_IF_RET_VAL(condition, val, formatString, ...) \
+    do                                                             \
+    {                                                              \
+        if (condition)                                             \
+        {                                                          \
+            PA_ERROR(formatString, ##__VA_ARGS__);                 \
+            return (val);                                          \
+        }                                                          \
+    } while (0);
 
 #ifdef __cplusplus
 }
