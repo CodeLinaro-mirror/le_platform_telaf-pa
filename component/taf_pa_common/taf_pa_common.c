@@ -3,34 +3,170 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+#include "taf_ns_common.h"
+
+#include "taf_prop_common.h"
+
 #include "taf_pa_common.h"
 
-#if 0
-static pthread_once_t log_once = PTHREAD_ONCE_INIT;
+#define MAX_MSG_SIZE 1024 
 
-static void open_syslog(void) {
-    openlog("TelAF_PA", LOG_PID | LOG_CONS, LOG_USER);
+taf_pa_common_LogLevel_t gLogLevel = TAF_PA_COMMON_LOG_LEVEL_INFO;
+
+static const char* LogLevelToStr
+(
+    taf_pa_common_LogLevel_t level
+)
+{
+    switch (level)
+    {
+        case TAF_PA_COMMON_LOG_LEVEL_DEBUG:
+            return " DBUG";
+        case TAF_PA_COMMON_LOG_LEVEL_INFO:
+            return " INFO";
+        case TAF_PA_COMMON_LOG_LEVEL_NOTICE:
+            return "-NTC-";
+        case TAF_PA_COMMON_LOG_LEVEL_WARN:
+            return "-WRN-";
+        case TAF_PA_COMMON_LOG_LEVEL_ERROR:
+            return "=ERR=";
+        case TAF_PA_COMMON_LOG_LEVEL_CRIT:
+            return "*CRT*";
+        case TAF_PA_COMMON_LOG_LEVEL_ALERT:
+            return "*ALT*";
+        case TAF_PA_COMMON_LOG_LEVEL_EMERG:
+            return "*EMR*";
+        default:
+            break;
+    }
+
+    return " INFO";
 }
 
-void tafpa_common_log_init(void) {
-    pthread_once(&log_once, open_syslog);
+static int LogLevelToSyslog
+(
+    taf_pa_common_LogLevel_t level
+)
+{
+    switch (level)
+    {
+        case TAF_PA_COMMON_LOG_LEVEL_DEBUG:
+            return LOG_DEBUG;
+        case TAF_PA_COMMON_LOG_LEVEL_INFO:
+            return LOG_INFO;
+        case TAF_PA_COMMON_LOG_LEVEL_NOTICE:
+            return LOG_NOTICE;
+        case TAF_PA_COMMON_LOG_LEVEL_WARN:
+            return LOG_WARNING;
+        case TAF_PA_COMMON_LOG_LEVEL_ERROR:
+            return LOG_ERR;
+        case TAF_PA_COMMON_LOG_LEVEL_CRIT:
+            return LOG_CRIT;
+        case TAF_PA_COMMON_LOG_LEVEL_ALERT:
+            return LOG_ALERT;
+        case TAF_PA_COMMON_LOG_LEVEL_EMERG:
+            return LOG_EMERG;
+        default:
+            break;
+    }
+
+    return LOG_INFO;
 }
-#endif
 
-void taf_pa_common_log_message(int level, const char *file,
-                              const char *func, int line,
-                              const char *fmt, ...) {
-    //tafpa_common_log_init();
+static taf_prop_common_LogLevel_t LogLevelToPropLogLevel
+(
+    taf_pa_common_LogLevel_t level
+)
+{
+    switch (level)
+    {
+        case TAF_PA_COMMON_LOG_LEVEL_DEBUG:
+            return TAF_PROP_COMMON_LOG_LEVEL_DEBUG;
+        case TAF_PA_COMMON_LOG_LEVEL_INFO:
+            return TAF_PROP_COMMON_LOG_LEVEL_INFO;
+        case TAF_PA_COMMON_LOG_LEVEL_NOTICE:
+            return TAF_PROP_COMMON_LOG_LEVEL_NOTICE;
+        case TAF_PA_COMMON_LOG_LEVEL_WARN:
+            return TAF_PROP_COMMON_LOG_LEVEL_WARN;
+        case TAF_PA_COMMON_LOG_LEVEL_ERROR:
+            return TAF_PROP_COMMON_LOG_LEVEL_ERROR;
+        case TAF_PA_COMMON_LOG_LEVEL_CRIT:
+            return TAF_PROP_COMMON_LOG_LEVEL_CRIT;
+        case TAF_PA_COMMON_LOG_LEVEL_ALERT:
+            return TAF_PROP_COMMON_LOG_LEVEL_ALERT;
+        case TAF_PA_COMMON_LOG_LEVEL_EMERG:
+            return TAF_PROP_COMMON_LOG_LEVEL_EMERG;
+        default:
+            break;
+    }
 
-    const char *base = strrchr(file, '/');
-    if (!base) base = strrchr(file, '\\');
+    return TAF_PROP_COMMON_LOG_LEVEL_INFO;
+}
+
+static taf_ns_common_LogLevel_t LogLevelToNsLogLevel
+(
+    taf_pa_common_LogLevel_t level
+)
+{
+    switch (level)
+    {
+        case TAF_PA_COMMON_LOG_LEVEL_DEBUG:
+            return TAF_NS_COMMON_LOG_LEVEL_DEBUG;
+        case TAF_PA_COMMON_LOG_LEVEL_INFO:
+            return TAF_NS_COMMON_LOG_LEVEL_INFO;
+        case TAF_PA_COMMON_LOG_LEVEL_NOTICE:
+            return TAF_NS_COMMON_LOG_LEVEL_NOTICE;
+        case TAF_PA_COMMON_LOG_LEVEL_WARN:
+            return TAF_NS_COMMON_LOG_LEVEL_WARN;
+        case TAF_PA_COMMON_LOG_LEVEL_ERROR:
+            return TAF_NS_COMMON_LOG_LEVEL_ERROR;
+        case TAF_PA_COMMON_LOG_LEVEL_CRIT:
+            return TAF_NS_COMMON_LOG_LEVEL_CRIT;
+        case TAF_PA_COMMON_LOG_LEVEL_ALERT:
+            return TAF_NS_COMMON_LOG_LEVEL_ALERT;
+        case TAF_PA_COMMON_LOG_LEVEL_EMERG:
+            return TAF_NS_COMMON_LOG_LEVEL_EMERG;
+        default:
+            break;
+    }
+
+    return TAF_NS_COMMON_LOG_LEVEL_INFO;
+}
+
+void taf_pa_common_LogSetlevel
+(
+    taf_pa_common_LogLevel_t level
+)
+{
+    gLogLevel = level;
+    taf_prop_common_LogSetlevel(LogLevelToPropLogLevel(level));
+    taf_ns_common_LogSetlevel(LogLevelToNsLogLevel(level));
+}
+
+void taf_pa_common_LogMessage
+(
+    taf_pa_common_LogLevel_t level,
+    const char* file,
+    const char* func,
+    int line,
+    const char* fmt,
+    ...
+)
+{
+    if (level < gLogLevel)
+        return;
+
+    const char* base = strrchr(file, '/');
+    if (!base)
+        base = strrchr(file, '\\');
     base = base ? base + 1 : file;
 
-    char newFmt[1024];
-    snprintf(newFmt, sizeof(newFmt), "%s %s() %d | %s", base, func, line, fmt);
-
-    va_list args;
-    va_start(args, fmt);
-    vsyslog(level, newFmt, args);
-    va_end(args);
+    char log[MAX_MSG_SIZE];
+    snprintf(log, sizeof(log), "%s | %s %s() %d | %s", LogLevelToStr(level), base,
+        (func ? func : "?"), line, fmt);
+	
+    va_list ap;
+    va_start(ap, fmt);
+    vsyslog(LogLevelToSyslog(level), log, ap);
+    va_end(ap);
 }

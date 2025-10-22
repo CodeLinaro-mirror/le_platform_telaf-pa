@@ -1,16 +1,17 @@
-project(TAF_PA_COMMON C)
+cmake_minimum_required(VERSION 3.16)
+project(taf_pa_radio LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(LIBRARY_VERSION "1.0.0")
 set(LIBRARY_SOVERSION "1")
-set(TARGET_NAME taf_pa_common)
+set(TARGET_NAME taf_pa_radio)
 set(OUTPUT_NAME Component_${TARGET_NAME})
-
-# common headers
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
 add_subdirectory(stub)
 
-add_library(${TARGET_NAME} SHARED taf_pa_common.c)
+add_library(${TARGET_NAME} SHARED taf_pa_radio.cpp)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     VERSION ${LIBRARY_VERSION}
@@ -20,8 +21,9 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/stub/include)
 
-target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_common)
-target_link_libraries(${TARGET_NAME} PRIVATE taf_ns_common)
+target_link_libraries(${TARGET_NAME} PRIVATE telux_tel telux_data)
+target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
+target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_radio)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib

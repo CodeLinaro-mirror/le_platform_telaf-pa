@@ -20,6 +20,9 @@ set(MODULE_LIST
     component/taf_pa_sms
     component/taf_pa_deviceinfo
     component/taf_pa_time
+    component/taf_pa_radio
+    component/taf_pa_mrc
+    component/taf_pa_flash
 )
 
 foreach(module ${MODULE_LIST})
