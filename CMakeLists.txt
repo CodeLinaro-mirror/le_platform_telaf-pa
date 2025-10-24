@@ -31,6 +31,7 @@ set(MODULE_LIST
     component/taf_pa_audio
     component/taf_pa_ecall
     component/taf_pa_health
+    component/taf_pa_pms
 )
 
 foreach(module ${MODULE_LIST})
