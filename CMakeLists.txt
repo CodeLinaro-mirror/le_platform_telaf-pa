@@ -23,6 +23,7 @@ set(MODULE_LIST
     component/taf_pa_radio
     component/taf_pa_mrc
     component/taf_pa_flash
+    component/taf_pa_wlan
 )
 
 foreach(module ${MODULE_LIST})
