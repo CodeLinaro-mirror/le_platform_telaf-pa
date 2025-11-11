@@ -58,62 +58,6 @@ struct PaType(RefStruct)
 
 static PaType(RefStruct) pa;
 
-static std::promise<telux::common::ServiceStatus> masterMgrP;
-static std::promise<telux::common::ServiceStatus> slaveMgrP;
-static std::promise<telux::common::ServiceStatus> wakeupMgrP;
-
-static bool IsTimeout
-(
-    std::future<telux::common::ServiceStatus> &fu,
-    uint32_t timeoutMs
-)
-{
-    return (fu.wait_for(std::chrono::seconds(5))
-            !=
-            std::future_status::ready);
-}
-
-static bool CheckResultIsOK
-(
-    std::future<telux::common::ServiceStatus> &fu,
-    const char * mgrName
-)
-{
-    try
-    {
-        if (fu.get() !=  telux::common::ServiceStatus::SERVICE_AVAILABLE)
-        {
-            PA_ERROR("Failed to init %s: Servaice is unavailable", mgrName);
-            return false;
-        }
-    }
-    catch (const std::future_error& fe)
-    {
-        using std::future_errc;
-
-        if (fe.code() == std::make_error_code(future_errc::broken_promise))
-        {
-            PA_ERROR("No provider & can NOT set_value");
-            return false;
-        }
-        else if (fe.code() == std::make_error_code(future_errc::no_state))
-        {
-            PA_ERROR("Already got the future ever");
-            return false;
-        }
-        else
-        {
-            PA_ERROR("future_error: %s (%d) - %s",
-                     fe.what(), fe.code().value(), fe.code().message().c_str());
-
-            return false;
-        }
-    }
-
-    PA_INFO("Service [%s] is AVAIABLE", mgrName);
-    return true;
-}
-
 static const char * to_StateString(TcuActivityState state)
 {
     switch(state) {
@@ -467,25 +411,152 @@ static inline telux::power::TcuActivityState to_SdkPowerState
     }
 }
 
-static std::promise<int> SetPowerStatePromise;
-
-static void CommandCallback
+static void cb_SetPowerState
 (
-    ErrorCode errorCode
+    std::weak_ptr<std::promise<int>> wp,
+    ErrorCode errorCode,
+    const char * description
 )
 {
+    auto valid = wp.lock();
+    int rst = 0;
+
     PA_INFO("Calling %s", __FUNCTION__);
 
-    if(errorCode == telux::common::ErrorCode::SUCCESS)
+    if (valid)
     {
-        SetPowerStatePromise.set_value(0);
+        if (errorCode != telux::common::ErrorCode::SUCCESS)
+        {
+            PA_WARN("Failed to %s, err: %d, mark as N-OK",
+                    description,
+                    static_cast<int>(errorCode));
+            rst = 1;
+        }
+        else
+        {
+            PA_INFO("[%s] PMD says OK", description);
+            rst = 0; // OK
+        }
+
+        try
+        {
+            valid->set_value(rst);
+        }
+        catch (const std::future_error& e)
+        {
+            if (e.code() == std::make_error_code(std::future_errc::promise_already_satisfied)
+            ||  e.code() == std::make_error_code(std::future_errc::no_state))
+            {
+                PA_WARN("[%s] Already set by another one, ignore", description);
+            }
+            else
+            {
+                PA_ERROR("[%s] Report the exception to the top level", description);
+                throw; // Rare cases
+            }
+        }
     }
     else
     {
-        PA_ERROR("Failed to set power state, err: %d, mark as FAULT",
-                 static_cast<int>(errorCode));
+        PA_ERROR("[%s] Got one invalid 'promise', ignore", description);
+    }
+}
 
-        SetPowerStatePromise.set_value(1);
+static void cb_ServiceStatus
+(
+    std::weak_ptr<std::promise<telux::common::ServiceStatus>> wp,
+    telux::common::ServiceStatus status,
+    const char * description
+)
+{
+    auto valid = wp.lock();
+
+    if (valid)
+    {
+        if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            PA_INFO("[%s] service is available", description);
+        }
+        else
+        {
+            PA_ERROR("[%s] service is UN-available", description);
+        }
+
+        // Ensure the graceful exit from exceptions.
+        try
+        {
+            valid->set_value(status);
+        }
+        catch (const std::future_error& e)
+        {
+            // The 'set_xxx' functions already were invoked
+            if (e.code() == std::make_error_code(std::future_errc::promise_already_satisfied)
+            ||  e.code() == std::make_error_code(std::future_errc::no_state))
+            {
+                PA_WARN("[%s] Already set by another one, ignore", description);
+            }
+            else
+            {
+                PA_ERROR("[%s] Report the exception to the top level", description);
+                throw; // Rare cases
+            }
+        }
+    }
+    else
+    {
+        PA_ERROR("[%s] Got one invalid 'promise', ignore", description);
+    }
+}
+
+static bool IsOkForCheckingFuture
+(
+    std::future<telux::common::ServiceStatus> &fu,
+    uint32_t timeoutMs,
+    const char * mgrName
+)
+{
+    auto status = fu.wait_for(std::chrono::milliseconds(timeoutMs));
+
+    if (status == std::future_status::ready)
+    {
+        try
+        {
+            if (fu.get() !=  telux::common::ServiceStatus::SERVICE_AVAILABLE)
+            {
+                PA_ERROR("Failed to init %s: Service is unavailable", mgrName);
+                return false;
+            }
+        }
+        catch (const std::future_error& fe)
+        {
+            using std::future_errc;
+
+            if (fe.code() == std::make_error_code(future_errc::broken_promise))
+            {
+                PA_ERROR("No provider & can NOT set_value");
+                return false;
+            }
+            else if (fe.code() == std::make_error_code(future_errc::no_state))
+            {
+                PA_ERROR("Already got the future ever");
+                return false;
+            }
+            else
+            {
+                PA_ERROR("future_error: %s (%d) - %s",
+                        fe.what(), fe.code().value(), fe.code().message().c_str());
+
+                return false;
+            }
+        }
+
+        PA_INFO("Service [%s] is AVAIABLE", mgrName);
+        return true;
+    }
+    else
+    {
+        PA_ERROR("Timeout for preparing the %s [%u](ms)", mgrName, timeoutMs);
+        return false;
     }
 }
 
@@ -513,11 +584,20 @@ PaType(Result) PaFn(Init)
     masterConfig.clientName = "tafPMSvc";
     masterConfig.machineName =  ALL_MACHINES;
 
+    auto masterMgrP =
+        std::make_shared<
+            std::promise<
+                telux::common::ServiceStatus>>();
+
+    std::weak_ptr<
+        std::promise<
+            telux::common::ServiceStatus>> masterMgrWP = masterMgrP;
+
     pa.masterMgr_ = powerFactory.getTcuActivityManager(
                     masterConfig,
-                    [](telux::common::ServiceStatus status)
+                    [masterMgrWP](telux::common::ServiceStatus status)
                     {
-                        masterMgrP.set_value(status);
+                        cb_ServiceStatus(masterMgrWP, status, "masterMgr");
                     });
 
     if (nullptr == pa.masterMgr_)
@@ -526,15 +606,9 @@ PaType(Result) PaFn(Init)
         return PaResult(FAULT);
     }
 
-    std::future<telux::common::ServiceStatus> fuMaster = masterMgrP.get_future();
+    std::future<telux::common::ServiceStatus> fuMaster = masterMgrP->get_future();
 
-    if (IsTimeout(fuMaster, timeoutMs))
-    {
-        PA_ERROR("Timeout for preparing the /masterMgr [%u](ms)", timeoutMs);
-        return PaResult(TIMEOUT);
-    }
-
-    if (! CheckResultIsOK(fuMaster, "/masterMgr"))
+    if (! IsOkForCheckingFuture(fuMaster, timeoutMs, "/masterMgr"))
     {
         return PaResult(FAULT);
     }
@@ -544,34 +618,42 @@ PaType(Result) PaFn(Init)
     slaveConfig.clientName = "tafPMSvc";
     slaveConfig.machineName =  ALL_MACHINES;
 
+    auto slaveMgrP =
+        std::make_shared<
+            std::promise<
+                telux::common::ServiceStatus>>();
+
+    std::weak_ptr<
+        std::promise<
+            telux::common::ServiceStatus>> slaveMgrWP = slaveMgrP;
+
     pa.slaveMgr_ = powerFactory.getTcuActivityManager(
                     slaveConfig,
-                    [](telux::common::ServiceStatus status)
+                    [slaveMgrWP](telux::common::ServiceStatus status)
                     {
-                        slaveMgrP.set_value(status);
+                        cb_ServiceStatus(slaveMgrWP, status, "slaveMgr");
                     });
-    if (nullptr == pa.slaveMgr_)
-    {
-        PA_ERROR("Failed to getTcuActivityManager for [slaveMgr]");
-        return PaResult(FAULT);
-    }
-    std::future<telux::common::ServiceStatus> fuSlave = slaveMgrP.get_future();
 
-    if (IsTimeout(fuSlave, timeoutMs))
-    {
-        PA_ERROR("Timeout for preparing the /slaveMgr [%u](ms)", timeoutMs);
-        return PaResult(TIMEOUT);
-    }
+    std::future<telux::common::ServiceStatus> fuSlave = slaveMgrP->get_future();
 
-    if (! CheckResultIsOK(fuSlave, "/slaveMgr"))
+    if (! IsOkForCheckingFuture(fuSlave, timeoutMs, "/slaveMgr"))
     {
         return PaResult(FAULT);
     }
+
+    auto wakeupMgrP =
+        std::make_shared<
+            std::promise<
+                telux::common::ServiceStatus>>();
+
+    std::weak_ptr<
+        std::promise<
+            telux::common::ServiceStatus>> wakeupMgrWP = wakeupMgrP;
 
     pa.wakeupMgr_ = powerFactory.getWakeupManager(
-                        [](telux::common::ServiceStatus status)
+                        [wakeupMgrWP](telux::common::ServiceStatus status)
                         {
-                            wakeupMgrP.set_value(status);
+                            cb_ServiceStatus(wakeupMgrWP, status, "wakeupMgr");
                         });
 
     if (nullptr == pa.wakeupMgr_)
@@ -580,15 +662,9 @@ PaType(Result) PaFn(Init)
         return PaResult(FAULT);
     }
 
-    std::future<telux::common::ServiceStatus> fuWakeup = wakeupMgrP.get_future();
+    std::future<telux::common::ServiceStatus> fuWakeup = wakeupMgrP->get_future();
 
-    if (IsTimeout(fuWakeup, timeoutMs))
-    {
-        PA_ERROR("Timeout for preparing the /wakeupMgr [%u](ms)", timeoutMs);
-        return PaResult(TIMEOUT);
-    }
-
-    if (! CheckResultIsOK(fuWakeup, "/wakeupMgr"))
+    if (! IsOkForCheckingFuture(fuWakeup, timeoutMs, "/wakeupMgr"))
     {
         return PaResult(FAULT);
     }
@@ -709,16 +785,23 @@ PaType(Result) PaFn(SetPowerStateAsMaster)
     telux::common::Status status = telux::common::Status::FAILED;
     PaType(Result) rst = PaResult(OK);
 
-    SetPowerStatePromise = std::promise<int>();
+    auto pwrSetP = std::make_shared<std::promise<int>>();
+
+    std::weak_ptr<std::promise<int>> pwrSetWP = pwrSetP;
 
     status = pa.masterMgr_->setActivityState(
                                 sdkState,
                                 std::string(name),
-                                CommandCallback);
+                                [pwrSetWP](ErrorCode errorCode){
+                                    cb_SetPowerState(
+                                        pwrSetWP,
+                                        errorCode,
+                                        "/SetPowerState");
+                                });
 
     if(status == telux::common::Status::SUCCESS)
     {
-        std::future<int> fu = SetPowerStatePromise.get_future();
+        std::future<int> fu = pwrSetP->get_future();
 
         #define SET_STATE_TIMEOUT 5
         std::future_status waitStatus =
@@ -732,8 +815,7 @@ PaType(Result) PaFn(SetPowerStateAsMaster)
         }
         else
         {
-            int r = fu.get();
-            rst = r == 0 ? PaResult(OK) : PaResult(FAULT);
+            rst = fu.get() == 0 ? PaResult(OK) : PaResult(FAULT);
         }
     }
     else
