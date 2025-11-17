@@ -29,6 +29,7 @@ set(MODULE_LIST
     component/taf_pa_net
     component/taf_pa_sensor
     component/taf_pa_audio
+    component/taf_pa_ecall
 )
 
 foreach(module ${MODULE_LIST})
