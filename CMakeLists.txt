@@ -25,6 +25,7 @@ set(MODULE_LIST
     component/taf_pa_flash
     component/taf_pa_wlan
     component/taf_pa_data
+    component/taf_pa_location
 )
 
 foreach(module ${MODULE_LIST})
