@@ -22,16 +22,45 @@ LOCAL_BUILD_DIR="${LEGATO_ROOT}/build/${TARGET}/telaf-pa"
 mkdir -p $LOCAL_BUILD_DIR; cd $LOCAL_BUILD_DIR
 
 args_sa525m=(
-    "${CURDIR}/component/taf_pa_voicecall/"
+    "${CURDIR}/component/taf_pa_keystore/"
+    "${CURDIR}/component/taf_pa_fscrypt/"
+    "${CURDIR}/component/taf_pa_sensor/"
+    "${CURDIR}/component/taf_pa_data/"
 )
 
 case "${TARGET}" in
     "sa525m")
         for ((i=0; i<${#args_sa525m[@]}; i++))
         do
-            mkcomp ${LOCAL_MKCOMP_FLAGS} -t "${TARGET}" \
-                   -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
-                   -i "${TELAF_ROOT}/interfaces/" ${args_sa525m[$i]}
+            if [ $i -lt ${#stub_args_sa525m[@]} ]; then
+                comp=${stub_args_sa525m[$i]}
+                mkcomp ${LOCAL_MKCOMP_FLAGS} -t "${TARGET}" \
+                       -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
+                       -i "${TELAF_ROOT}/interfaces/" ${comp}
+            else
+                j=$((i - ${#stub_args_sa525m[@]}))
+                comp=${args_sa525m[$j]}
+                mkcomp ${LOCAL_MKCOMP_FLAGS} -t "${TARGET}" \
+                       -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
+                       -i "${TELAF_ROOT}/interfaces/" ${comp}
+            fi
+        done
+        ;;
+    "sa510m")
+        for ((i=0; i<${#args_sa510m[@]}; i++))
+        do
+            if [ $i -lt ${#stub_args_sa510m[@]} ]; then
+                comp=${stub_args_sa510m[$i]}
+                mkcomp ${LOCAL_MKCOMP_FLAGS} -t "${TARGET}" \
+                       -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
+                       -i "${TELAF_ROOT}/interfaces/" ${comp}
+            else
+                j=$((i - ${#stub_args_sa510m[@]}))
+                comp=${args_sa510m[$j]}
+                mkcomp ${LOCAL_MKCOMP_FLAGS} -t "${TARGET}" \
+                       -X "-O2" -C "-O2" ${MKTOOLS_X_C_FLAGS} \
+                       -i "${TELAF_ROOT}/interfaces/" ${comp}
+            fi
         done
         ;;
     *)
