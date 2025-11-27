@@ -5,9 +5,61 @@
 
 #include <errno.h>
 
+#include <future>
+#include <condition_variable>
+
+#include <telux/common/CommonDefines.hpp>
+#include <telux/platform/PlatformFactory.hpp>
+#include <telux/platform/FsDefines.hpp>
+#include <telux/platform/FsManager.hpp>
+
 #include "taf_pa_mrc.hpp"
 
 #include "taf_ns_mrc.h"
+
+#define SERVICE_TIMEOUT 5
+
+using namespace std;
+using namespace telux::common;
+using namespace telux::platform;
+
+#define SERVICE_PROMISE_AND_CALLBACK(name)                                \
+    auto name##Promise = make_shared<promise<ServiceStatus>>();           \
+    auto name##Callback = [name##Promise](ServiceStatus status)           \
+    {                                                                     \
+        try                                                               \
+        {                                                                 \
+            name##Promise->set_value(status);                             \
+        }                                                                 \
+        catch (const future_error& e)                                     \
+        {                                                                 \
+            PA_ERROR("Future error in %s callback: %s", #name, e.what()); \
+        }                                                                 \
+        catch (const exception& e)                                        \
+        {                                                                 \
+            PA_ERROR("Exception in %s callback: %s", #name, e.what());    \
+        }                                                                 \
+        catch (...)                                                       \
+        {                                                                 \
+            PA_ERROR("Unknown error in %s callback.", #name);             \
+        }                                                                 \
+    };
+
+#define SERVICE_READY(name)                                              \
+    future<ServiceStatus> name##Future = name##Promise->get_future();    \
+    future_status name##Status = name##Future.wait_for(                  \
+        chrono::seconds(SERVICE_TIMEOUT));                               \
+        ServiceStatus name##ServiceStatus;                               \
+        if (future_status::timeout == name##Status)                      \
+            PA_CRIT("Timeout for %s.", #name);                           \
+        else                                                             \
+        {                                                                \
+            name##ServiceStatus = name##Future.get();                    \
+            if (name##ServiceStatus != ServiceStatus::SERVICE_AVAILABLE) \
+                PA_CRIT("%s is not available.", #name);                  \
+            else                                                         \
+                PA_INFO("%s is available.", #name);                      \
+        }
 
 typedef struct
 {
@@ -20,10 +72,16 @@ typedef struct
     Handler_t processStatus;
 } Indicator_t;
 
+typedef struct
+{
+    shared_ptr<IFsManager> fs;
+} Manager_t;
+
 class PlatformAdaptor
 {
     public:
         Indicator_t indicators;
+        Manager_t managers;
 
         static PlatformAdaptor& GetInstance
         (
@@ -230,8 +288,14 @@ static void ProcessStatusHandler
 
 pa_result_t taf_pa_mrc_Init()
 {
-    PA_INFO("MRC platform adaptor initialization is done.");
+    auto& pa = PlatformAdaptor::GetInstance();
+    auto& platformFactory = PlatformFactory::getInstance();
 
+    SERVICE_PROMISE_AND_CALLBACK(fs)
+    pa.managers.fs = platformFactory.getFsManager(fsCallback);
+    SERVICE_READY(fs)
+
+    PA_INFO("MRC platform adaptor initialization is done.");
     int32_t result = taf_ns_mrc_Init();
     if (result == -ENOSYS)
         PA_INFO("MRC proprietary platform adaptor is not implemented.");
@@ -258,9 +322,116 @@ pa_result_t taf_pa_mrc_SetProcessStatus
     taf_pa_mrc_Status_t status
 )
 {
-    taf_ns_mrc_Process_t nsProcess = Utility::Convert::Process(process);
-    taf_ns_mrc_Status_t nsStatus = Utility::Convert::Status(status);
-    return taf_ns_mrc_SetProcessStatus(nsProcess, nsStatus);
+    pa_result_t result = 0;
+    switch (process)
+    {
+        case TAF_PA_MRC_PROCESS_ABSYNC:
+        {
+            taf_ns_mrc_Status_t nsStatus = Utility::Convert::Status(status);
+            result = taf_ns_mrc_SetProcessStatus(TAF_NS_MRC_PROCESS_ABSYNC, nsStatus);
+            break;
+        }
+        case TAF_PA_MRC_PROCESS_OTA:
+        {
+            Status paStatus = Status::SUCCESS;
+            auto promisePtr = make_shared<promise<ErrorCode>>();
+            auto callback = [promisePtr](ErrorCode error)
+            {
+                try
+                {
+                    promisePtr->set_value(error);
+                }
+                catch (const future_error& e)
+                {
+                    PA_ERROR("Future error in callback: %s", e.what());
+                }
+                catch (const exception& e)
+                {
+                    PA_ERROR("Exception in callback: %s", e.what());
+                }
+                catch (...)
+                {
+                    PA_ERROR("Unknown error in callback.");
+                }
+            };
+
+            auto& pa = PlatformAdaptor::GetInstance();
+
+            switch (status)
+            {
+                case TAF_PA_MRC_STATUS_INITIATED:
+                    paStatus = pa.managers.fs->prepareForOta(OtaOperation::START, callback);
+                    break;
+                case TAF_PA_MRC_STATUS_RESUMED:
+                    paStatus = pa.managers.fs->prepareForOta(OtaOperation::RESUME, callback);
+                    break;
+                case TAF_PA_MRC_STATUS_SUCCEEDED:
+                    paStatus = pa.managers.fs->otaCompleted(OperationStatus::SUCCESS, callback);
+                    break;
+                case TAF_PA_MRC_STATUS_FAILED:
+                    paStatus = pa.managers.fs->otaCompleted(OperationStatus::FAILURE, callback);
+                    break;
+                default:
+                    PA_ERROR("Unknown status %d.", status);
+                    return -EINVAL;
+            }
+
+            ErrorCode error = promisePtr->get_future().get();
+            if (paStatus != Status::SUCCESS || error != ErrorCode::SUCCESS)
+            {
+                PA_ERROR("Failed to set OTA status %d, ret = %d, error = %d.", status,
+                    (int)paStatus, (int)error);
+                return -EFAULT;
+            }
+
+            result = 0;
+            break;
+        }
+        default:
+            PA_ERROR("Unknown process %d.", process);
+            return -EINVAL;
+    }
+
+    return result;
+}
+
+pa_result_t taf_pa_mrc_PerformABSync
+(
+    void
+)
+{
+    auto promisePtr = make_shared<promise<ErrorCode>>();
+    auto callback = [promisePtr](ErrorCode error)
+    {
+        try
+        {
+            promisePtr->set_value(error);
+        }
+        catch (const future_error& e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const exception& e)
+        {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown error in callback.");
+        }
+    };
+
+    auto& pa = PlatformAdaptor::GetInstance();
+    auto status = pa.managers.fs->startAbSync(callback);
+    auto error = promisePtr->get_future().get();
+    if (status != Status::SUCCESS || error != ErrorCode::SUCCESS)
+    {
+        PA_ERROR("Failed to set OTA status %d, ret = %d, error = %d.", status, (int)status,
+            (int)error);
+        return -EFAULT;
+    }
+
+    return 0;
 }
 
 taf_pa_mrc_ProcessStatusHandlerRef_t taf_pa_mrc_AddProcessStatusHandler

@@ -114,6 +114,11 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_SetTimerPeriod
     uint32_t period
 );
 
+PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_PerformABSync
+(
+    void
+);
+
 #ifdef __cplusplus
 }
 #endif
