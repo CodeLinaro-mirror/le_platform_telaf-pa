@@ -39,7 +39,6 @@ public:
     }
 
     taf_pa_location_LocationId acquireId() {
-        std::lock_guard<std::mutex> lock(mtx_);
         for (size_t i = 0; i < MAX_LOCATION_IDS; ++i) {
             if (!idMask_.test(i)) {
                 idMask_.set(i);
@@ -247,8 +246,25 @@ pa_result_t LocationPAController::MapErrorCode(telux::common::ErrorCode errorCod
 void LocationPAController::PALocationClient::Init(){
     if(locationManager_ != nullptr)
     {
-        locationManager_->registerListenerEx(shared_from_this());
-        locationManager_->registerForSystemInfoUpdates(shared_from_this());
+        PA_INFO("locationManager_ --> Init: %p", locationManager_.get());
+        auto status = locationManager_->registerForSystemInfoUpdates(shared_from_this());
+        if(status == telux::common::Status::SUCCESS)
+        {
+            PA_INFO("registerForSystemInfoUpdates listener for location system information");
+        }
+        else
+        {
+            PA_ERROR("Failed to register a listener for location system information");
+        }
+        status = locationManager_->registerListenerEx(shared_from_this());
+        if(status == telux::common::Status::SUCCESS)
+        {
+            PA_INFO("registerListenerEx a listener!!");
+        }
+        else
+        {
+            PA_ERROR("Failed to register a listener");
+        }
     }
     else
     {
@@ -259,20 +275,11 @@ void LocationPAController::PALocationClient::Init(){
 void LocationPAController::PALocationClient::CleanUp()
 {
     PA_INFO("CleanUp!!");
-    std::lock_guard<std::mutex> lock(mtx_);
 
     if(locationManager_ != nullptr)
     {
-        auto status = locationManager_->deRegisterForSystemInfoUpdates(shared_from_this());
-        if(status == telux::common::Status::SUCCESS)
-        {
-            PA_INFO("Deregistered a listener for location system information");
-        }
-        else
-        {
-            PA_ERROR("Failed to deregister a listener for location system information");
-        }
-        status = locationManager_->deRegisterListenerEx(shared_from_this());
+        PA_INFO("locationManager_ --> CleanUp: %p", locationManager_.get());
+        auto status = locationManager_->deRegisterListenerEx(shared_from_this());
         if(status == telux::common::Status::SUCCESS)
         {
             PA_INFO("Deregistered a listener!!");
@@ -280,6 +287,15 @@ void LocationPAController::PALocationClient::CleanUp()
         else
         {
             PA_ERROR("Failed to deregister a listener");
+        }
+        status = locationManager_->deRegisterForSystemInfoUpdates(shared_from_this());
+        if(status == telux::common::Status::SUCCESS)
+        {
+            PA_INFO("Deregistered a listener for location system information");
+        }
+        else
+        {
+            PA_ERROR("Failed to deregister a listener for location system information");
         }
     }
     else
@@ -342,12 +358,12 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
         return ReusableIdGenerator::INVALID_LOCATION_ID;
     }
 
-    std::shared_ptr<PALocationClient> paLocationClient =
-        std::make_shared<PALocationClient>(sdkLocationManager);
+    std::shared_ptr<LocationPAController::PALocationClient> paLocationClient =
+        std::make_shared<LocationPAController::PALocationClient>(sdkLocationManager);
 
     paLocationClient->Init();
 
-    PA_INFO("sdkLocationManager: %p", sdkLocationManager);
+    PA_INFO("sdkLocationManager: %p", sdkLocationManager.get());
 
     locationClients_[newId] = paLocationClient;
     PA_INFO("Created location client for with ID %llu", newId);
@@ -358,16 +374,15 @@ pa_result_t LocationPAController::ReleaseLocationClient(taf_pa_location_Location
 {
     PA_INFO("Release location Client with ID %llu", id);
 
-    std::shared_ptr<PALocationClient> clientPtr;
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto it = locationClients_.find(id);
-    if (it == locationClients_.end()) {
-        PA_ERROR("Invalid location ID (%llu) provided for release!", id);
-        return PA_BAD_PARAMETER;
-    }
+    std::shared_ptr<LocationPAController::PALocationClient> clientPtr;
 
     try {
+        auto it = locationClients_.find(id);
+        if (it == locationClients_.end()) {
+            PA_ERROR("Invalid location ID (%llu) provided for release!", id);
+            return PA_BAD_PARAMETER;
+        }
+
         clientPtr = it->second;
         locationClients_.erase(it);
 
@@ -1676,7 +1691,6 @@ pa_result_t tafpa::location::taf_pa_location_requestXtraStatus(taf_pa_location_R
 
 void LocationPAController::PALocationClient::onGnssNmeaInfo(uint64_t timestamp, const std::string &nmea)
 {
-    std::lock_guard<std::mutex> lock(mtx_);
     PA_DEBUG( "**** onGnssNmeaInfo Information --> PA****" );
 
     auto nmeaEvent = std::make_shared<taf_pa_location_NmeaInfoEvent_t>();
@@ -1694,7 +1708,6 @@ void LocationPAController::PALocationClient::onGnssNmeaInfo(uint64_t timestamp, 
 
 void LocationPAController::PALocationClient::onCapabilitiesInfo(const telux::loc::LocCapability capabilityInfo)
 {
-    std::lock_guard<std::mutex> lock(mtx_);
     PA_DEBUG( "**** onCapabilitiesInfo Information-->PA ****" );
 
     auto capabilityEvent = std::make_shared<taf_pa_location_CapabilityChangeEvent_t>();
@@ -1711,7 +1724,6 @@ void LocationPAController::PALocationClient::onCapabilitiesInfo(const telux::loc
 
 void LocationPAController::PALocationClient::onGnssSVInfo(const std::shared_ptr<telux::loc::IGnssSVInfo> &gnssSVInfo)
 {
-    std::lock_guard<std::mutex> lock(mtx_);
     PA_DEBUG( "**** onGnssSVInfo Information -->PA****" );
 
     std::vector<std::shared_ptr<taf_pa_location_GnssSVInfo_t>> GnssSVInfo;
@@ -1743,7 +1755,6 @@ void LocationPAController::PALocationClient::onGnssSVInfo(const std::shared_ptr<
 
 void LocationPAController::PALocationClient::onGnssSignalInfo(const std::shared_ptr<telux::loc::IGnssSignalInfo> &gnssDatainfo)
 {
-    std::lock_guard<std::mutex> lock(mtx_);
     PA_DEBUG( "**** onGnssSignalInfo Information -->PA****" );
 
     std::shared_ptr<taf_pa_location_GnssData_t> GnssDatainfo = std::make_shared<taf_pa_location_GnssData_t>();
@@ -1764,7 +1775,6 @@ void LocationPAController::PALocationClient::onGnssSignalInfo(const std::shared_
 
 void LocationPAController::PALocationClient::onXtraStatusUpdate(const telux::loc::XtraStatus xtraStatus)
 {
-    std::lock_guard<std::mutex> lock(mtx_);
     PA_DEBUG( "**** onXtraStatusUpdate Information -->PA****" );
 
     auto onXtraStatusUpdateData = std::make_shared<taf_pa_location_XtraStatus_t>();
@@ -1783,7 +1793,6 @@ void LocationPAController::PALocationClient::onXtraStatusUpdate(const telux::loc
 
 void LocationPAController::PALocationClient::onLocationSystemInfo(const telux::loc::LocationSystemInfo &locationSystemInfo)
 {
-    std::lock_guard<std::mutex> lock(mtx_);
     PA_DEBUG( "**** Location System Information ****" );
     PA_DEBUG( "**** Location System Information locationSystemInfoValidity:%d",locationSystemInfo.valid);
     PA_DEBUG( "**** Location System Information LeapSecondInfoValidity:%d",locationSystemInfo.info.valid);
@@ -1815,7 +1824,6 @@ void LocationPAController::PALocationClient::onLocationSystemInfo(const telux::l
 
 void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(const std::vector<std::shared_ptr<telux::loc::ILocationInfoEx>> &locationEngineInfo)
 {
-    std::lock_guard<std::mutex> lock(mtx_);
     PA_DEBUG( "**** onDetailedEngineLocationUpdate Information -->PA****" );
 
     std::vector<std::shared_ptr<taf_pa_location_LocEngineInfo_t>> LocationEngineInfo;
@@ -1993,7 +2001,6 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
 
 void LocationPAController::PALocationClient::onGnssMeasurementsInfo(const telux::loc::GnssMeasurements &measurementInfo)
 {
-    std::lock_guard<std::mutex> lock(mtx_);
     PA_DEBUG( "**** onGnssMeasurementsInfo Information -->PA****" );
 
     std::shared_ptr<taf_pa_location_GnssMeasurements_t> measurementsInfo = std::make_shared<taf_pa_location_GnssMeasurements_t>();
