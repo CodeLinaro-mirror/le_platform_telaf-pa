@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fvisibility=hidden")
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -34,6 +35,8 @@ set(MODULE_LIST
     component/taf_pa_pms
     component/taf_pa_sim
     component/taf_pa_therm
+    component/taf_pa_keystore
+    component/taf_pa_fscrypt
     # IMPORTANT: split_debug_symbols_strip_binaries must be the last module in this list.
     # This module extracts debug symbols from all installed binaries and strips them.
     # It must run after all other components have installed their files, otherwise

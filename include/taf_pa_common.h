@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 #include <fcntl.h>
@@ -94,6 +95,10 @@ PA_SHARED void taf_pa_common_LogMessage
 #define PA_CRIT(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_CRIT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define PA_ALERT(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_ALERT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define PA_EMERG(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_EMERG,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define PA_FATAL(fmt, ...) { PA_EMERG(fmt, ##__VA_ARGS__); exit(EXIT_FAILURE); }
+#define PA_FATAL_IF(condition, fmt, ...) if (condition) { PA_FATAL(fmt, ##__VA_ARGS__) }
+#define PA_ASSERT(condition) PA_FATAL_IF(!(condition), "Assert Failed: '%s'", #condition)
 
 //--------------------------------------------------------------------------------------------------
 /**

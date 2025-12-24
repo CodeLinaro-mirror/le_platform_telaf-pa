@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "legato.h"
-#include "interfaces.h"
 #include "taf_pa_keystore.h"
 #include "taf_prop_keystore.h"
 
@@ -17,8 +15,9 @@
  *      LE_FAULT if there was some other error.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_Init(void)
+pa_result_t taf_pa_ks_Init(void)
 {
+    PA_INFO("Telaf keyStore PA initializing ...");
     return taf_prop_ks_Init();
 }
 
@@ -29,21 +28,22 @@ le_result_t taf_pa_ks_Init(void)
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_GenerateRsaEncKey
+pa_result_t taf_pa_ks_GenerateRsaEncKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     const char* keyName,
-    taf_ks_RsaKeySize_t keySize,
+    taf_pa_ks_RsaKeySize_t keySize,
     taf_pa_ks_EncPurpose_t purpose,
-    taf_ks_RsaEncPadding_t padding,
-    le_dls_List_t* tagListPtr,
+    taf_pa_ks_RsaEncPadding_t padding,
+    const taf_pa_ks_Tag_t** tagListPtr,
+    size_t tagListSize,
     const uint8_t* impDataPtr,
     size_t impDataSize,
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateRsaEncKey(clientSessionRef, keyName, keySize, purpose, padding,
-                                           tagListPtr, impDataPtr, impDataSize, keyFileRefPtr);
+    return taf_prop_ks_GenerateRsaEncKey(clientSessionFd, keyName, keySize, purpose, padding,
+               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -53,21 +53,22 @@ le_result_t taf_pa_ks_GenerateRsaEncKey
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_GenerateRsaSigKey
+pa_result_t taf_pa_ks_GenerateRsaSigKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     const char* keyName,
-    taf_ks_RsaKeySize_t keySize,
+    taf_pa_ks_RsaKeySize_t keySize,
     taf_pa_ks_SigPurpose_t purpose,
-    taf_ks_RsaSigPadding_t padding,
-    le_dls_List_t* tagListPtr,
+    taf_pa_ks_RsaSigPadding_t padding,
+    const taf_pa_ks_Tag_t** tagListPtr,
+    size_t tagListSize,
     const uint8_t* impDataPtr,
     size_t impDataSize,
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateRsaSigKey(clientSessionRef, keyName, keySize, purpose, padding,
-                                           tagListPtr, impDataPtr, impDataSize, keyFileRefPtr);
+    return taf_prop_ks_GenerateRsaSigKey(clientSessionFd, keyName, keySize, purpose, padding,
+               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -77,21 +78,22 @@ le_result_t taf_pa_ks_GenerateRsaSigKey
  * The impData must be PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_GenerateEcdsaKey
+pa_result_t taf_pa_ks_GenerateEcdsaKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     const char* keyName,
-    taf_ks_EccKeySize_t keySize,
+    taf_pa_ks_EccKeySize_t keySize,
     taf_pa_ks_SigPurpose_t purpose,
-    taf_ks_Digest_t digest,
-    le_dls_List_t* tagListPtr,
+    taf_pa_ks_Digest_t digest,
+    const taf_pa_ks_Tag_t** tagListPtr,
+    size_t tagListSize,
     const uint8_t* impDataPtr,
     size_t impDataSize,
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateEcdsaKey(clientSessionRef, keyName, keySize, purpose, digest,
-                                          tagListPtr, impDataPtr, impDataSize, keyFileRefPtr);
+    return taf_prop_ks_GenerateEcdsaKey(clientSessionFd, keyName, keySize, purpose, digest,
+               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -101,21 +103,22 @@ le_result_t taf_pa_ks_GenerateEcdsaKey
  * The impData must be raw key bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_GenerateAesKey
+pa_result_t taf_pa_ks_GenerateAesKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     const char* keyName,
-    taf_ks_AesKeySize_t keySize,
+    taf_pa_ks_AesKeySize_t keySize,
     taf_pa_ks_EncPurpose_t purpose,
-    taf_ks_AesBlockMode_t mode,
-    le_dls_List_t* tagListPtr,
+    taf_pa_ks_AesBlockMode_t mode,
+    const taf_pa_ks_Tag_t** tagListPtr,
+    size_t tagListSize,
     const uint8_t* impDataPtr,
     size_t impDataSize,
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateAesKey(clientSessionRef, keyName, keySize, purpose, mode,
-                                        tagListPtr, impDataPtr, impDataSize, keyFileRefPtr);
+    return taf_prop_ks_GenerateAesKey(clientSessionFd, keyName, keySize, purpose, mode,
+               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -125,21 +128,22 @@ le_result_t taf_pa_ks_GenerateAesKey
  * Currently only digest DIGEST_SHA2_256 is supported. The impData must be raw key bytes if provided
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_GenerateHmacKey
+pa_result_t taf_pa_ks_GenerateHmacKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     const char* keyName,
     uint32_t keySize,
     taf_pa_ks_SigPurpose_t purpose,
-    taf_ks_Digest_t digest,
-    le_dls_List_t* tagListPtr,
+    taf_pa_ks_Digest_t digest,
+    const taf_pa_ks_Tag_t** tagListPtr,
+    size_t tagListSize,
     const uint8_t* impDataPtr,
     size_t impDataSize,
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateHmacKey(clientSessionRef, keyName, keySize, purpose, digest,
-                                         tagListPtr, impDataPtr, impDataSize, keyFileRefPtr);
+    return taf_prop_ks_GenerateHmacKey(clientSessionFd, keyName, keySize, purpose, digest,
+               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -147,9 +151,9 @@ le_result_t taf_pa_ks_GenerateHmacKey
  * Export a key into specified key data format.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_pa_ks_ExportKey
+pa_result_t taf_pa_ks_ExportKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
     const uint8_t* appDataPtr,
     size_t appDataSize,
@@ -157,7 +161,7 @@ LE_SHARED le_result_t taf_pa_ks_ExportKey
     size_t* expDataSizePtr
 )
 {
-    return taf_prop_ks_ExportKey(clientSessionRef, keyFileRef, appDataPtr, appDataSize,
+    return taf_prop_ks_ExportKey(clientSessionFd, keyFileRef, appDataPtr, appDataSize,
                                    expDataPtr, expDataSizePtr);
 }
 
@@ -166,16 +170,16 @@ LE_SHARED le_result_t taf_pa_ks_ExportKey
  * Share a key.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_pa_ks_ShareKey
+pa_result_t taf_pa_ks_ShareKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
-    taf_ks_KeyUsage_t keyCap,
-    taf_ks_AppCapMask_t appCap,
+    taf_pa_ks_KeyUsage_t keyCap,
+    uint32_t appCap,
     const char* appName
 )
 {
-    return taf_prop_ks_ShareKey(clientSessionRef, keyFileRef, keyCap, appCap, appName);
+    return taf_prop_ks_ShareKey(clientSessionFd, keyFileRef, keyCap, appCap, appName);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -183,13 +187,13 @@ LE_SHARED le_result_t taf_pa_ks_ShareKey
  * Delete a key file by key name.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_DeleteKey
+pa_result_t taf_pa_ks_DeleteKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef
 )
 {
-    return taf_prop_ks_DeleteKey(clientSessionRef, keyFileRef);
+    return taf_prop_ks_DeleteKey(clientSessionFd, keyFileRef);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -197,14 +201,14 @@ le_result_t taf_pa_ks_DeleteKey
  * Get a key file reference by key name.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_GetKey
+pa_result_t taf_pa_ks_GetKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     const char* keyName,
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GetKey(clientSessionRef, keyName, keyFileRefPtr);
+    return taf_prop_ks_GetKey(clientSessionFd, keyName, keyFileRefPtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -212,15 +216,15 @@ le_result_t taf_pa_ks_GetKey
  * Get a shared key file reference by key name and app name.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_GetSharedKey
+pa_result_t taf_pa_ks_GetSharedKey
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     const char* keyName,
     const char* appName,
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GetSharedKey(clientSessionRef, keyName, appName, keyFileRefPtr);
+    return taf_prop_ks_GetSharedKey(clientSessionFd, keyName, appName, keyFileRefPtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -228,14 +232,14 @@ le_result_t taf_pa_ks_GetSharedKey
  * Cancel key sharing to an application.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_CancelKeySharing
+pa_result_t taf_pa_ks_CancelKeySharing
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
     const char* appName
 )
 {
-    return taf_prop_ks_CancelKeySharing(clientSessionRef, keyFileRef, appName);
+    return taf_prop_ks_CancelKeySharing(clientSessionFd, keyFileRef, appName);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -243,28 +247,28 @@ le_result_t taf_pa_ks_CancelKeySharing
  * Get a shared app list for a shared key.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_pa_ks_GetSharedAppList
+pa_result_t taf_pa_ks_GetSharedAppList
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
     taf_pa_ks_sharedAppList_t* appListPtr
 )
 {
-    return taf_prop_ks_GetSharedAppList(clientSessionRef, keyFileRef, appListPtr);
+    return taf_prop_ks_GetSharedAppList(clientSessionFd, keyFileRef, appListPtr);
 }
 //--------------------------------------------------------------------------------------------------
 /**
  * Get key usage
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_GetKeyUsage
+pa_result_t taf_pa_ks_GetKeyUsage
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
-    taf_ks_KeyUsage_t* keyUsagePtr
+    taf_pa_ks_KeyUsage_t* keyUsagePtr
 )
 {
-    return taf_prop_ks_GetKeyUsage(clientSessionRef, keyFileRef, keyUsagePtr);
+    return taf_prop_ks_GetKeyUsage(clientSessionFd, keyFileRef, keyUsagePtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -272,16 +276,18 @@ le_result_t taf_pa_ks_GetKeyUsage
  * Start the session for the given crypto operation.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_CryptoSessionStart
+pa_result_t taf_pa_ks_CryptoSessionStart
 (
-    le_msg_SessionRef_t clientSessionRef,
+    int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
-    taf_ks_CryptoPurpose_t cryptoPurpose,
-    le_dls_List_t* paramListPtr,
+    taf_pa_ks_CryptoPurpose_t cryptoPurpose,
+    const taf_pa_ks_Param_t** paramListPtr,
+    size_t paramListSize,
     uint64_t* opHandlePtr
 )
 {
-    return taf_prop_ks_CryptoSessionStart(clientSessionRef, keyFileRef, cryptoPurpose, paramListPtr, opHandlePtr);
+    return taf_prop_ks_CryptoSessionStart(clientSessionFd, keyFileRef, cryptoPurpose,
+                                          paramListPtr, paramListSize, opHandlePtr);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -289,7 +295,7 @@ le_result_t taf_pa_ks_CryptoSessionStart
  * Provides AES AEAD to the running crypto session started with CryptoSessionStart API for AES GCM mode.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_CryptoSessionProcessAead
+pa_result_t taf_pa_ks_CryptoSessionProcessAead
 (
     uint64_t opHandle,
     const uint8_t* inputDataPtr,
@@ -304,7 +310,7 @@ le_result_t taf_pa_ks_CryptoSessionProcessAead
  * Provides data to, and possibly receives output from, a running crypto operation.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_CryptoSessionProcess
+pa_result_t taf_pa_ks_CryptoSessionProcess
 (
     uint64_t opHandle,
     const uint8_t* inputDataPtr,
@@ -321,7 +327,7 @@ le_result_t taf_pa_ks_CryptoSessionProcess
  * Finalizes and stops a crypto operation session.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_CryptoSessionEnd
+pa_result_t taf_pa_ks_CryptoSessionEnd
 (
     uint64_t opHandle,
     const uint8_t* inputDataPtr,
@@ -338,7 +344,7 @@ le_result_t taf_pa_ks_CryptoSessionEnd
  * Abort crypto operation session.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_CryptoSessionAbort
+pa_result_t taf_pa_ks_CryptoSessionAbort
 (
     uint64_t opHandle
 )
@@ -351,7 +357,7 @@ le_result_t taf_pa_ks_CryptoSessionAbort
  * Register Key creation handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_RegKeyCreationHandler
+pa_result_t taf_pa_ks_RegKeyCreationHandler
 (
     taf_pa_ks_KeyCreationHandler_t handlerFunc
 )
@@ -364,21 +370,10 @@ le_result_t taf_pa_ks_RegKeyCreationHandler
  * Register Key sharing state change handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_pa_ks_RegKeySharingHandler
+pa_result_t taf_pa_ks_RegKeySharingHandler
 (
     taf_pa_ks_KeySharingHandler_t handlerFunc
 )
 {
     return taf_prop_ks_RegKeySharingHandler(handlerFunc);
-}
-
-//--------------------------------------------------------------------------------------------------
-/**
- * The PA initialization function.
- */
-//--------------------------------------------------------------------------------------------------
-COMPONENT_INIT
-{
-    taf_prop_ks_Component_Init();
-    LE_INFO("Telaf keyStore PA initialized.");
 }
