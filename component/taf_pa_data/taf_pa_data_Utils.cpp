@@ -23,6 +23,7 @@ SlotId_e Utils::ConvertSlotId(SlotId slotId)
         return SlotId_e::SLOT_2;
     case INVALID_SLOT_ID:
     default:
+        PA_WARN("Invalid slot ID: %d", TO_INT(slotId));
         return SlotId_e::INVALID;
     }
 }
@@ -37,6 +38,7 @@ SlotId Utils::ConvertSlotId(SlotId_e slotId)
         return SLOT_ID_2;
     case SlotId_e::INVALID:
     default:
+        PA_WARN("Invalid slot ID: %d", TO_INT(slotId));
         return INVALID_SLOT_ID;
     }
 }
@@ -55,6 +57,7 @@ telux::data::RoamingType Utils::ConvertRoamingType
         return telux::data::RoamingType::INTERNATIONAL;
     case RoamingType_e::UNKNOWN:
     default:
+        PA_WARN("Invalid roaming type: %d", TO_INT(roamingType));
         return telux::data::RoamingType::UNKNOWN;
     }
 }
@@ -72,29 +75,29 @@ RoamingType_e Utils::ConvertRoamingType
         return RoamingType_e::INTERNATIONAL;
     case telux::data::RoamingType::UNKNOWN:
     default:
+        PA_WARN("Invalid roaming type: %d", TO_INT(roamingType));
         return RoamingType_e::UNKNOWN;
     }
 }
 
 ProfileId_e Utils::ConvertProfileId(int id)
 {
-    if (isValueInRange ( id,
+    if (IS_VALUE_IN_RANGE ( id,
                           TO_INT(ProfileId_e::ID_1),
                           TO_INT(ProfileId_e::ID_255))
                         )
     {
-        LE_DEBUG("Id: %d", id);
+        PA_DEBUG("Id: %d", id);
         return static_cast<ProfileId_e>(id);
     }
     else
     {
-        LE_WARN ("Id out of range: %d", id);
+        PA_WARN ("Id out of range: %d", id);
         return ProfileId_e::INVALID;
     }
 }
 
-TechPref_e Utils::ConvertTechPref
-                                                    (telux::data::TechPreference techPref)
+TechPref_e Utils::ConvertTechPref (telux::data::TechPreference techPref)
 {
     using namespace taf::pa::data;
     switch (techPref)
@@ -106,9 +109,9 @@ TechPref_e Utils::ConvertTechPref
     case telux::data::TechPreference::TP_ANY:
         return TechPref_e::TP_ANY;
     default:
-        break;
+        PA_WARN("Invalid tech pref: %d", TO_INT(techPref));
+        return TechPref_e::TP_UNKNOWN;
     }
-    return TechPref_e::TP_UNKNOWN;
 }
 
 telux::data::TechPreference Utils::ConvertTechPref
@@ -124,17 +127,18 @@ telux::data::TechPreference Utils::ConvertTechPref
     case TechPref_e::TP_ANY:
         return telux::data::TechPreference::TP_ANY;
     default:
-        break;
+        PA_WARN("Invalid tech pref: %d", TO_INT(techPref));
+        return telux::data::TechPreference::UNKNOWN;
     }
-    return telux::data::TechPreference::UNKNOWN;
 }
 
-AuthType_e Utils::ConvertAuthType
-                                                    (telux::data::AuthProtocolType authType)
+AuthType_e Utils::ConvertAuthType (telux::data::AuthProtocolType authType)
 {
     using namespace taf::pa::data;
     switch (authType)
     {
+    case telux::data::AuthProtocolType::AUTH_NONE:
+        return AuthType_e::NONE;
     case telux::data::AuthProtocolType::AUTH_PAP:
         return AuthType_e::PAP;
     case telux::data::AuthProtocolType::AUTH_CHAP:
@@ -142,9 +146,28 @@ AuthType_e Utils::ConvertAuthType
     case telux::data::AuthProtocolType::AUTH_PAP_CHAP:
         return AuthType_e::PAP_CHAP;
     default:
-        break;
+        PA_WARN("Invalid auth type: %d", TO_INT(authType));
+        return AuthType_e::NONE;
     }
-    return AuthType_e::NONE;
+}
+
+telux::data::AuthProtocolType Utils::ConvertAuthType(AuthType_e authType)
+{
+    using namespace taf::pa::data;
+    switch (authType)
+    {
+    case AuthType_e::NONE:
+        return telux::data::AuthProtocolType::AUTH_NONE;
+    case AuthType_e::PAP:
+        return telux::data::AuthProtocolType::AUTH_PAP;
+    case AuthType_e::CHAP:
+        return telux::data::AuthProtocolType::AUTH_CHAP;
+    case AuthType_e::PAP_CHAP:
+        return telux::data::AuthProtocolType::AUTH_PAP_CHAP;
+    default:
+        PA_WARN("Invalid auth type: %d", TO_INT(authType));
+        return telux::data::AuthProtocolType::AUTH_NONE;
+    }
 }
 
 IpType_e Utils::ConvertIpType(telux::data::IpFamilyType ipType)
@@ -159,13 +182,12 @@ IpType_e Utils::ConvertIpType(telux::data::IpFamilyType ipType)
     case telux::data::IpFamilyType::IPV4V6:
         return IpType_e::IPV4V6;
     default:
-        break;
+        PA_WARN("Invalid IP type: %d", TO_INT(ipType));
+        return IpType_e::UNKNOWN;
     }
-    return IpType_e::UNKNOWN;
 }
 
-telux::data::IpFamilyType Utils::ConvertIpType
-                                                        (IpType_e ipType)
+telux::data::IpFamilyType Utils::ConvertIpType (IpType_e ipType)
 {
     using namespace taf::pa::data;
     switch (ipType)
@@ -177,28 +199,11 @@ telux::data::IpFamilyType Utils::ConvertIpType
     case IpType_e::IPV4V6:
         return telux::data::IpFamilyType::IPV4V6;
     default:
-        break;
+        PA_WARN("Invalid IP type: %d", TO_INT(ipType));
+        return telux::data::IpFamilyType::UNKNOWN;
     }
-    return telux::data::IpFamilyType::UNKNOWN;
 }
 
-telux::data::AuthProtocolType Utils::ConvertAuthType
-                                                    (AuthType_e authType)
-{
-    using namespace taf::pa::data;
-    switch (authType)
-    {
-    case AuthType_e::PAP:
-        return telux::data::AuthProtocolType::AUTH_PAP;
-    case AuthType_e::CHAP:
-        return telux::data::AuthProtocolType::AUTH_CHAP;
-    case AuthType_e::PAP_CHAP:
-        return telux::data::AuthProtocolType::AUTH_PAP_CHAP;
-    default:
-        break;
-    }
-    return telux::data::AuthProtocolType::AUTH_NONE;
-}
 
 EmergencyCapability_e Utils::ConvertEmerCallCap
 (
@@ -213,9 +218,9 @@ EmergencyCapability_e Utils::ConvertEmerCallCap
     case telux::data::EmergencyCapability::NOT_ALLOWED:
         return EmergencyCapability_e::NOT_ALLOWED;
     default:
-        break;
+        PA_WARN("Invalid emergency call capability: %d", TO_INT(emerCallCapa));
+        return EmergencyCapability_e::UNSPECIFIED;
     }
-    return EmergencyCapability_e::UNSPECIFIED;
 }
 
 telux::data::EmergencyCapability Utils::ConvertEmerCallCap
@@ -231,9 +236,9 @@ telux::data::EmergencyCapability Utils::ConvertEmerCallCap
     case EmergencyCapability_e::NOT_ALLOWED:
         return telux::data::EmergencyCapability::NOT_ALLOWED;
     default:
-        break;
+        PA_WARN("Invalid emergency call capability: %d", TO_INT(emerCallCapa));
+        return telux::data::EmergencyCapability::NOT_ALLOWED;
     }
-    return telux::data::EmergencyCapability::NOT_ALLOWED;
 }
 
 ApnTypeBitmask_e Utils::ConvertApnTypeMask
@@ -278,9 +283,9 @@ telux::data::DataCallStatus Utils::ConvertCallStatus
         case DataCallStatus_e::DELADDR:
             return telux::data::DataCallStatus::NET_DELADDR;
         default:
-            break;
-    };
-    return telux::data::DataCallStatus::INVALID;
+            PA_WARN("Invalid data call status: %d", TO_INT(status));
+            return telux::data::DataCallStatus::INVALID;
+    }
 }
 
 DataCallStatus_e Utils::ConvertCallStatus
@@ -308,64 +313,87 @@ DataCallStatus_e Utils::ConvertCallStatus
         case telux::data::DataCallStatus::NET_DELADDR:
             return DataCallStatus_e::DELADDR;
         default:
-            break;
-    };
-    return DataCallStatus_e::UNKNOWN;
+            PA_WARN("Invalid data call status: %d", TO_INT(status));
+            return DataCallStatus_e::UNKNOWN;
+    }
 }
 
-le_result_t Utils::ConvertProfileInfo
+pa_result_t Utils::ConvertProfileInfo
 (
-    telux::data::DataProfile &dataProfile,
-    ProfileInfo_t   &profileInfo
+    telux::data::DataProfile &dataProfile, //IN
+    ProfileInfo_t   &profileInfo           //OUT
 )
 {
-    LE_DEBUG("Profile details:");
+    PA_DEBUG("Profile details:");
     using namespace taf::pa::data;
 
     profileInfo.profileId = ConvertProfileId(dataProfile.getId());
-    LE_DEBUG(" Id          : %d", TO_INT(profileInfo.profileId));
+    PA_DEBUG(" Id          : %d", TO_INT(profileInfo.profileId));
 
+    int iRet = 0;
     if (!dataProfile.getApn().empty())
     {
-        le_utf8_Copy(profileInfo.apn, dataProfile.getApn().c_str(), MAX_APN_LEN, NULL);
-        LE_DEBUG(" APN         : %s", profileInfo.apn);
+        iRet = std::snprintf(profileInfo.apn, MAX_APN_LEN, "%s", dataProfile.getApn().c_str());
+        if (iRet < 0 || iRet >= MAX_APN_LEN)
+        {
+            // Add a warning as this is not fatal, and continue processing.
+            PA_WARN("APN truncated or encoding error");
+        }
+        PA_DEBUG(" APN         : %s", profileInfo.apn);
     }
 
     if (!dataProfile.getName().empty())
     {
-        le_utf8_Copy(profileInfo.name, dataProfile.getName().c_str(), MAX_NAME_LEN, NULL);
-        LE_DEBUG(" Name        : %s", profileInfo.name);
+        iRet = std::snprintf(profileInfo.name, MAX_NAME_LEN, "%s", dataProfile.getName().c_str());
+        if (iRet < 0 || iRet >= MAX_NAME_LEN)
+        {
+            // Add a warning as this is not fatal, and continue processing.
+            PA_WARN("Name truncated or encoding error");
+        }
+        PA_DEBUG(" Name        : %s", profileInfo.name);
     }
 
     if (!dataProfile.getUserName().empty())
     {
-        le_utf8_Copy(profileInfo.userName,dataProfile.getUserName().c_str(),MAX_USERNAME_LEN, NULL);
-        LE_DEBUG(" Username    : %s", profileInfo.userName);
+        iRet = std::snprintf(profileInfo.userName, MAX_USERNAME_LEN, "%s",
+                                                                dataProfile.getUserName().c_str());
+        if (iRet < 0 || iRet >= MAX_USERNAME_LEN)
+        {
+            // Add a warning as this is not fatal, and continue processing.
+            PA_WARN("Username truncated or encoding error");
+        }
+        PA_DEBUG(" Username    : %s", profileInfo.userName);
     }
 
     if (!dataProfile.getPassword().empty())
     {
-        le_utf8_Copy(profileInfo.password,dataProfile.getPassword().c_str(),MAX_PASSWORD_LEN, NULL);
-        LE_DEBUG(" Password    : %s", profileInfo.password);
+        iRet = std::snprintf(profileInfo.password, MAX_PASSWORD_LEN, "%s",
+                                                                dataProfile.getPassword().c_str());
+        if (iRet < 0 || iRet >= MAX_PASSWORD_LEN)
+        {
+            // Add a warning as this is not fatal, and continue processing.
+            PA_WARN("Password truncated or encoding error");
+        }
+        PA_DEBUG(" Password    : %s", profileInfo.password);
     }
 
     profileInfo.techPref = ConvertTechPref(dataProfile.getTechPreference());
-    LE_DEBUG(" TechPref    : %d", TO_INT(profileInfo.techPref));
+    PA_DEBUG(" TechPref    : %d", TO_INT(profileInfo.techPref));
 
     profileInfo.authType = ConvertAuthType(dataProfile.getAuthProtocolType());
-    LE_DEBUG(" AuthType    : %d", TO_INT(profileInfo.authType));
+    PA_DEBUG(" AuthType    : %d", TO_INT(profileInfo.authType));
 
     profileInfo.ipType = ConvertIpType(dataProfile.getIpFamilyType());
-    LE_DEBUG(" IPType      : %d", TO_INT(profileInfo.ipType));
+    PA_DEBUG(" IPType      : %d", TO_INT(profileInfo.ipType));
 
     profileInfo.apnTypeMask = ConvertApnTypeMask(dataProfile.getApnTypes());
-    LE_DEBUG(" TelSDK mask : %ld", dataProfile.getApnTypes().to_ulong());
-    LE_DEBUG(" APNType mask: %d", TO_INT(profileInfo.apnTypeMask));
+    PA_DEBUG(" TelSDK mask : %ld", dataProfile.getApnTypes().to_ulong());
+    PA_DEBUG(" APNType mask: %d", TO_INT(profileInfo.apnTypeMask));
 
     profileInfo.emergencyCallSupport = ConvertEmerCallCap(dataProfile.getIsEmergencyAllowed());
-    LE_DEBUG(" Emer call   : %d", TO_INT(profileInfo.emergencyCallSupport));
+    PA_DEBUG(" Emer call   : %d", TO_INT(profileInfo.emergencyCallSupport));
 
-    return LE_OK;
+    return PA_OK;
 }
 
 const char *Utils::CallStatusToString(telux::data::DataCallStatus status)
@@ -391,7 +419,7 @@ const char *Utils::CallStatusToString(telux::data::DataCallStatus status)
     case telux::data::DataCallStatus::NET_DELADDR:
         return "NET_DELADDR";
     default:
-        LE_ERROR("call(%d) status error", static_cast<int32_t>(status));
+        PA_WARN("call(%d) status error", static_cast<int32_t>(status));
         return "INVALID";
     }
 }
@@ -408,7 +436,7 @@ const char *Utils::IpFamilyTypeToString(telux::data::IpFamilyType ipType)
         return "IPv4v6";
     case telux::data::IpFamilyType::UNKNOWN:
     default:
-        LE_ERROR("unknown ip: %d", static_cast<int32_t>(ipType));
+        PA_WARN("unknown ip: %d", static_cast<int32_t>(ipType));
         return "UNKNOWN";
     }
 }
@@ -425,7 +453,7 @@ const char *Utils::TechPreferenceToString(telux::data::TechPreference techPref)
         return "TP_ANY";
     case telux::data::TechPreference::UNKNOWN:
     default:
-        LE_ERROR("unknown tech preference(%d)", static_cast<int32_t>(techPref));
+        PA_WARN("unknown tech preference(%d)", static_cast<int32_t>(techPref));
         return "UNKNOWN";
     }
 }
@@ -479,7 +507,7 @@ const char *Utils::DataBearerToString(telux::data::DataBearerTechnology dataBear
     case telux::data::DataBearerTechnology::BEARER_TECH_5G:
         return "5G";
     default:
-        LE_ERROR("unknown data bearer type(%d)", static_cast<int32_t>(dataBearer));
+        PA_WARN("unknown data bearer type(%d)", static_cast<int32_t>(dataBearer));
         return "UNKNOWN";
     }
 }
@@ -505,7 +533,7 @@ const char *Utils::CallEndReasonTypeToString(telux::common::EndReasonType endRea
     case telux::common::EndReasonType::CE_UNKNOWN:
         return "CE_UNKNOWN";
     default:
-        LE_ERROR("end reason(%d) error", static_cast<int32_t>(endReasontype));
+        PA_WARN("end reason(%d) error", static_cast<int32_t>(endReasontype));
         return "CE_UNKNOWN";
     }
 }
@@ -562,11 +590,12 @@ DataBearerTechnology_e Utils::ConvertBearerTech
     case telux::data::DataBearerTechnology::BEARER_TECH_5G:
         return DataBearerTechnology_e::BEARER_5G;
     default:
+        PA_WARN("Unknown bearer technology: %d", TO_INT(bearerTech));
         return DataBearerTechnology_e::BEARER_UNKNOWN;
     }
 };
 
-le_result_t Utils::ConvertThrottledApnEvent
+pa_result_t Utils::ConvertThrottledApnEvent
 (
     const telux::data::APNThrottleInfo &sdkEvent,
     ThrottledApnEventInfo_t &paEvent
@@ -582,7 +611,7 @@ le_result_t Utils::ConvertThrottledApnEvent
     {
         paEvent.profileIds.push_back(static_cast<ProfileId_e>(id));
     }
-    return LE_OK;
+    return PA_OK;
 }
 
 QosFlowState_e Utils::ConvertQosFlowState
@@ -599,6 +628,7 @@ QosFlowState_e Utils::ConvertQosFlowState
     case telux::data::QosFlowStateChangeEvent::DELETED:
         return QosFlowState_e::DELETED;
     default:
+        PA_WARN("Unknown QoS flow state: %d", TO_INT(stateChangeEvent));
         return QosFlowState_e::UNKNOWN;
     }
 }
@@ -612,4 +642,90 @@ HwAccelerationState_e Utils::ConvertHwAccelerationState
         return HwAccelerationState_e::ACTIVE;
     }
     return HwAccelerationState_e::INACTIVE;
+}
+
+const char *Utils::ProfileChangeEventToString(telux::data::ProfileChangeEvent event)
+{
+
+    switch (event)
+    {
+    case telux::data::ProfileChangeEvent::CREATE_PROFILE_EVENT:
+        return "CREATED";
+    case telux::data::ProfileChangeEvent::DELETE_PROFILE_EVENT:
+        return "DELETED";
+    case telux::data::ProfileChangeEvent::MODIFY_PROFILE_EVENT:
+        return "MODIFIED";
+    default:
+        PA_WARN("Unknown profile change event: %d", TO_INT(event));
+        return "UNKNOWN";
+    };
+}
+
+taf::pa::data::ProfileEvent_e Utils::ConvertProfileChangeEvent
+(
+    const telux::data::ProfileChangeEvent sdkEvent
+)
+{
+    switch (sdkEvent)
+    {
+    case telux::data::ProfileChangeEvent::CREATE_PROFILE_EVENT:
+        return ProfileEvent_e::CREATED;
+    case telux::data::ProfileChangeEvent::DELETE_PROFILE_EVENT:
+        return ProfileEvent_e::DELETED;
+    case telux::data::ProfileChangeEvent::MODIFY_PROFILE_EVENT:
+        return ProfileEvent_e::MODIFIED;
+    default:
+        PA_WARN("Unknown profile change event: %d", TO_INT(sdkEvent));
+        return ProfileEvent_e::UNKNOWN;
+    };
+}
+
+const char *Utils::SubsysStateToString(taf::pa::data::SubsystemState_e state)
+{
+    switch (state)
+    {
+    case SubsystemState_e::AVAILABLE:
+        return "AVAILABLE";
+    case SubsystemState_e::UNAVAILABLE:
+        return "UNAVAILABLE";
+    case SubsystemState_e::FAILED:
+        return "FAILED";
+    default:
+        PA_WARN("Unknown state: %d", TO_INT(state));
+        return "FAILED";
+    };
+}
+
+taf::pa::data::BandIntPriority_e Utils::ConvertBandIntPriority
+(
+    const telux::data::BandPriority bandPriority
+)
+{
+    switch (bandPriority)
+    {
+    case telux::data::BandPriority::N79:
+        return BandIntPriority_e::N79_5G;
+    case telux::data::BandPriority::WLAN:
+        return BandIntPriority_e::WLAN_5G;
+    default:
+        PA_WARN("Unknown band priority: %d", TO_INT(bandPriority));
+        return BandIntPriority_e::UNKNOWN;
+    };
+}
+
+telux::data::BandPriority Utils::ConvertBandIntPriority
+(
+    const taf::pa::data::BandIntPriority_e bandPriority
+)
+{
+    switch (bandPriority)
+    {
+    case BandIntPriority_e::N79_5G:
+        return telux::data::BandPriority::N79;
+    case BandIntPriority_e::WLAN_5G:
+        return telux::data::BandPriority::WLAN;
+    default:
+        PA_WARN("Unknown band priority: %d. Return N79", TO_INT(bandPriority));
+        return telux::data::BandPriority::N79;
+    };
 }

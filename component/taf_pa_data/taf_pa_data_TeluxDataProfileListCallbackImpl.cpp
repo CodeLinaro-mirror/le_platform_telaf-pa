@@ -17,13 +17,13 @@
 void taf::pa::data::TafPaTeluxDataProfileListCallback::SetListProfilesCmdInProgress(bool bState)
 {
     bListProfilesCmdInProgress_.store(bState);
-    LE_DEBUG("bListProfilesCmdInProgress_ = %s",
+    PA_DEBUG("bListProfilesCmdInProgress_ = %s",
             bListProfilesCmdInProgress_.load() ? "true" : "false");
 }
 
 bool taf::pa::data::TafPaTeluxDataProfileListCallback::GetListProfilesCmdInProgress()
 {
-    LE_DEBUG("bListProfilesCmdInProgress_ = %s",
+    PA_DEBUG("bListProfilesCmdInProgress_ = %s",
             bListProfilesCmdInProgress_.load() ? "true" : "false");
     return bListProfilesCmdInProgress_.load();
 }
@@ -40,7 +40,7 @@ void
 taf::pa::data::TafPaTeluxDataProfileListCallback::SetListProfilesContext(void *ctxPtr)
 {
     contextListProfiles_ = ctxPtr;
-    LE_DEBUG("contextListProfiles_: %p", contextListProfiles_);
+    PA_DEBUG("contextListProfiles_: %p", contextListProfiles_);
 }
 
 void taf::pa::data::TafPaTeluxDataProfileListCallback::onProfileListResponse(
@@ -53,26 +53,28 @@ void taf::pa::data::TafPaTeluxDataProfileListCallback::onProfileListResponse(
     taf::pa::data::SlotId_e slotId = taf::pa::data::Utils::ConvertSlotId(slotId_);
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
-    teluxPaData.PaGetPhoneIdFromSimSlotId(slotId, phoneId);
-    LE_INFO("Phone ID: %d, Slot ID: %d", TO_INT(phoneId), TO_INT(slotId));
+    pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(slotId, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result, "PaGetPhoneIdFromSlotId err: %d. Dropping event",
+                                                                                         result);
+    PA_INFO("Phone ID: %d, Slot ID: %d", TO_INT(phoneId), TO_INT(slotId));
 
     if (telux ::common::ErrorCode::SUCCESS != error)
     {
-        LE_WARN("onProfileListResponse failed: %d(%s)", TO_INT(error),
+        PA_WARN("onProfileListResponse failed: %d(%s)", TO_INT(error),
                 telux::common::Utils::getErrorCodeAsString(error).c_str());
         // call the callback with error
         if (nullptr != callbackListProfiles_)
         {
             callbackListProfiles_(
                 phoneId,                                     // The phone ID
-                LE_FAULT,                                    // Error
+                PA_FAULT,                                    // Error
                 std::vector<taf::pa::data::ProfileInfo_t>(), // Empty vector
                 contextListProfiles_                         // App provided context
             );
         }
         else
         {
-            LE_WARN("callbackListProfiles_ is NULL");
+            PA_WARN("callbackListProfiles_ is NULL");
         }
         // Reset the callback and context
         SetListProfilesCallback(nullptr);
@@ -81,7 +83,7 @@ void taf::pa::data::TafPaTeluxDataProfileListCallback::onProfileListResponse(
         SetListProfilesCmdInProgress(false);
         return;
     }
-    LE_INFO("onProfileListResponse: %zu profiles", profiles.size());
+    PA_INFO("onProfileListResponse: %zu profiles", profiles.size());
 
     // Protect the critical section
     std::lock_guard<std::mutex> lock(profileListMutex_);
@@ -99,7 +101,7 @@ void taf::pa::data::TafPaTeluxDataProfileListCallback::onProfileListResponse(
         }
         else
         {
-            LE_WARN("share_ptr profile is null");
+            PA_WARN("share_ptr profile is null");
             break;
         }
     }
@@ -109,14 +111,14 @@ void taf::pa::data::TafPaTeluxDataProfileListCallback::onProfileListResponse(
     {
         callbackListProfiles_(
             phoneId,             // The phone ID
-            LE_OK,               // Success
+            PA_OK,               // Success
             profileInfos,        // ProfileInfo_t vector
             contextListProfiles_ // App provided context
         );
     }
     else
     {
-        LE_WARN("callbackListProfiles_ is NULL");
+        PA_WARN("callbackListProfiles_ is NULL");
     }
 
     // Reset the callback and context
