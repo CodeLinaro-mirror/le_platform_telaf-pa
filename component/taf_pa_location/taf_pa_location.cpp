@@ -143,6 +143,8 @@ public:
     telux::common::Status ConfigureNmea(telux::loc::NmeaConfig nmeaConfig, taf_pa_location_GeneralCb callback, std::any context);
     telux::common::Status RequestMinGpsWeek(taf_pa_location_RequestMinGpsWeekCb callback, std::any context);
     telux::common::Status RequestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context);
+    telux::common::Status InjectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context);
+    telux::common::Status ConfigureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context);
 
     std::shared_ptr<PALocationClient> GetClientPtr(taf_pa_location_LocationId id);
     taf_pa_location_LocationId CreateLocationClient();
@@ -1704,6 +1706,121 @@ void LocationPAController::PALocationClient::onGnssNmeaInfo(uint64_t timestamp, 
     else{
         PA_ERROR("unable to find event Listener for onGnssNmeaInfo");
     }
+}
+
+telux::common::Status LocationPAController::InjectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context)
+{
+    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto paCtrl = LocationPAController::getInstance();
+
+    //Sdk Callback
+    auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
+        try{
+            if(error == telux::common::ErrorCode::SUCCESS) {
+                promisePtr->set_value(PA_OK);
+            }
+            else{
+                pa_result_t res = paCtrl->MapErrorCode(error);
+                promisePtr->set_value(res);
+            }
+        }
+        catch (const std::future_error& e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const std::exception& e)
+        {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown error in callback.");
+        }
+    };
+    telux::common::Status status = telux::common::Status::FAILED;
+    status =  mLocationConfigurator->injectMerkleTreeInformation(merkleTreeInfo, cb);
+    if(status == telux::common::Status::SUCCESS){
+        auto futResult = promisePtr->get_future();
+        if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
+            == std::future_status::ready)
+        {
+            pa_result_t selfResult = futResult.get();
+            if(callback)
+            {
+                callback(selfResult,context);
+            }
+        }
+        else
+        {
+            PA_ERROR("InjectMerkleTreeInformation Timeout waiting for result..");
+        }
+    }
+    return status;
+}
+
+pa_result_t tafpa::location::taf_pa_location_injectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context)
+{
+    auto paCtrl = LocationPAController::getInstance();
+    PA_INFO("taf_pa_location_injectMerkleTreeInformation");
+    telux::common::Status status = paCtrl->InjectMerkleTreeInformation(merkleTreeInfo, callback, context);
+    return paCtrl->MapStatus(status);
+}
+
+telux::common::Status LocationPAController::ConfigureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context)
+{
+    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto paCtrl = LocationPAController::getInstance();
+
+    //Sdk Callback
+    auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
+        try{
+            if(error == telux::common::ErrorCode::SUCCESS) {
+                promisePtr->set_value(PA_OK);
+            }
+            else{
+                pa_result_t res = paCtrl->MapErrorCode(error);
+                promisePtr->set_value(res);
+            }
+        }
+        catch (const std::future_error& e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const std::exception& e)
+        {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown error in callback.");
+        }
+    };
+    telux::common::Status status = telux::common::Status::FAILED;
+    status =  mLocationConfigurator->configureOsnma(enableOsnma, cb);
+    if(status == telux::common::Status::SUCCESS){
+        auto futResult = promisePtr->get_future();
+        if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
+            == std::future_status::ready)
+        {
+            pa_result_t selfResult = futResult.get();
+            if(callback)
+            {
+                callback(selfResult,context);
+            }
+        }
+        else
+        {
+            PA_ERROR("configureOsnma Timeout waiting for result..");
+        }
+    }
+    return status;
+}
+pa_result_t tafpa::location::taf_pa_location_configureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context)
+{
+    auto paCtrl = LocationPAController::getInstance();
+    PA_INFO("taf_pa_location_configureOsnma");
+    telux::common::Status status = paCtrl->ConfigureOsnma(enableOsnma, callback, context);
+    return paCtrl->MapStatus(status);
 }
 
 void LocationPAController::PALocationClient::onCapabilitiesInfo(const telux::loc::LocCapability capabilityInfo)
