@@ -124,13 +124,14 @@ public:
 
         void commandResponse(telux::common::ErrorCode error) override
         {
-            PA_INFO("Command response trigger %d",(int)error);
-            auto paCtrl =  EcallPaController::getInstance();
-            callProm_.set_value(error);
-            pa_result_t result = paCtrl->MapErrorCode(error);
-            if(callback_){
-                callback_(result,ctxPtr_);
-            }
+                PA_INFO("Command response trigger %d",(int)error);
+                auto paCtrl =  EcallPaController::getInstance();
+                callProm_.set_value(error);
+                pa_result_t result = paCtrl->MapErrorCode(error);
+                if(callback_)
+                {
+                    callback_(result,ctxPtr_);
+                }
         }
 
         std::future<telux::common::ErrorCode> getFuture() {
@@ -139,7 +140,7 @@ public:
 
         protected:
         taf_pa_ecall_CommandCb callback_;
-        std::promise<telux::common::ErrorCode> callProm_;
+	std::promise<telux::common::ErrorCode> callProm_;
         std::shared_ptr<telux::tel::ICallManager> callMngr;
         std::any ctxPtr_;
     };
@@ -156,26 +157,23 @@ public:
             return;
         }
 
-        void makeCallResponse(
-            telux::common::ErrorCode error,
-            std::shared_ptr<telux::tel::ICall> icall) override
+        void makeCallResponse(telux::common::ErrorCode error,std::shared_ptr<telux::tel::ICall> icall) override
         {
-            PA_INFO("Call response trigger %d",(int)error);
-            auto paCtrl = EcallPaController::getInstance();
-            pa_result_t result = paCtrl->MapErrorCode(error);
-            std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
+                PA_INFO("Call response trigger %d",(int)error);
+                auto paCtrl = EcallPaController::getInstance();
+                pa_result_t result = paCtrl->MapErrorCode(error);
+                std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
                 std::make_shared<taf_pa_ecall_CallInfo_t>();
-            callInfo->phoneId = icall->getPhoneId();
-            callInfo->callIndex = icall->getCallIndex();
-            callInfo->callState = paCtrl->stateToEvent(icall->getCallState());
-            callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
-            callInfo->remotePartyNumber = icall->getRemotePartyNumber();
-            callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
-            callProm_.set_value(error);
-            if(callback_){
-                callback_(callInfo,result,ctxPtr_);
-            }
-
+                callInfo->phoneId = icall->getPhoneId();
+                callInfo->callIndex = icall->getCallIndex();
+                callInfo->callState = paCtrl->stateToEvent(icall->getCallState());
+                callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
+                callInfo->remotePartyNumber = icall->getRemotePartyNumber();
+                callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
+                callProm_.set_value(error);
+                if(callback_){
+                    callback_(callInfo,result,ctxPtr_);
+                }
         }
 
         std::future<telux::common::ErrorCode> getFuture() {
@@ -185,7 +183,7 @@ public:
         protected:
         taf_pa_ecall_MakeEcallCb callback_;
         std::shared_ptr<telux::tel::ICallManager> callMngr;
-        std::promise<telux::common::ErrorCode> callProm_;
+	std::promise<telux::common::ErrorCode> callProm_;
         std::any ctxPtr_;
     };
 
@@ -785,22 +783,31 @@ pa_result_t EcallPaController::InitializeSDKSubsystem()
 {
     //  Get the PhoneFactory and PhoneManager instances.
     auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
-    std::promise<telux::common::ServiceStatus> prom;
+    auto prom = std::make_shared<std::promise<telux::common::ServiceStatus>>();
 
-    CallManager_ = phoneFactory.getCallManager([&](telux::common::ServiceStatus status) {
-        PA_INFO("Getting status: %d from call manager", (int)status);
-        // If the status is SERVICE_UNAVAILABLE, the call manager will also update the status through initCB
-        if (status != telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
-        {
-            prom.set_value(status);
+    CallManager_ = phoneFactory.getCallManager([prom](telux::common::ServiceStatus status) 
+    {
+	    try{
+            PA_INFO("Getting status: %d from call manager", (int)status);
+            // If the status is SERVICE_UNAVAILABLE, the call manager will also update the status through initCB
+            if (status != telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
+            {
+                prom->set_value(status);
+            }
+        }catch (const std::future_error &e) {
+            PA_ERROR("Future error in call manager callback: %s", e.what());
+        } catch (const std::exception &e) {
+            PA_ERROR("Exception in call manager callback: %s", e.what());
+        } catch (...) {
+            PA_ERROR("Unknown error in call manager callback.");
         }
-    });
+   });
     if (!CallManager_)
     {
         PA_CRIT("Can't get call manager");
     }
 
-    std::future<telux::common::ServiceStatus> initFuture = prom.get_future();
+    std::future<telux::common::ServiceStatus> initFuture = prom->get_future();
     std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
     telux::common::ServiceStatus serviceStatus;
     if (std::future_status::timeout == waitStatus)
@@ -816,14 +823,22 @@ pa_result_t EcallPaController::InitializeSDKSubsystem()
         }
     }
 
-    std::promise<telux::common::ServiceStatus> phoneMgrprom;
-    PhoneManager_ =
-        PhoneFactory::getInstance().getPhoneManager([&] (telux::common::ServiceStatus status) {
-        PA_INFO("Getting status: %d from phone manager", (int)status);
-        // If the status is SERVICE_UNAVAILABLE, the call manager will also update the status through initCB
-        if (status != telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
-        {
-            phoneMgrprom.set_value(status);
+   auto phoneMgrProm = std::make_shared<std::promise<telux::common::ServiceStatus>>();
+   PhoneManager_ = PhoneFactory::getInstance().getPhoneManager([phoneMgrProm] (telux::common::ServiceStatus status)
+   {
+        try{
+	        PA_INFO("Getting status: %d from phone manager", (int)status);
+            // If the status is SERVICE_UNAVAILABLE, the call manager will also update the status through initCB
+            if (status != telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
+            {
+                phoneMgrProm->set_value(status);
+            }
+        } catch (const std::future_error &e) {
+            PA_ERROR("Future error in phone manager callback: %s", e.what());
+        } catch (const std::exception &e) {
+            PA_ERROR("Exception in phone manager callback: %s", e.what());
+        } catch (...) {
+            PA_ERROR("Unknown error in phone manager callback.");
         }
     });
     if (!PhoneManager_)
@@ -834,7 +849,7 @@ pa_result_t EcallPaController::InitializeSDKSubsystem()
     telux::common::ServiceStatus phoneMgrStatus = PhoneManager_->getServiceStatus();
     if (phoneMgrStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
         PA_INFO("telephony subsystem is not ready, wait for it to be ready");
-        std::future<telux::common::ServiceStatus> initFuture = phoneMgrprom.get_future();
+        std::future<telux::common::ServiceStatus> initFuture = phoneMgrProm->get_future();
         std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
         if (std::future_status::timeout == waitStatus)
         {
@@ -874,18 +889,27 @@ pa_result_t EcallPaController::initialize()
         PA_INFO("phone and call manager intialize");
     }
     auto &subsystemFact = telux::platform::SubsystemFactory::getInstance();
-    std::promise<telux::common::ServiceStatus> subsystemMgrprom{};
+    auto subsystemMgrprom = std::make_shared<std::promise<telux::common::ServiceStatus>>();
 
-    subsystemMgr_ = subsystemFact.getSubsystemManager(
-            [&subsystemMgrprom](telux::common::ServiceStatus srvStatus) {
-        subsystemMgrprom.set_value(srvStatus);
+    subsystemMgr_ = subsystemFact.getSubsystemManager([subsystemMgrprom](telux::common::ServiceStatus srvStatus)
+    {
+        try{
+            PA_INFO("Getting status: %d from subsystem manager", (int)srvStatus);
+            subsystemMgrprom->set_value(srvStatus);
+        }catch (const std::future_error &e) {
+            PA_ERROR("Future error in subsystem manager callback: %s", e.what());
+        } catch (const std::exception &e) {
+            PA_ERROR("Exception in subsystem manager callback: %s", e.what());
+        } catch (...) {
+            PA_ERROR("Unknown error in subsystem manager callback.");
+        }
     });
 
     if (!subsystemMgr_) {
         PA_ERROR("Couldn't get the subsystemMgr");
     }
 
-    std::future<telux::common::ServiceStatus> initFuture = subsystemMgrprom.get_future();
+    std::future<telux::common::ServiceStatus> initFuture = subsystemMgrprom->get_future();
     std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
     if (std::future_status::timeout == waitStatus)
     {
@@ -1069,7 +1093,7 @@ pa_result_t tafpa::ecall::taf_pa_ecall_GetOpMode(
         {
             PA_INFO("taf_pa_ecall_GetOpMode response trigger %d",(int)errorCode);
             pa_result_t res = paCtrl->MapErrorCode(errorCode);
-            promisePtr->set_value(errorCode);
+                promisePtr->set_value(errorCode);
             if(mode == telux::tel::ECallMode::ECALL_ONLY){
                 callback(taf_pa_ecall_mode_t::ONLY,res,context);
             }
@@ -1396,7 +1420,7 @@ pa_result_t tafpa::ecall::taf_pa_ecall_RequestHlapTimerStatus(
         hlapStatus->t7 = static_cast<taf_pa_ecall_hlap_timer_state_t>(static_cast<int>(hlapTimerStatus.t7));
         hlapStatus->t9 = static_cast<taf_pa_ecall_hlap_timer_state_t>(static_cast<int>(hlapTimerStatus.t9));
         hlapStatus->t10 = static_cast<taf_pa_ecall_hlap_timer_state_t>(static_cast<int>(hlapTimerStatus.t10));
-        promisePtr->set_value(error);
+            promisePtr->set_value(error);
         if(callback){
             callback(res,phoneId,hlapStatus,context);
         }
@@ -1653,7 +1677,7 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
         callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
         callInfo->remotePartyNumber = icall->getRemotePartyNumber();
         callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
-        promisePtr->set_value(errorCode);
+            promisePtr->set_value(errorCode);
         if(callback){
             callback(callInfo,result,context);
         }
@@ -1718,7 +1742,7 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
         callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
         callInfo->remotePartyNumber = icall->getRemotePartyNumber();
         callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
-        promisePtr->set_value(errorCode);
+            promisePtr->set_value(errorCode);
         if(callback){
             callback(callInfo,result,context);
         }
