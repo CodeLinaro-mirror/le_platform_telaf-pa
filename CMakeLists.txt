@@ -33,6 +33,7 @@ set(MODULE_LIST
     component/taf_pa_health
     component/taf_pa_pms
     component/taf_pa_sim
+    component/taf_pa_therm
     # IMPORTANT: split_debug_symbols_strip_binaries must be the last module in this list.
     # This module extracts debug symbols from all installed binaries and strips them.
     # It must run after all other components have installed their files, otherwise
