@@ -7,6 +7,11 @@
 #define TAF_PA_SIM_HPP
 
 #include "taf_pa_common.h"
+#include <string>
+#include <vector>
+#include <functional> // For std::function
+#include <any>        // For std::any context
+#include <memory>     // For std::shared_ptr
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,6 +26,14 @@ extern "C" {
 
 #define MAX_SIM_PATH 10
 #define MAX_SIM_REFRESH_FILES 100
+
+#define TAF_PA_DEFAULT_SLOT_ID 1
+#define TAF_PA_SIM_ICCID_BYTES 21
+#define TAF_PA_SIM_IMSI_BYTES 16
+#define TAF_PA_SIM_PHONE_NUM_MAX_BYTES 18
+#define TAF_PA_DEFAULT_TIMEOUT_IN_SECONDS 5
+#define TAF_PA_SIM_MAX_APP_TYPE 5
+#define TAF_PA_SIM_RESPONSE_MAX_BYTES  (256+2)
 
 typedef enum
 {
@@ -53,10 +66,163 @@ typedef enum
 }taf_pa_sim_RefreshStage_t;
 
 typedef struct {
-   taf_pa_sim_SessionType_t sessionType;
-   taf_pa_sim_RefreshMode_t refreshMode;
-   taf_pa_sim_RefreshStage_t refreshStage;
+    taf_pa_sim_SessionType_t sessionType;
+    taf_pa_sim_RefreshMode_t refreshMode;
+    taf_pa_sim_RefreshStage_t refreshStage;
 }taf_pa_sim_RefreshChangeInd_t;
+
+typedef enum States
+{
+    TAF_PA_SIM_PRESENT,
+    TAF_PA_SIM_ABSENT,
+    TAF_PA_SIM_READY,
+    TAF_PA_SIM_BLOCKED,
+    TAF_PA_SIM_BUSY,
+    TAF_PA_SIM_POWER_DOWN,
+    TAF_PA_SIM_STATE_UNKNOWN,
+    TAF_PA_SIM_RESTRICTED,
+    TAF_PA_SIM_ERROR
+}taf_pa_sim_States_t;
+
+typedef enum
+{
+    TAF_PA_SIM_EMBEDDED,
+    TAF_PA_SIM_SLOT_ID_1,
+    TAF_PA_SIM_SLOT_ID_2,
+    TAF_PA_SIM_REMOTE,
+    TAF_PA_SIM_UNSPECIFIED,
+    TAF_PA_SIM_ID_MAX
+}taf_pa_sim_Id_t;
+
+typedef enum Command
+{
+    TAF_PA_SIM_READ_BINARY = 0xb0,
+    TAF_PA_SIM_READ_RECORD = 0xb2,
+    TAF_PA_SIM_GET_RESPONSE = 0xc0,
+    TAF_PA_SIM_UPDATE_BINARY = 0xd6,
+    TAF_PA_SIM_UPDATE_RECORD = 0xdc,
+    TAF_PA_SIM_COMMAND_MAX
+}taf_pa_sim_Command_t;
+
+typedef struct
+{
+    taf_pa_sim_Id_t   simId;
+    taf_pa_sim_States_t  state;
+}taf_pa_sim_pa_event_t;
+
+typedef struct taf_pa_sim_Obj
+{
+    taf_pa_sim_Id_t     simId;
+    char  ICCID[TAF_PA_SIM_ICCID_BYTES];
+    char  IMSI[TAF_PA_SIM_IMSI_BYTES];
+    char  phoneNumber[TAF_PA_SIM_PHONE_NUM_MAX_BYTES];
+    int32_t pinTryCount;
+    uint32_t pukTryCount;
+}taf_pa_sim_info_t ;
+
+typedef enum
+{
+    PA_SIM_POWER_OFF = 0,
+    PA_SIM_POWER_ON  = 1,
+}
+taf_pa_sim_power_state_t;
+
+typedef enum
+{
+   TAF_PA_SIM_PIN1 = 0,
+   TAF_PA_SIM_PIN2 = 1,
+   TAF_PA_SIM_PUK1 = 2,
+   TAF_PA_SIM_PUK2 = 3,
+   TAF_PA_SIM_FDN  = 4
+}taf_pa_sim_LockType_t;
+
+typedef enum AppType {
+   TAF_PA_APPTYPE_UNKNOWN = 0,
+   TAF_PA_APPTYPE_SIM = 1,
+   TAF_PA_APPTYPE_USIM = 2,
+   TAF_PA_APPTYPE_RUIM = 3,
+   TAF_PA_APPTYPE_CSIM = 4,
+   TAF_PA_APPTYPE_ISIM = 5
+}taf_pa_sim_AppType_t;
+
+typedef enum LockResponse
+{
+    TAF_PA_CHANGE_PIN,
+    TAF_PA_UNLOCK_BY_PIN,
+    TAF_PA_UNLOCK_BY_PUK,
+    TAF_PA_SET_LOCK
+}taf_pa_sim_LockResponse_t;
+
+typedef struct
+{
+    taf_pa_sim_Id_t simId;
+    taf_pa_sim_LockResponse_t responseType;
+    pa_result_t    result;
+}telaf_pa_sim_pa_response_event_t;
+
+struct taf_pa_sim_Iccid_t
+{
+    taf_pa_sim_Id_t simId;
+    std::string     ICCID;
+};
+struct taf_pa_sim_CardInfo_t
+{
+    taf_pa_sim_Id_t slotId;
+    taf_pa_sim_States_t state;
+};
+struct taf_pa_sim_ResponseInfo_t
+{
+    taf_pa_sim_Id_t simId;
+    taf_pa_sim_LockResponse_t responseType;
+    pa_result_t    result;
+};
+struct taf_pa_sim_UnlockCardResponseInfo_t
+{
+    taf_pa_sim_Id_t simId;
+    taf_pa_sim_LockResponse_t responseType;
+    pa_result_t    result;
+};
+struct taf_pa_sim_UnlockCardPukResponseInfo_t
+{
+    taf_pa_sim_Id_t simId;
+    taf_pa_sim_LockResponse_t responseType;
+    pa_result_t    result;
+};
+struct taf_pa_sim_CardLockResponseInfo_t
+{
+    taf_pa_sim_Id_t simId;
+    taf_pa_sim_LockResponse_t responseType;
+    pa_result_t    result;
+};
+
+using taf_pa_sim_GeneralCb = std::function<void(pa_result_t result, std::any context)>;
+using taf_pa_sim_onSubscriptionInfoChanged =
+      std::function<void(const std::shared_ptr<taf_pa_sim_Iccid_t>& iccidDataInfo)>;
+
+using taf_pa_sim_onCardInfoChanged =
+      std::function<void(const std::shared_ptr<taf_pa_sim_CardInfo_t>& cardInfo)>;
+
+using taf_pa_sim_ChangeCardPinResponseCb =
+      std::function<void(const std::shared_ptr<taf_pa_sim_ResponseInfo_t>& responseInfo)>;
+
+using taf_pa_sim_unlockCardByPinResponseCb =
+      std::function<void(const std::shared_ptr<taf_pa_sim_UnlockCardResponseInfo_t>& responseInfo)>;
+
+using taf_pa_sim_unlockCardByPukResponseCb =
+      std::function<void(const std::shared_ptr<taf_pa_sim_UnlockCardPukResponseInfo_t>& responseInfo)>;
+
+using taf_pa_sim_setCardLockResponseCb =
+      std::function<void(const std::shared_ptr<taf_pa_sim_CardLockResponseInfo_t>& responseInfo)>;
+
+struct taf_pa_sim_EventListener
+{
+    taf_pa_sim_onSubscriptionInfoChanged onSubscriptionInfoChanged;
+    taf_pa_sim_onCardInfoChanged onCardInfoChanged;
+    taf_pa_sim_ChangeCardPinResponseCb ChangeCardPinResponseCb;
+    taf_pa_sim_unlockCardByPinResponseCb unlockCardByPinResponseCb;
+    taf_pa_sim_unlockCardByPukResponseCb unlockCardByPukResponseCb;
+    taf_pa_sim_setCardLockResponseCb setCardLockResponseCb;
+};
 
 typedef struct {
     uint16_t file_id;
@@ -187,8 +353,447 @@ PA_SHARED PA_WEAK void taf_pa_sim_RemoveRefreshChangeHandler
    taf_pa_sim_RefreshChangeHandlerRef_t handlerRef ///< [IN] Handler reference.
 );
 
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Register subscription, card and multi sim listeners.
+ *
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_RegisterListeners
+(
+
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Deregister subscription, card and multi sim listeners.
+ *
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_DeregisterListeners
+(
+
+);
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get Iccid.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetIccid
+(
+    taf_pa_sim_Id_t simId,
+    std::string& iccIdStr
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get subscriber phone number.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetSubscriberPhoneNumber
+(
+    taf_pa_sim_Id_t simId,
+    std::string& phoneNumber
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get IMSI.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetImsi
+(
+    taf_pa_sim_Id_t simId,
+    std::string& imsi
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get carrier name.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetCarrierName
+(
+    taf_pa_sim_Id_t simId,
+    std::string& nameString
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get home network MCC/MNC.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetHomeNetworkMccMnc
+(
+    taf_pa_sim_Id_t simId,
+    int* mcc,
+    int* mnc
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get slot count.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_getSlotCount
+(
+    int* count
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get sim state.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetState
+(
+    taf_pa_sim_Id_t simId,
+    taf_pa_sim_States_t* state
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set power state.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_SetPower
+(
+    taf_pa_sim_Id_t simId,
+    taf_pa_sim_power_state_t powerState
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Check if multisim sub system is ready or not.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_IsSubsystemReady
+(
+    bool* isReady
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Select sim slot.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_selectSimSlot
+(
+    taf_pa_sim_Id_t simId
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Change sim card pin.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_ChangeCardPin
+(
+    taf_pa_sim_LockType_t lockType,
+    const char* oldpinPtr,
+    const char* newpinPtr,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Unlock sim card by pin.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_UnlockCardByPin
+(
+    taf_pa_sim_LockType_t lockType,
+    const char* pinPtr,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Unlock sim card by Puk.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_UnlockCardByPuk
+(
+    taf_pa_sim_LockType_t lockType,
+    const char* pukPtr,
+    const char* newpinPtr,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set SIM card lock.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_SetCardLock
+(
+    taf_pa_sim_LockType_t lockType,
+    const char* pinPtr,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Unlocks the SIM card and disables the lock request of PIN1/PIN2.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_SetCardUnLock
+(
+    taf_pa_sim_LockType_t lockType,
+    const char* pinPtr,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get SIM app types.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetAppTypes
+(
+    taf_pa_sim_AppType_t* appTypePtr,
+    size_t* appTypeNumElementsPtr
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Open logical channel.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_OpenLogicalChannel
+(
+    taf_pa_sim_AppType_t appType,
+    uint8_t* channelPtr,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Open logical channel by Aid.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_OpenLogicalChannelByAid
+(
+    const char* aid,
+    uint8_t* channelIdPtr,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Close logical channel.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_CloseLogicalChannel
+(
+    uint8_t channelId,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Send APDU on channel.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_SendApduOnLogicalChannel
+(
+    uint8_t channel,
+    uint8_t* responseApduPtr,
+    size_t* responseApduNumElementsPtr,
+    uint8_t p1, uint8_t p2, uint8_t p3,
+    uint8_t cla, uint8_t instruction,
+    std::vector<uint8_t> data,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Send APDU.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_SendApdu
+(
+    uint8_t* responseApduPtr,
+    size_t* responseApduNumElementsPtr,
+    uint8_t p1, uint8_t p2, uint8_t p3,
+    uint8_t cla, uint8_t instruction,
+    std::vector<uint8_t> data,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Send Command.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_ExchangeSimIO
+(
+    taf_pa_sim_Command_t command,
+    uint8_t *p1, uint8_t *p2,
+    uint8_t *p3, const uint8_t* dataPtr,
+    size_t dataNumElements,const char* pathPtr,
+    uint8_t *sw1,uint8_t *sw2,
+    uint8_t* responsePtr, size_t* responseNumElementsPtr,
+    uint16_t field,
+    taf_pa_sim_GeneralCb callback,
+    std::any context
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Register event listeners.
+ * @return
+ *  - PA_OK on success
+ *  - PA_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_RegisterEventListener
+(
+    taf_pa_sim_EventListener* eventListener,
+    std::any context
+);
+
+//----------------------------------------------------------------------------------------------
+/**
+ * Get remaining PIN retries.
+ * @return
+ *  - PA_OK on success
+ *  - PA_FAULT on failure
+ *
+ */
+//----------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetRemainingPINTries
+(
+    taf_pa_sim_Id_t simId,
+    int32_t* retryCount
+);
+
+//----------------------------------------------------------------------------------------------
+/**
+ * Get remaining PUK tries.
+ * @return
+ *  - PA_OK on success
+ *  - PA_FAULT on failure
+ *
+ */
+//----------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetRemainingPukTries
+(
+    taf_pa_sim_Id_t simId,
+    uint32_t*  remainingPukTries
+);
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TAF_PROP_SIM_HPP */
+#endif /* TAF_PA_SIM_HPP */
