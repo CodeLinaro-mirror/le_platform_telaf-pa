@@ -387,7 +387,7 @@ using taf_pa_data_SubsystemStateChangeCb =
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Register roaming events callback
+ * Register for subsystem state change events callback
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED pa_result_t AddSubsystemStateChangeCallback

@@ -38,7 +38,7 @@
     auto cb = [callback, context](ErrorCode error) {                                         \
         PA_INFO("callback received");                                                        \
             if (ErrorCode::SUCCESS == error) {                                               \
-                PA_DEBUG("Request is successful!!");                                        \
+                PA_DEBUG("Request is successful!!");                                         \
                 callback(PA_OK, context);                                                    \
             }                                                                                \
             else{                                                                            \
@@ -53,6 +53,14 @@ using namespace telux::audio;
 using namespace telux::common;
 
 class AudioPAController {
+
+struct SubsystemEventsCallbackEntry_t
+{
+    uint16_t id;
+    taf_pa_audio_SubsystemStateChangeCb callBack;
+    std::shared_ptr<void> context;
+};
+
 public:
     static std::shared_ptr<AudioPAController> getInstance()
     {
@@ -142,30 +150,39 @@ public:
         taf_pa_audio_cb callback,
         std::any context
     );
+    pa_result_t registerAudioSubsystemChangeListener(
+        taf_pa_audio_SubsystemStateChangeCb callBack,
+        std::shared_ptr<void> context,
+        uint16_t &id
+    );
+    pa_result_t deregisterAudioSubsystemChangeListener(
+        uint16_t id
+    );
+    void SendSubsystemEventToClients(SubsystemState_e state);
 
     class tafPaPromptsStatusListener : public telux::audio::IPlayListListener {
     public:
-        void onPlaybackStarted() 
+        void onPlaybackStarted()
         {
             auto pbListener = pbStatusListener.lock();
             pbListener->onPlaybackStarted();
         };
-        void onPlaybackStopped() 
+        void onPlaybackStopped()
         {
             auto pbListener = pbStatusListener.lock();
             pbListener->onPlaybackStopped();
         };
-        void onError(telux::common::ErrorCode error, std::string file) 
+        void onError(telux::common::ErrorCode error, std::string file)
         {
             auto pbListener = pbStatusListener.lock();
             pbListener->onError((int)error, file);
         };
-        void onFilePlayed(std::string file) 
+        void onFilePlayed(std::string file)
         {
             auto pbListener = pbStatusListener.lock();
             pbListener->onFilePlayed(file);
         };
-        void onPlaybackFinished() 
+        void onPlaybackFinished()
         {
             auto pbListener = pbStatusListener.lock();
             pbListener->onPlaybackFinished();
@@ -189,11 +206,11 @@ public:
         };
         uint8_t *getRawBuffer()
         {
-            return streamBuffer_->getRawBuffer();  
+            return streamBuffer_->getRawBuffer();
         };
         uint32_t getDataSize()
         {
-            return streamBuffer_->getDataSize();             
+            return streamBuffer_->getDataSize();
         };
         void setDataSize(uint32_t size)
         {
@@ -269,7 +286,23 @@ public:
         std::weak_ptr<IPaDtmfListener> paDtmfListener;
     };
 
-    class CommandCallback : public telux::common::ICommandResponseCallback 
+    class tafPaServiceStatusListener : public telux::audio::IAudioListener {
+        public:
+            void onServiceStatusChange(telux::common::ServiceStatus status)
+            {
+                auto pACtrl = AudioPAController::getInstance();
+                if (status == telux::common::ServiceStatus::SERVICE_UNAVAILABLE) {
+                    PA_ERROR("Audio Service UNAVAILABLE");
+                    pACtrl->SendSubsystemEventToClients(SubsystemState_e::UNAVAILABLE);
+                }
+                else if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                    PA_INFO("Audio Service AVAILABLE");
+                    pACtrl->SendSubsystemEventToClients(SubsystemState_e::AVAILABLE);
+                }
+            }
+    };
+
+    class CommandCallback : public telux::common::ICommandResponseCallback
     {
         public:
             CommandCallback() = default;
@@ -303,7 +336,7 @@ public:
 private:
     AudioPAController(const AudioPAController&) = delete;
     AudioPAController& operator=(const AudioPAController&) = delete;
-    
+
     std::shared_ptr<telux::audio::IAudioManager> audioManager_;
     std::shared_ptr<telux::audio::IAudioVoiceStream> mAudioVoiceStream;
     std::shared_ptr<telux::audio::IAudioPlayStream> mAudioPlaybackStream;
@@ -319,11 +352,17 @@ private:
     std::shared_ptr<tafPaPromptsStatusListener> repeatedTxPlayerStatusListener;
     std::shared_ptr<tafPaDtmfListener> dtmfListener;
     std::shared_ptr<CommandCallback> dtmfCb = nullptr;
+    std::shared_ptr<tafPaServiceStatusListener> paServiceStatusChangeListener;
     std::queue<std::shared_ptr<telux::audio::IStreamBuffer>> mRecFreeBuffers, mRxRecFreeBuffers;
+    std::mutex subsystemEventsCbksMtx_;
+    // The callback entry vector for subsystem events
+    std::vector<SubsystemEventsCallbackEntry_t> subsystemEventsCallbacks_;
+    uint16_t subsystemEventsCallbackId_ = 1;
+    SubsystemState_e audioMngrInitState_ = SubsystemState_e::UNAVAILABLE;
 
 };
 
-pa_result_t AudioPAController::initialize() 
+pa_result_t AudioPAController::initialize()
 {
     auto &audioFactory = telux::audio::AudioFactory::getInstance();
     bool isReady = false;
@@ -378,10 +417,49 @@ pa_result_t AudioPAController::initialize()
 
     if (isReady) {
         PA_INFO("Audio subsystem is ready");
+        audioMngrInitState_ = SubsystemState_e::AVAILABLE;
+        paServiceStatusChangeListener = std::make_shared<tafPaServiceStatusListener>();
+        auto status = audioManager_->registerListener(paServiceStatusChangeListener);
+        if (status != telux::common::Status::SUCCESS)
+        {
+           PA_ERROR("Failed to register with audio subsystem service status change listener");
+        }
         return PA_OK;
     } else {
         PA_CRIT("Unable to initialize audio subsystem");
         return PA_UNAVAILABLE;
+    }
+}
+
+void AudioPAController::SendSubsystemEventToClients
+(
+    SubsystemState_e state
+)
+{
+    PA_DEBUG("Calling registered callbacks...");
+    std::vector<SubsystemEventsCallbackEntry_t> localCbksCopy;
+    {
+        // Use exclusive lock to serialize event delivery and prevent race conditions
+        // This ensures that all registered callbacks receive events in the correct order
+        // even when called from multiple threads simultaneously
+        std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
+        localCbksCopy = subsystemEventsCallbacks_;
+    }
+    for (auto &cbk : localCbksCopy)
+    {
+        try
+        {
+            PA_DEBUG("Calling callback: %d", cbk.id);
+            cbk.callBack(state, cbk.context);
+        }
+        catch (const std::exception &e)
+        {
+            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown exception in callback %d", cbk.id);
+        }
     }
 }
 
@@ -696,7 +774,7 @@ pa_result_t AudioPAController::getVolume(
     PaStreamConfig streamConfig,
     double *volLevel,
     taf_pa_audio_cb callback,
-    std::any context 
+    std::any context
 )
 {
     auto status = Status::FAILED;
@@ -713,7 +791,7 @@ pa_result_t AudioPAController::getVolume(
                 PA_ERROR("Failed to start dtmf tone, err %d", (int)error);
                 callback(PA_FAULT, context);
             }
-    }; 
+    };
     if (streamConfig.type == PaStreamType::PLAY)
     {
         float volume;
@@ -990,7 +1068,7 @@ pa_result_t AudioPAController::stopPlayback(PaStreamConfig streamConfig)
     else
     {
         mAudioPlayer.reset();
-        mAudioPlayer = nullptr;      
+        mAudioPlayer = nullptr;
     }
     return PA_OK;
 }
@@ -1016,7 +1094,7 @@ std::shared_ptr<PaAudioCaptureStream> AudioPAController::GetCaptureStream(
             return paRxCaptureStream;
         }
     }
-    return NULL;    
+    return NULL;
 }
 
 pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const char dtmf,
@@ -1195,6 +1273,60 @@ pa_result_t AudioPAController::deregisterDtmfListener(
     dtmfListener.reset();
     dtmfListener = nullptr;
     return PA_OK;
+}
+
+pa_result_t AudioPAController::registerAudioSubsystemChangeListener
+(
+    taf_pa_audio_SubsystemStateChangeCb callBack,
+    std::shared_ptr<void> context,
+    uint16_t &id
+)
+{
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != audioMngrInitState_, PA_FAULT,
+                                                              "PA audio manager not initialized.");
+    // Lock
+    std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
+    // Add the callback
+    SubsystemEventsCallbackEntry_t entry = {
+        subsystemEventsCallbackId_,
+        callBack,
+        context,
+    };
+    subsystemEventsCallbacks_.push_back(entry);
+    // Give ID back to app
+    id = subsystemEventsCallbackId_;
+    // Increment the ID.
+    subsystemEventsCallbackId_++;
+
+    PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+    PA_INFO("Number of registered callbacks: %zu", subsystemEventsCallbacks_.size());
+
+    return PA_OK;
+}
+
+pa_result_t AudioPAController::deregisterAudioSubsystemChangeListener
+(
+    uint16_t id
+)
+{
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != audioMngrInitState_, PA_FAULT,
+                                                              "PA audio manager not initialized.");
+    // Lock
+    std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
+    // Iterate over the vector and remove the one with the provided id.
+    for (auto cbk = subsystemEventsCallbacks_.begin();cbk != subsystemEventsCallbacks_.end(); ++cbk)
+    {
+        if (cbk->id == id)
+        {
+            PA_INFO("Id: %d, Cbk: %p", id, cbk);
+            subsystemEventsCallbacks_.erase(cbk);
+            return PA_OK;
+        }
+    }
+    PA_WARN("Callback not found. Id: %d", id);
+    return PA_NOT_FOUND;
 }
 
 pa_result_t tafpa::audio::taf_pa_audio_Init()
@@ -1502,4 +1634,26 @@ pa_result_t tafpa::audio::taf_pa_audio_StopSignallingDtmfOnTx(
     auto pACtrl = AudioPAController::getInstance();
 
     return pACtrl->stopSignallingDtmfOnTx(slotId, callback, context);
+}
+
+pa_result_t tafpa::audio::AddSubsystemStateChangeListener
+(
+    taf_pa_audio_SubsystemStateChangeCb callBack,
+    std::shared_ptr<void> context,
+    uint16_t &id
+)
+{
+    auto pACtrl = AudioPAController::getInstance();
+
+    return pACtrl->registerAudioSubsystemChangeListener(callBack, context, id);
+}
+
+pa_result_t tafpa::audio::RemoveSubsystemStateChangeListener
+(
+    uint16_t id
+)
+{
+    auto pACtrl = AudioPAController::getInstance();
+
+    return pACtrl->deregisterAudioSubsystemChangeListener(id);
 }

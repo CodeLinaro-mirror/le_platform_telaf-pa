@@ -48,14 +48,14 @@ enum class Subsystem_e
 
 //--------------------------------------------------------------------------------------------------
 /**
- * The PA initialization state.
+ * The PA Subsystem state.
  */
 //--------------------------------------------------------------------------------------------------
 enum class SubsystemState_e
 {
-    AVAILABLE,   ///< PA initialization failed.
-    UNAVAILABLE, ///< PA for profile management is ready.
-    FAILED       ///< PA for call management is ready.
+    AVAILABLE,   ///< Subsystem available.
+    UNAVAILABLE, ///< Subsystem unavailable.
+    FAILED       ///< Subsystem initialization failed.
 };
 
 //--------------------------------------------------------------------------------------------------
