@@ -558,6 +558,15 @@ pa_result_t tafpa::sms::taf_pa_sms_SetActivationStatus
         return PA_FAULT;
     }
 
+    // Check service status before using
+    telux::common::ServiceStatus status = cbMgr->getServiceStatus();
+    if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
+            phoneId, static_cast<int>(status));
+        return PA_FAULT;
+    }
+
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
     auto cb = [promisePtr](telux::common::ErrorCode err)
     {
@@ -876,6 +885,15 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
         return PA_FAULT;
     }
 
+    // Check service status before using
+    telux::common::ServiceStatus status = cbMgr->getServiceStatus();
+    if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
+            phoneId, static_cast<int>(status));
+        return PA_FAULT;
+    }
+
     auto prom = std::make_shared<std::promise<std::vector<telux::tel::CellBroadcastFilter>>>();
     auto cb = [prom](std::vector<telux::tel::CellBroadcastFilter> filters,
                      telux::common::ErrorCode err) {
@@ -945,6 +963,15 @@ pa_result_t tafpa::sms::taf_pa_sms_AddCellBroadcastIds
     if (!cbMgr)
     {
         PA_ERROR("CellBroadcastManager is NULL");
+        return PA_FAULT;
+    }
+
+    // Check service status before using
+    telux::common::ServiceStatus status = cbMgr->getServiceStatus();
+    if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
+            phoneId, static_cast<int>(status));
         return PA_FAULT;
     }
 
@@ -1031,6 +1058,15 @@ pa_result_t tafpa::sms::taf_pa_sms_RemoveCellBroadcastIds
     if (!cbMgr)
     {
         PA_ERROR("CellBroadcastManager is NULL");
+        return PA_FAULT;
+    }
+
+    // Check service status before using
+    telux::common::ServiceStatus status = cbMgr->getServiceStatus();
+    if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
+             phoneId, static_cast<int>(status));
         return PA_FAULT;
     }
 
@@ -1837,57 +1873,135 @@ pa_result_t SmsPAController::initialize
         PA_INFO("MultiSim supported");
     }
 
-    for (auto index = 1; index <= NumOfSlot; index++)
+    for (auto index = 1; index <= NumOfSlot; ++index)
     {
-        std::promise<telux::common::ServiceStatus> prom;
+        // Initialize SMS Manager
+        auto prom = std::make_shared<std::promise<telux::common::ServiceStatus>>();
         auto smsMgr = phoneFactory.getSmsManager(
-            index, [&](telux::common::ServiceStatus status) { prom.set_value(status); });
+            index,
+            [prom](telux::common::ServiceStatus status)
+            {
+                try
+                {
+                    prom->set_value(status);
+                }
+                catch (const std::future_error& e)
+                {
+                    PA_ERROR("Failed to set SMS Manager promise value: %s", e.what());
+                }
+            });
+        constexpr int WAIT_TIMEOUT_SECONDS = 30;
 
         if (!smsMgr)
         {
             PA_ERROR("Failed to get SMS Manager instance ");
         }
-
-        telux::common::ServiceStatus smsMgrStatus = prom.get_future().get();
-        if (smsMgrStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+        else
         {
-            auto status = smsMgr->registerListener(mySmsListener);
+            try
             {
-                if (status != telux::common::Status::SUCCESS)
+                auto future = prom->get_future();
+                auto waitStatus = future.wait_for(std::chrono::seconds(WAIT_TIMEOUT_SECONDS));
+
+                if (waitStatus == std::future_status::timeout)
                 {
-                    PA_ERROR("Unable to register Listener");
+                    PA_ERROR("Timeout waiting for SMS Manager initialization for slot %d", index);
                 }
-                smsManagers.emplace_back(smsMgr);
+                else if (waitStatus == std::future_status::ready)
+                {
+                    telux::common::ServiceStatus smsMgrStatus = future.get();
+                    if (smsMgrStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+                    {
+                        auto status = smsMgr->registerListener(mySmsListener);
+                        if (status != telux::common::Status::SUCCESS)
+                        {
+                            PA_ERROR("Unable to register Listener for slot %d", index);
+                        }
+                        else
+                        {
+                            smsManagers.emplace_back(smsMgr);
+                            PA_INFO("SMS Manager initialized successfully for slot %d", index);
+                        }
+                    }
+                    else
+                    {
+                        PA_ERROR("Unable to initialize SMS Manager for slot %d, status: %d",
+                            index, static_cast<int>(smsMgrStatus));
+                    }
+                }
+            }
+            catch (const std::future_error& e)
+            {
+                PA_ERROR("Failed to get SMS Manager initialization status: %s", e.what());
+            }
+            catch (const std::exception& e)
+            {
+                PA_ERROR("Unexpected exception during SMS Manager initialization: %s", e.what());
+            }
+        }
+
+        // Initialize CellBroadcast Manager
+        auto cbProm = std::make_shared<std::promise<telux::common::ServiceStatus>>();
+        auto cbMgr = phoneFactory.getCellBroadcastManager
+        (
+            static_cast<SlotId>(index),
+            [cbProm](telux::common::ServiceStatus status)
+            {
+                try
+                {
+                    cbProm->set_value(status);
+                }
+                catch (const std::future_error& e)
+                {
+                    PA_ERROR("Failed to set CellBroadcast Manager promise value: %s", e.what());
+                }
+            }
+        );
+
+        if (cbMgr)
+        {
+            try
+            {
+                auto cbFuture = cbProm->get_future();
+                auto cbWaitStatus = cbFuture.wait_for(std::chrono::seconds(WAIT_TIMEOUT_SECONDS));
+                if (cbWaitStatus == std::future_status::timeout)
+                {
+                    PA_ERROR("Timeout waiting for CellBroadcast Manager initialization for "
+                        "slot %d", index);
+                }
+                else if (cbWaitStatus == std::future_status::ready)
+                {
+                    telux::common::ServiceStatus cbMgrStatus = cbFuture.get();
+                    if (cbMgrStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+                    {
+                        PA_INFO("CellBroadcast Manager initialized successfully for slot %d",
+                            index);
+                        CbManagers.emplace_back(cbMgr);
+                    }
+                    else
+                    {
+                        PA_ERROR("Unable to initialize CellBroadcast Manager for slot %d, "
+                            "status: %d", index, static_cast<int>(cbMgrStatus));
+                    }
+                }
+            }
+            catch (const std::future_error& e)
+            {
+                PA_ERROR("Failed to get CellBroadcast Manager initialization status for slot %d: "
+                    "%s", index, e.what());
+            }
+            catch (const std::exception& e)
+            {
+                PA_ERROR("Unexpected exception during CellBroadcast Manager initialization for "
+                    "slot %d: %s", index, e.what());
             }
         }
         else
         {
-            PA_ERROR("Unable to initialize SMS Manager");
-        }
-
-        auto CbMgr = phoneFactory.getCellBroadcastManager(static_cast<SlotId>(index));
-        if (CbMgr)
-        {
-            //  Check if cellbroadcast subsystem is ready
-            bool subSystemStatus = CbMgr->isSubsystemReady();
-            //  If cellbroadcast subsystem is not ready, wait for it to be ready
-            if (!subSystemStatus)
-            {
-                PA_INFO("Cellbroadcast subsystem is not ready, Please wait");
-                std::future<bool> f = CbMgr->onSubsystemReady();
-                // If we want to wait unconditionally for cellbroadcast subsystem to be ready
-                subSystemStatus = f.get();
-
-                //  Exit the application, if SDK is unable to initialize cell broadcast
-                //  subsystem for any of the slot
-                if (!subSystemStatus)
-                {
-                    PA_ERROR("Unable to initialize Cellbroadcast SMS Manager");
-                }
-            }
-            CbManagers.emplace_back(CbMgr);
+            PA_ERROR("Failed to get CellBroadcast Manager instance for slot %d", index);
         }
     }
+
     return PA_OK;
 }
 
