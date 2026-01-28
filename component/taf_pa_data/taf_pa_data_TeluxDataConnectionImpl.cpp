@@ -213,36 +213,53 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetDefaultProfile
         return PA_FAULT;
     }
 
-    std::future<std::tuple<int, SlotId, telux::common::ErrorCode>> future;
-    // Lock the mutex to protect access to getDefProfilePromise_
-    {
-        std::lock_guard<std::mutex> lock(getDefProfileMtx_);
+    // Create shared promise to ensure it outlives this function scope
+    auto promisePtr =
+                std::make_shared<std::promise<std::tuple<int, SlotId, telux::common::ErrorCode>>>();
+    std::future<std::tuple<int, SlotId, telux::common::ErrorCode>> future =
+                promisePtr->get_future();
 
-        // Init promise and get a future
-        getDefProfilePromise_ = std::promise<std::tuple<int, SlotId, telux::common::ErrorCode>>();
-        future = getDefProfilePromise_.get_future();
-
-        // Define a lambda function to handle the callback and set the promise
-        status = dataConnectionManagersMap_[slotId]->getDefaultProfile
+    // Define a lambda function to handle the callback and set the promise
+    status = dataConnectionManagersMap_[slotId]->getDefaultProfile
+            (
+                telux::data::OperationType::DATA_LOCAL,
+                // Lambda callback - captures promisePtr by value (shared ownership)
+                [promisePtr]
                 (
-                    telux::data::OperationType::DATA_LOCAL,
-                    // Lambda callback
-                    [this]
-                    (
-                        int profileId, SlotId slotId, telux::common::ErrorCode error
-                    )
-                    {
+                    int profileId, SlotId slotId, telux::common::ErrorCode error
+                )
+                                    {
                         SET_SDK_THREAD_NAME();
-                        std::lock_guard<std::mutex> lock(getDefProfileMtx_);
-                        getDefProfilePromise_.set_value(std::make_tuple(profileId, slotId, error));
+                        try
+                        {
+                            promisePtr->set_value(std::make_tuple(profileId, slotId, error));
+                        }
+                        catch (const std::future_error& e)
+                        {
+                            PA_ERROR("Future error in callback: %s", e.what());
+                            // Try to set promise to unblock waiting thread
+                            try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
+                                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                        }
+                        catch (const std::exception& e)
+                        {
+                                                        PA_ERROR("Exception in callback: %s", e.what());
+                            try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
+                                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                        }
+                        catch (...)
+                        {
+                                                        PA_ERROR("Unknown error in getDefaultProfile callback.");
+                            try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
+                                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                        }
                     }
-                );
-        if (telux::common::Status::SUCCESS != status)
-        {
-            PA_ERROR("getDefaultProfile failed. Status: %d", TO_INT(status));
-            return PA_FAULT;
-        }
-    } // Main thread lock released here (end of scoped block)
+            );
+    if (telux::common::Status::SUCCESS != status)
+    {
+        PA_ERROR("getDefaultProfile failed. Status: %d", TO_INT(status));
+        return PA_FAULT;
+    }
 
     // Wait for the callback to complete and capture the results
     PA_DEBUG("Wait for callback..");
@@ -308,33 +325,49 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetDefaultProfile
         return PA_FAULT;
     }
 
-    std::future<telux::common::ErrorCode> fut;
-    // Lock the mutex to protect access to setDefProfilePromise_
-    {
-        std::lock_guard<std::mutex> lock(setDefProfileMtx_);
+    // Create shared promise to ensure it outlives this function scope
+    auto promisePtr = std::make_shared<std::promise<telux::common::ErrorCode>>();
+    std::future<telux::common::ErrorCode> fut = promisePtr->get_future();
 
-        // Init promise and get a future
-        setDefProfilePromise_ = std::promise<telux::common::ErrorCode>();
-        fut = setDefProfilePromise_.get_future();
-
-        PA_INFO("Profile ID to set: %d", TO_INT(profileId));
-        status = dataConnectionManagersMap_[slotId]->setDefaultProfile
-                    (
-                        telux::data::OperationType::DATA_LOCAL,
-                        static_cast<uint8_t>(profileId),
-                        [this](telux::common::ErrorCode error)
+    PA_INFO("Profile ID to set: %d", TO_INT(profileId));
+    status = dataConnectionManagersMap_[slotId]->setDefaultProfile
+                (
+                    telux::data::OperationType::DATA_LOCAL,
+                    static_cast<uint8_t>(profileId),
+                    // Lambda callback - captures promisePtr by value (shared ownership)
+                    [promisePtr](telux::common::ErrorCode error)
+                    {
+                        SET_SDK_THREAD_NAME();
+                        try
                         {
-                            SET_SDK_THREAD_NAME();
-                            std::lock_guard<std::mutex> lock(setDefProfileMtx_);
-                            setDefProfilePromise_.set_value(error);
+                            promisePtr->set_value(error);
                         }
-                    );
-        if (telux::common::Status::SUCCESS != status)
-        {
-            PA_ERROR("setDefaultProfile failed. Status: %d", TO_INT(status));
-            return PA_FAULT;
-        }
-    } // Main thread lock released here (end of scoped block)
+                        catch (const std::future_error& e)
+                        {
+                            PA_ERROR("Future error in callback: %s", e.what());
+                            // Try to set promise to unblock waiting thread
+                            try { promisePtr->set_value
+                                (telux::common::ErrorCode::INTERNAL_ERROR); } catch(...) {}
+                        }
+                        catch (const std::exception& e)
+                        {
+                            PA_ERROR("Exception in callback: %s", e.what());
+                            try { promisePtr->set_value
+                                (telux::common::ErrorCode::INTERNAL_ERROR); } catch(...) {}
+                        }
+                        catch (...)
+                        {
+                            PA_ERROR("Unknown error in setDefaultProfile callback.");
+                            try { promisePtr->set_value
+                                (telux::common::ErrorCode::INTERNAL_ERROR); } catch(...) {}
+                        }
+                    }
+                );
+    if (telux::common::Status::SUCCESS != status)
+    {
+        PA_ERROR("setDefaultProfile failed. Status: %d", TO_INT(status));
+        return PA_FAULT;
+    }
 
     // Wait for the callback to complete and capture the results
     PA_DEBUG("Wait for callback..");
@@ -1049,6 +1082,8 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
         PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        // Reset the flag since we're returning early
+        bRequestCallListInProgress_.store(false);
         return PA_FAULT;
     }
 
@@ -1069,21 +1104,6 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
 
     PA_INFO("requestDataCallList in progress for phone id %d", TO_INT(phoneId));
     return PA_OK;
-}
-
-// The callback fuction for TelSDK requestThrottledApnInfo()
-void taf::pa::data::TafPaTeluxDataConnection::requestThrottledApnInfoCallback
-(
-    const std::vector<telux::data::APNThrottleInfo> &throttleInfoList,
-    telux::common::ErrorCode error
-)
-{
-    SET_SDK_THREAD_NAME();
-    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-    // Protect promise set_value to avoid races with concurrent requests
-    std::lock_guard<std::mutex> lock(teluxPaDataConn.requestThrottledApnInfoMtx_);
-    teluxPaDataConn.requestThrottledApnInfoPromise_.set_value(
-                                                std::make_pair(throttleInfoList, error));
 }
 
 pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
@@ -1114,23 +1134,53 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
         return PA_FAULT;
     }
 
-    std::future<std::pair<std::vector<telux::data::APNThrottleInfo>, telux::common::ErrorCode>> fut;
-    // Lock and send request to TelSDK
+    // Create shared promise to ensure it outlives this function scope
+    auto promisePtr = std::make_shared<std::promise<
+            std::pair<std::vector<telux::data::APNThrottleInfo>, telux::common::ErrorCode>>>();
+    std::future<std::pair<std::vector<telux::data::APNThrottleInfo>, telux::common::ErrorCode>> fut
+            = promisePtr->get_future();
+
+    // Lambda callback - captures promisePtr by value (shared ownership)
+    auto requestThrottledApnInfoCallback = [promisePtr]
+    (
+        const std::vector<telux::data::APNThrottleInfo> &throttleInfoList,
+        telux::common::ErrorCode error
+    )
     {
-        std::lock_guard<std::mutex> lock(requestThrottledApnInfoMtx_);
-
-        requestThrottledApnInfoPromise_ = std::promise<
-                std::pair<std::vector<telux::data::APNThrottleInfo>, telux::common::ErrorCode>>();
-        fut = requestThrottledApnInfoPromise_.get_future();
-
-        status = dataConnectionManagersMap_[slotId]->requestThrottledApnInfo(
-                                                                requestThrottledApnInfoCallback);
-        if (telux::common::Status::SUCCESS != status)
+        SET_SDK_THREAD_NAME();
+        try
         {
-            PA_ERROR("requestThrottledApnInfo failed. Status: %d", TO_INT(status));
-            return PA_FAULT;
+            promisePtr->set_value(std::make_pair(throttleInfoList, error));
         }
-    } // Lock released here
+        catch (const std::future_error& e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+            // Try to set promise to unblock waiting thread
+            try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
+                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+        }
+        catch (const std::exception& e)
+        {
+                        PA_ERROR("Exception in callback: %s", e.what());
+            try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
+                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+        }
+        catch (...)
+        {
+                        PA_ERROR("Unknown error in requestThrottledApnInfo callback.");
+            try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
+                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+        }
+    };
+
+    status = dataConnectionManagersMap_[slotId]->requestThrottledApnInfo(
+                                                            requestThrottledApnInfoCallback);
+    if (telux::common::Status::SUCCESS != status)
+    {
+        PA_ERROR("requestThrottledApnInfo failed. Status: %d", TO_INT(status));
+        return PA_FAULT;
+    }
+
     PA_DEBUG("Wait for callback ...");
 
     std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
