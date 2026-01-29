@@ -71,6 +71,60 @@ typedef void (*taf_pa_sim_RefreshChangeHandlerFunc_t)
 
 typedef struct taf_pa_sim_RefreshChangeHandler* taf_pa_sim_RefreshChangeHandlerRef_t;
 
+typedef enum
+{
+    TAF_PA_SIM_PROFILE_TYPE_UNKNOWN   = -1,
+    TAF_PA_SIM_PROFILE_TYPE_REGULAR   = 0,
+    TAF_PA_SIM_PROFILE_TYPE_EMERGENCY = 1
+} taf_pa_sim_ProfileType_t;
+
+typedef enum
+{
+    TAF_PA_SIM_PROFILE_STATE_UNKNOWN  = -1,
+    TAF_PA_SIM_PROFILE_STATE_INACTIVE = 0,
+    TAF_PA_SIM_PROFILE_STATE_ACTIVE   = 1
+} taf_pa_sim_ProfileState_t;
+
+typedef enum
+{
+    TAF_PA_SIM_SLOT_UNKNOWN = -1,
+    TAF_PA_SIM_SLOT_1       = 0,
+    TAF_PA_SIM_SLOT_2       = 1,
+} taf_pa_sim_SlotId_t;
+
+typedef enum
+{
+    TAF_PA_SIM_PROFILE_ID_UNKNOWN = -1,
+    TAF_PA_SIM_PROFILE_ID_1       = 0,
+    TAF_PA_SIM_PROFILE_ID_2       = 1,
+} taf_pa_sim_ProfileId_t;
+
+typedef struct
+{
+    taf_pa_sim_ProfileId_t   profileId;
+    taf_pa_sim_ProfileType_t type;
+    taf_pa_sim_ProfileState_t state;
+} taf_pa_sim_ProfileInfo_t;
+
+PA_SHARED PA_WEAK uint8_t taf_pa_sim_GetProfileNum
+(
+    taf_pa_sim_SlotId_t slot
+);
+
+// Get profile info by slot and index
+PA_SHARED PA_WEAK taf_pa_sim_ProfileInfo_t taf_pa_sim_GetProfile
+(
+    taf_pa_sim_SlotId_t slot,
+    uint8_t index
+);
+
+// Set active profile (also enables profile by default)
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_SetActiveProfile
+(
+    taf_pa_sim_SlotId_t slot,
+    taf_pa_sim_ProfileId_t profileId
+);
+
 /**
  * Initialize SIM platform adaptor.
  */
