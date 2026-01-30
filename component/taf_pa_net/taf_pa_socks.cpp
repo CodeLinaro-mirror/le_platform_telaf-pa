@@ -20,13 +20,7 @@
 class taf_SocksAdaptor
 {
         public:
-            taf_SocksAdaptor() {};
-            ~taf_SocksAdaptor() {};
-
-            void Init(void);
-
             static taf_SocksAdaptor &getInstance();
-            void onInitComplete(telux::common::ServiceStatus status);
 
             pa_result_t initialize();
 
@@ -36,9 +30,6 @@ class taf_SocksAdaptor
             }
 
             std::shared_ptr<telux::data::net::ISocksManager> socksManager = nullptr;
-            bool IsSubSystemStatusUpdated=false;
-            std::mutex mMutex;
-            std::condition_variable conVar;
 
             taf_pa_socks_CallCb callCbEnableAsync;
             taf_pa_socks_CallCb callCbDisableAsync;
@@ -51,9 +42,6 @@ class taf_SocksAdaptor
               public:
                 static void enableSocksAsyncResponse(telux::common::ErrorCode error);
                 static void disableSocksAsyncResponse(telux::common::ErrorCode error);
-
-                tafSocksCallback(){};
-                ~tafSocksCallback(){};
             };
 };
 
@@ -133,62 +121,76 @@ taf_SocksAdaptor &taf_SocksAdaptor::getInstance
 
 pa_result_t taf_SocksAdaptor::initialize()
 {
-    bool isReady = false;
+    PA_INFO("Initializing SOCKS adaptor");
+    auto &dataFactory = telux::data::DataFactory::getInstance();
 
-    // 1. Get the DataFactory and socksManager instances
     if (socksManager == nullptr)
     {
-        auto &dataFactory = telux::data::DataFactory::getInstance();
-        auto initCb = std::bind(&taf_SocksAdaptor::onInitComplete, this, std::placeholders::_1);
-
-        socksManager = dataFactory.getSocksManager(telux::data::OperationType::DATA_LOCAL, initCb);
+        socksManager = dataFactory.getSocksManager(
+            telux::data::OperationType::DATA_LOCAL);
     }
 
-    if(socksManager == nullptr )
+    if (socksManager == nullptr)
     {
         PA_INFO("Socks manager initialize error...");
-        return PA_FAULT ;
+        return PA_FAULT;
     }
 
-    // 2. Check subsystem status
-    std::unique_lock<std::mutex> lck(mMutex);
+    telux::common::ServiceStatus subSystemStatus =
+        socksManager->getServiceStatus();
 
-    telux::common::ServiceStatus subSystemStatus = socksManager->getServiceStatus();
+    if (subSystemStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+        PA_INFO("Socks subsystem is not ready, waiting for it to be ready...");
 
-    if (subSystemStatus == telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
-    {
-        PA_INFO("Socks manager initialize...");
-        conVar.wait(lck, [this]{return this->IsSubSystemStatusUpdated;});
-        subSystemStatus = socksManager->getServiceStatus();
+        auto socksMgrPromPtr =
+            std::make_shared<std::promise<telux::common::ServiceStatus>>();
+
+        socksManager = dataFactory.getSocksManager(
+            telux::data::OperationType::DATA_LOCAL,
+            [socksMgrPromPtr](telux::common::ServiceStatus status) {
+                PA_INFO("Getting status:%d from socks manager", static_cast<int>(status));
+                try {
+                    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                        socksMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_AVAILABLE);
+                    } else {
+                        socksMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_FAILED);
+                    }
+                } catch (const std::exception &e) {
+                    PA_ERROR("Exception setting socks manager promise: %s", e.what());
+                } catch (...) {
+                    PA_ERROR("Unknown error setting socks manager promise");
+                }
+            });
+
+        if (socksManager == nullptr) {
+            PA_ERROR("Failed to get socks manager with init callback");
+            return PA_FAULT;
+        }
+
+        std::future<telux::common::ServiceStatus> initFuture =
+            socksMgrPromPtr->get_future();
+        std::future_status waitStatus =
+            initFuture.wait_for(std::chrono::seconds(ENABLE_SOCKS_TIMEOUT));
+
+        if (std::future_status::timeout == waitStatus) {
+            PA_ERROR("Timeout waiting for socks subsystem");
+            return PA_TIMEOUT;
+        } else {
+            subSystemStatus = initFuture.get();
+        }
     }
 
-    //At this point, initialization should be either AVAILABLE or Failure
-    if (subSystemStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
-    {
-        PA_ERROR("Socks Manager initialization failed");
-        socksManager = nullptr;
-        return PA_FAULT ;
-    }
-
-    isReady = socksManager->isSubsystemReady();
-
-    if(isReady == false)
-    {
-        PA_INFO("Socks component is not ready, wait for it unconditionally...");
-        std::future<bool> readyFunc = socksManager->onSubsystemReady();
-        isReady = readyFunc.get();
-    }
-
-    if(isReady)
-    {
+    if (subSystemStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
         PA_INFO("socksManager component is ready...");
+        return PA_OK;
+    } else {
+        PA_CRIT("unable to init socksManager component, status=%d",
+                static_cast<int>(subSystemStatus));
+        socksManager = nullptr;
+        return PA_FAULT;
     }
-    else
-    {
-        PA_CRIT("unable to init socksManager component!");
-    }
-
-    return PA_OK;
 }
 
 /* Implementation */
@@ -211,27 +213,6 @@ pa_result_t taf_pa_socks_Init()
 
     return result;
 }
-
-/*======================================================================
-
- FUNCTION        taf_Socks::onInitComplete
-
- DESCRIPTION     Call back function of socksManager.
-
- DEPENDENCIES    The initialization of Socks.
-
- PARAMETERS      [IN] telux::common::ServiceStatus status : Socks manager service status.
-
- RETURN VALUE    None
-
-======================================================================*/
-void taf_SocksAdaptor::onInitComplete(telux::common::ServiceStatus status)
-{
-    std::lock_guard<std::mutex> lock(mMutex);
-    IsSubSystemStatusUpdated = true;
-    conVar.notify_all();
-}
-
 
 //--------------------------------------------------------------------------------------------------
 /**
