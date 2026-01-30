@@ -17,7 +17,7 @@ static SendEventFunc_t SendEvent;
 
 static inline void RaiseEvent
 (
-    PaEvent_t * ev
+    taf_pa_pms_Event_t * ev
 )
 {
     if (SendEvent != NULL)
@@ -42,7 +42,7 @@ using namespace std;
 #define TAF_MODEM_WS_BIT_MASK_VOICE_CALL              (0x0002)
 #define TAF_MODEM_WS_BIT_MASK_REMOTE_SIM_PROFILE_SWAP (0x0004)
 
-struct PaType(RefStruct)
+struct taf_pa_pms_RefStruct_t
 {
     taf_ns_pa_pms_MpssRef_t mpssRef;
 
@@ -56,7 +56,7 @@ struct PaType(RefStruct)
     std::shared_ptr<telux::power::IWakeupListener>         wakeupReasonListener_;
 };
 
-static PaType(RefStruct) pa;
+static taf_pa_pms_RefStruct_t pa;
 
 static const char * to_StateString(TcuActivityState state)
 {
@@ -132,7 +132,7 @@ public:
                 return; // No need to raise the event
             }
 
-            static PaEvent_t ev = {
+            static taf_pa_pms_Event_t ev = {
                 .evType = EV_WAKEUP_INFO,
                 .evPayload = &wsBitset,
                 .evPsize = sizeof(wsBitset),
@@ -152,7 +152,7 @@ class ServiceStatusListener : public telux::common::IServiceStatusListener {
 public:
     void onServiceStatusChange(ServiceStatus status) override
     {
-        static ServiceStatus_t status_ = SVC_AVAILABLE;
+        static taf_pa_pms_ServiceStatus_t status_ = SVC_AVAILABLE;
 
         if(status == ServiceStatus::SERVICE_UNAVAILABLE)
         {
@@ -164,7 +164,7 @@ public:
             PA_INFO( "SDK [master-service] status : AVAILABLE" );
         }
 
-        static PaEvent_t ev = {
+        static taf_pa_pms_Event_t ev = {
             .evType = EV_SVC_STATUS,
             .evPayload = &status_,
             .evPsize = sizeof(status_),
@@ -185,24 +185,24 @@ public :
     {
         PA_INFO("%s state is %s", __FUNCTION__, to_StateString(state));
 
-        static PowerUpdateEvent_t pwrUpdate;
+        static taf_pa_pms_PowerUpdateEvent_t pwrUpdate;
 
         if(state == TcuActivityState::SUSPEND)
         {
-            pwrUpdate.state = PaPwrState(SUSPEND);
+            pwrUpdate.state = taf_pa_pms_PwrSts_SUSPEND;
         }
         else if(state == TcuActivityState::SHUTDOWN)
         {
-            pwrUpdate.state = PaPwrState(SHUTDOWN);
+            pwrUpdate.state = taf_pa_pms_PwrSts_SHUTDOWN;
         }
         else if(state == TcuActivityState::RESUME)
         {
-            pwrUpdate.state = PaPwrState(RESUME);
+            pwrUpdate.state = taf_pa_pms_PwrSts_RESUME;
         }
         else
         {
             PA_ERROR("Unknown state from SDK");
-            pwrUpdate.state = PaPwrState(UNKNOWN);
+            pwrUpdate.state = taf_pa_pms_PwrSts_UNKNOWN;
             return; // Don't need to send out event
         }
 
@@ -213,7 +213,7 @@ public :
             machineName.c_str()
         );
 
-        static PaEvent_t ev = {
+        static taf_pa_pms_Event_t ev = {
             .evType = EV_POWER_STATE_UPDATE,
             .evPayload = &pwrUpdate,
             .evPsize = sizeof(pwrUpdate),
@@ -232,7 +232,7 @@ public :
     {
         PA_INFO("%s", __FUNCTION__);
 
-        static MachineUpdateEvent_t machUpdate;
+        static taf_pa_pms_MachineUpdateEvent_t machUpdate;
 
         if (machineEvent == MachineEvent::AVAILABLE)
         {
@@ -250,7 +250,7 @@ public :
             machineName.c_str()
         );
 
-        static PaEvent_t ev = {
+        static taf_pa_pms_Event_t ev = {
             .evType = EV_MACHINE_UPDATE,
             .evPayload = &machUpdate,
             .evPsize = sizeof(machUpdate),
@@ -282,7 +282,7 @@ public :
         }
 
         // Allocate the 'info-struct' on stack
-        static PaType(ConsolidatedInfo) info;
+        static taf_pa_pms_ConsolidatedInfo_t info;
 
         if (nackResponseClients.size() > TAF_CONSOLIDATED_CLNT_SIZE)
         {
@@ -361,7 +361,7 @@ public :
             }
         }
 
-        static PaEvent_t ev = {
+        static taf_pa_pms_Event_t ev = {
             .evType = EV_CONSOLIDATED_INFO,
             .evPayload = &info,
             .evPsize = sizeof(info),
@@ -394,18 +394,18 @@ static void PaMpssErrorCallback
 
 static inline telux::power::TcuActivityState to_SdkPowerState
 (
-    PaType(PowerState) state
+    taf_pa_pms_PowerState_t state
 )
 {
     switch (state)
     {
-        case PaPwrState(SUSPEND):
+        case taf_pa_pms_PwrSts_SUSPEND:
             return TcuActivityState::SUSPEND;
-        case PaPwrState(RESUME):
+        case taf_pa_pms_PwrSts_RESUME:
             return TcuActivityState::RESUME;
-        case PaPwrState(SHUTDOWN):
+        case taf_pa_pms_PwrSts_SHUTDOWN:
             return TcuActivityState::SHUTDOWN;
-        case PaPwrState(UNKNOWN):
+        case taf_pa_pms_PwrSts_UNKNOWN:
         default:
             return TcuActivityState::UNKNOWN;
     }
@@ -565,11 +565,11 @@ static bool IsOkForCheckingFuture
 /* -------------------( PaFn - Fcall ) ------------------ */
 /* ------------------------------------------------------ */
 /* ------------------------------------------------------ */
-PaType(Result) PaFn(Init)
+pa_result_t taf_pa_pms_Init
 (
-    PaType(Reference)  *paRefPtr,
-    SendEventFunc_t     fnSendEvent,
-    uint32_t            timeoutMs
+    taf_pa_pms_Reference_t  *paRefPtr,
+    SendEventFunc_t          fnSendEvent,
+    uint32_t                 timeoutMs
 )
 {
     // Loaded the Event-Reporter for the PA layer
@@ -603,14 +603,14 @@ PaType(Result) PaFn(Init)
     if (nullptr == pa.masterMgr_)
     {
         PA_ERROR("Failed to getTcuActivityManager for [masterMgr]");
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     std::future<telux::common::ServiceStatus> fuMaster = masterMgrP->get_future();
 
     if (! IsOkForCheckingFuture(fuMaster, timeoutMs, "/masterMgr"))
     {
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     ClientInstanceConfig slaveConfig;
@@ -638,7 +638,7 @@ PaType(Result) PaFn(Init)
 
     if (! IsOkForCheckingFuture(fuSlave, timeoutMs, "/slaveMgr"))
     {
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     auto wakeupMgrP =
@@ -659,14 +659,14 @@ PaType(Result) PaFn(Init)
     if (nullptr == pa.wakeupMgr_)
     {
         PA_ERROR("Failed to getWakeupManager for [wakeupMgr]");
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     std::future<telux::common::ServiceStatus> fuWakeup = wakeupMgrP->get_future();
 
     if (! IsOkForCheckingFuture(fuWakeup, timeoutMs, "/wakeupMgr"))
     {
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     // All SDK service managers are ready.
@@ -681,7 +681,7 @@ PaType(Result) PaFn(Init)
     if (err != telux::common::ErrorCode::SUCCESS)
     {
         PA_ERROR("Failed to register wakeup listener");
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     pa.masterSvcListener_ = std::make_shared<ServiceStatusListener>();
@@ -700,7 +700,7 @@ PaType(Result) PaFn(Init)
     if (sdkStatus != telux::common::Status::SUCCESS)
     {
         PA_ERROR("Failed to register the ITcuActivityListener for /masterMgr");
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     pa.slaveStateUpdateListener_ = std::make_shared<StateUpdateListener>();
@@ -709,30 +709,30 @@ PaType(Result) PaFn(Init)
     if (sdkStatus != telux::common::Status::SUCCESS)
     {
         PA_ERROR("Failed to register the ITcuActivityListener for /slaveMgr");
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
-    NsPaType(Result) result =
+    taf_ns_pa_pms_Result_t result =
         taf_ns_pa_pms_Init(
             &pa.mpssRef,
             PaMpssErrorCallback,
             NULL);
 
-    if (result != NsPaResult(OK))
+    if (result != taf_ns_pa_pms_Result_OK)
     {
         PA_ERROR("Failed to taf_ns_pa_pms_Init: err(%d)", result);
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     *paRefPtr = &pa;
 
     PA_INFO("PMS [ACTUAL] PA loaded");
-    return PaResult(OK);
+    return PA_OK;
 }
 
-void PaFn(Deinit)
+void taf_pa_pms_Deinit
 (
-    PaType(Reference) *paRefPtr
+    taf_pa_pms_Reference_t *paRefPtr
 )
 {
     if (paRefPtr == NULL || *paRefPtr != &pa)
@@ -773,17 +773,17 @@ void PaFn(Deinit)
     *paRefPtr = NULL; // Reset caller reference pointer
 }
 
-PaType(Result) PaFn(SetPowerStateAsMaster)
+pa_result_t taf_pa_pms_SetPowerStateAsMaster
 (
-    PaType(Reference)         paRef,
-    PaType(PowerState)        state,
+    taf_pa_pms_Reference_t         paRef,
+    taf_pa_pms_PowerState_t        state,
     const char               *name
 )
 {
     telux::power::TcuActivityState sdkState = to_SdkPowerState(state);
 
     telux::common::Status status = telux::common::Status::FAILED;
-    PaType(Result) rst = PaResult(OK);
+    pa_result_t rst = PA_OK;
 
     auto pwrSetP = std::make_shared<std::promise<int>>();
 
@@ -811,36 +811,36 @@ PaType(Result) PaFn(SetPowerStateAsMaster)
         {
             PA_ERROR("waiting promise timeout for %d seconds",
                      SET_STATE_TIMEOUT);
-            rst = PaResult(FAULT);
+            rst = PA_FAULT;
         }
         else
         {
-            rst = fu.get() == 0 ? PaResult(OK) : PaResult(FAULT);
+            rst = fu.get() == 0 ? PA_OK : PA_FAULT;
         }
     }
     else
     {
         PA_ERROR("Failed to call SDK setActivityState");
-        rst = PaResult(FAULT);
+        rst = PA_FAULT;
     }
 
     return rst;
 }
 
-PaType(Result) PaFn(SendAckForStateUpdate)
+pa_result_t taf_pa_pms_SendAckForStateUpdate
 (
-    PaType(Reference)  paRef,
-    PaType(PowerState) state,
-    PaType(Ack)        ack
+    taf_pa_pms_Reference_t  paRef,
+    taf_pa_pms_PowerState_t state,
+    taf_pa_pms_Ack_t        ack
 )
 {
     telux::common::Status status = telux::common::Status::FAILED;
 
-    if (state == PaPwrState(SUSPEND))
+    if (state == taf_pa_pms_PwrSts_SUSPEND)
     {
         status =
             pa.slaveMgr_->sendActivityStateAck(
-                ack == PaAck(ACK)
+                ack == taf_pa_pms_ACK
                     ? StateChangeResponse::ACK
                     : StateChangeResponse::NACK,
                 TcuActivityState::SUSPEND);
@@ -848,16 +848,16 @@ PaType(Result) PaFn(SendAckForStateUpdate)
         if (status != Status::SUCCESS)
         {
             PA_ERROR("Failed to send [%s] for [%s] state",
-                     ack == PaAck(ACK) ? "ACK": "NACK",
+                     ack == taf_pa_pms_ACK ? "ACK": "NACK",
                      "SUSPEND");
-            return PaResult(FAULT);
+            return PA_FAULT;
         }
     }
-    else if (state == PaPwrState(SHUTDOWN))
+    else if (state == taf_pa_pms_PwrSts_SHUTDOWN)
     {
         status =
             pa.slaveMgr_->sendActivityStateAck(
-                ack == PaAck(ACK)
+                ack == taf_pa_pms_ACK
                     ? StateChangeResponse::ACK
                     : StateChangeResponse::NACK,
                 TcuActivityState::SHUTDOWN);
@@ -865,30 +865,30 @@ PaType(Result) PaFn(SendAckForStateUpdate)
         if (status != Status::SUCCESS)
         {
             PA_ERROR("Failed to send [%s] for [%s] state",
-                     ack == PaAck(ACK) ? "ACK": "NACK",
+                     ack == taf_pa_pms_ACK ? "ACK": "NACK",
                      "SHUTDOWN");
-            return PaResult(FAULT);
+            return PA_FAULT;
         }
     }
     else
     {
         PA_WARN("Unsupported state to be set: %d, rejected", state);
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
     PA_INFO("Successfully send [%s] to PMD with [%s] state",
-            ack == PaAck(ACK) ? "ACK": "NACK",
-            state == PaPwrState(SUSPEND)
+            ack == taf_pa_pms_ACK ? "ACK": "NACK",
+            state == taf_pa_pms_PwrSts_SUSPEND
                 ? "SUSPEND"
                 : "SHUTDOWN");
 
-    return PaResult(OK);
+    return PA_OK;
 }
 
-PaType(Result) PaFn(GetAllMachineNames)
+pa_result_t taf_pa_pms_GetAllMachineNames
 (
-    PaType(Reference)  paRef,
-    std::vector<std::string> & machineNames
+    taf_pa_pms_Reference_t    paRef,
+    std::vector<std::string> &machineNames
 )
 {
     telux::common::Status status =
@@ -897,47 +897,47 @@ PaType(Result) PaFn(GetAllMachineNames)
     if (status != Status::SUCCESS)
     {
         PA_ERROR("Failed to getAllMachineNames");
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
-    return PaResult(OK);
+    return PA_OK;
 }
 
-PaType(Result) PaFn(SetModemWakeupFilter)
+pa_result_t taf_pa_pms_SetModemWakeupFilter
 (
-    PaType(Reference)         paRef,
+    taf_pa_pms_Reference_t    paRef,
     uint32_t                  wsBitmask
 )
 {
-    NsPaType(Result) result =
+    taf_ns_pa_pms_Result_t result =
         taf_ns_pa_pms_SetWsFilter(pa.mpssRef,
                 (taf_ns_pa_pms_ModemWakeupSource_t) wsBitmask);
 
-    if (result != NsPaResult(OK))
+    if (result != taf_ns_pa_pms_Result_OK)
     {
         PA_ERROR("Failed to taf_ns_pa_pms_SetWsFilter");
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
-    return PaResult(OK);
+    return PA_OK;
 }
 
-PaType(Result) PaFn(GetModemWakeupFilter)
+pa_result_t taf_pa_pms_GetModemWakeupFilter
 (
-    PaType(Reference)         paRef,
+    taf_pa_pms_Reference_t    paRef,
     uint32_t                 *wsBitmaskPtr
 )
 {
-    NsPaType(Result) result =
+    taf_ns_pa_pms_Result_t result =
         taf_ns_pa_pms_GetWsFilter(pa.mpssRef,
                 (taf_ns_pa_pms_ModemWakeupSource_t *) wsBitmaskPtr);
 
-    if (result != NsPaResult(OK))
+    if (result != taf_ns_pa_pms_Result_OK)
     {
         *wsBitmaskPtr = 0;
         PA_ERROR("Failed to taf_ns_pa_pms_GetWsFilter");
-        return PaResult(FAULT);
+        return PA_FAULT;
     }
 
-    return PaResult(OK);
+    return PA_OK;
 }

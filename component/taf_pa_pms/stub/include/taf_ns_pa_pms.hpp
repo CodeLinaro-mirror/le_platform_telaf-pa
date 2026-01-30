@@ -12,20 +12,17 @@
 extern "C" {
 #endif
 
-#define NsPaType(x) taf_ns_pa_pms_ ## x
-#define NsPaResult(tag) taf_ns_pa_pms_Result ## tag
-
 typedef enum {
-    NsPaResult(OK),
-    NsPaResult(FAULT),
-    NsPaResult(TIMEOUT),
-    NsPaResult(NOT_FOUND),
-    NsPaResult(BAD_PARAMETER),
-    NsPaResult(SVC_UNAVAILABLE),
-    NsPaResult(NOT_IMPLEMENTED),
+    taf_ns_pa_pms_Result_OK,
+    taf_ns_pa_pms_Result_FAULT,
+    taf_ns_pa_pms_Result_TIMEOUT,
+    taf_ns_pa_pms_Result_NOT_FOUND,
+    taf_ns_pa_pms_Result_BAD_PARAMETER,
+    taf_ns_pa_pms_Result_SVC_UNAVAILABLE,
+    taf_ns_pa_pms_Result_NOT_IMPLEMENTED,
 
-    NsPaResult(MAX),
-} NsPaType(Result);
+    taf_ns_pa_pms_Result_MAX,
+} taf_ns_pa_pms_Result_t;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -76,15 +73,15 @@ typedef void ( * taf_ns_pa_pms_ErrCallback )
  * Initialize the dependent QMI client and return the reference handle for other APIs.
  *
  * @return
- *  - NsPaResult(OK)            Function succeeded.
- *  - NsPaResult(BAD_PARAMETER) Bad parameters.
- *  - NsPaResult(DUPLICATE)     Duplicated to call this function.
- *  - NsPaResult(FAULT)         Failed to initialize the QMI client for remote QMI service.
+ *  - taf_ns_pa_pms_Result_OK            Function succeeded.
+ *  - taf_ns_pa_pms_Result_BAD_PARAMETER Bad parameters.
+ *  - taf_ns_pa_pms_Result_DUPLICATE     Duplicated to call this function.
+ *  - taf_ns_pa_pms_Result_FAULT         Failed to initialize the QMI client for remote QMI service.
  *
  * @b NOTE: DO NOT call taf_ns_pa_pms_XXX APIs in callback function, otherwise deadlock will occur!
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED NsPaType(Result) taf_ns_pa_pms_Init
+NS_SHARED taf_ns_pa_pms_Result_t taf_ns_pa_pms_Init
 (
     taf_ns_pa_pms_MpssRef_t * mpssRefPtr,  ///< [IN/OUT] Reference handle for active-object.
     taf_ns_pa_pms_ErrCallback errCbFn,     ///< [IN] Error notification callback function.
@@ -96,12 +93,12 @@ NS_SHARED NsPaType(Result) taf_ns_pa_pms_Init
  * Deinitialize the dependent QMI client and release the passed reference pointer.
  *
  * @return
- *  - NsPaResult(OK)            Function succeeded.
- *  - NsPaResult(BAD_PARAMETER) Bad parameters.
- *  - NsPaResult(NOT_PERMITTED) Can not perform this function due to some bad preconditions.
+ *  - taf_ns_pa_pms_Result_OK            Function succeeded.
+ *  - taf_ns_pa_pms_Result_BAD_PARAMETER Bad parameters.
+ *  - taf_ns_pa_pms_Result_NOT_PERMITTED Can not perform this function due to some bad preconditions.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED NsPaType(Result) taf_ns_pa_pms_Deinit
+NS_SHARED taf_ns_pa_pms_Result_t taf_ns_pa_pms_Deinit
 (
     taf_ns_pa_pms_MpssRef_t * mpssRefPtr   ///< [IN] Pointer for the recorded reference handle
 );
@@ -111,14 +108,14 @@ NS_SHARED NsPaType(Result) taf_ns_pa_pms_Deinit
  * Set the wakeup source filter(bitset) for specific MPSS services.
  *
  * @return
- *  - NsPaResult(OK)            Function succeeded.
- *  - NsPaResult(BAD_PARAMETER) Bad parameters.
- *  - NsPaResult(NOT_PERMITTED) Can not perform this function due to some bad preconditions.
- *  - NsPaResult(TIMEOUT)       Not received the indication from the QMI service.
- *  - NsPaResult(FAULT)         Failed to set the bitset to the remote service.
+ *  - taf_ns_pa_pms_Result_OK            Function succeeded.
+ *  - taf_ns_pa_pms_Result_BAD_PARAMETER Bad parameters.
+ *  - taf_ns_pa_pms_Result_NOT_PERMITTED Can not perform this function due to some bad preconditions.
+ *  - taf_ns_pa_pms_Result_TIMEOUT       Not received the indication from the QMI service.
+ *  - taf_ns_pa_pms_Result_FAULT         Failed to set the bitset to the remote service.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED NsPaType(Result) taf_ns_pa_pms_SetWsFilter
+NS_SHARED taf_ns_pa_pms_Result_t taf_ns_pa_pms_SetWsFilter
 (
     taf_ns_pa_pms_MpssRef_t mpssRef,         ///< [IN] Recorded reference from _Init API.
     taf_ns_pa_pms_ModemWakeupSource_t bitset ///< [IN] Filter bitset for special indications.
@@ -129,14 +126,14 @@ NS_SHARED NsPaType(Result) taf_ns_pa_pms_SetWsFilter
  * Get the wakeup source filter(bitset) from remote QMI PDC service.
  *
  * @return
- *  - NsPaResult(OK)            Function succeeded.
- *  - NsPaResult(BAD_PARAMETER) Bad parameters.
- *  - NsPaResult(NOT_PERMITTED) Can not perform this function due to some bad preconditions.
- *  - NsPaResult(TIMEOUT)       Not received the indication from the QMI service.
- *  - NsPaResult(FAULT)         Failt to get the bitset from the remote service.
+ *  - taf_ns_pa_pms_Result_OK            Function succeeded.
+ *  - taf_ns_pa_pms_Result_BAD_PARAMETER Bad parameters.
+ *  - taf_ns_pa_pms_Result_NOT_PERMITTED Can not perform this function due to some bad preconditions.
+ *  - taf_ns_pa_pms_Result_TIMEOUT       Not received the indication from the QMI service.
+ *  - taf_ns_pa_pms_Result_FAULT         Failt to get the bitset from the remote service.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED NsPaType(Result) taf_ns_pa_pms_GetWsFilter
+NS_SHARED taf_ns_pa_pms_Result_t taf_ns_pa_pms_GetWsFilter
 (
     taf_ns_pa_pms_MpssRef_t mpssRef,          ///< [IN]  Recorded reference from _Init API.
     taf_ns_pa_pms_ModemWakeupSource_t *bitset ///< [OUT] Configured filter bitset in remote sevice
@@ -147,14 +144,14 @@ NS_SHARED NsPaType(Result) taf_ns_pa_pms_GetWsFilter
  * Enable all wakeup source indications for MPSS.
  *
  * @return
- *  - NsPaResult(OK)            Function succeeded.
- *  - NsPaResult(BAD_PARAMETER) Bad parameters.
- *  - NsPaResult(NOT_PERMITTED) Can not perform this function due to some bad preconditions.
- *  - NsPaResult(TIMEOUT)       Not received the indication from the QMI service.
- *  - NsPaResult(FAULT)         Failed to enable all indications for MPSS side.
+ *  - taf_ns_pa_pms_Result_OK            Function succeeded.
+ *  - taf_ns_pa_pms_Result_BAD_PARAMETER Bad parameters.
+ *  - taf_ns_pa_pms_Result_NOT_PERMITTED Can not perform this function due to some bad preconditions.
+ *  - taf_ns_pa_pms_Result_TIMEOUT       Not received the indication from the QMI service.
+ *  - taf_ns_pa_pms_Result_FAULT         Failed to enable all indications for MPSS side.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED NsPaType(Result) taf_ns_pa_pms_EnableAllWs
+NS_SHARED taf_ns_pa_pms_Result_t taf_ns_pa_pms_EnableAllWs
 (
     taf_ns_pa_pms_MpssRef_t mpssRef
 );
