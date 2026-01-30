@@ -23,9 +23,6 @@ cmake .. \
 make -j$(nproc)
 
 echo ">>> Installing to ${INSTALL_DIR}"
+# Note: Debug symbol extraction and binary stripping is now handled by CMake install script
 make install
-
 echo ">>> Done, output: ${BUILD_DIR}, install: ${INSTALL_DIR}"
-
-
-

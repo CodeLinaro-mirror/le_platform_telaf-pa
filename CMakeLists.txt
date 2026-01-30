@@ -33,6 +33,13 @@ set(MODULE_LIST
     component/taf_pa_health
     component/taf_pa_pms
     component/taf_pa_sim
+    # IMPORTANT: split_debug_symbols_strip_binaries must be the last module in this list.
+    # This module extracts debug symbols from all installed binaries and strips them.
+    # It must run after all other components have installed their files, otherwise
+    # it would process an incomplete set of binaries. CMake processes install()
+    # commands in the order modules are added, so placing this module last ensures
+    # the debug symbol extraction happens after all component files are installed.
+    component/split_debug_symbols_strip_binaries
 )
 
 foreach(module ${MODULE_LIST})
