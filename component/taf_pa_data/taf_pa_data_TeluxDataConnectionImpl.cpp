@@ -581,6 +581,10 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManager
         PA_ERROR("CRITICAL: Failed to deregister data connection callbacks!");
         PA_ERROR("Cannot safely proceed with cleanup - callbacks may still be active");
         PA_ERROR("This could lead to crashes if SDK invokes callbacks after cleanup");
+        // Reset the flag to prevent further event forwarding attempts even though
+        // deregistration failed - this stops the PA layer from forwarding any
+        // incoming SDK throughput events to a partially cleaned-up state.
+        bThroughputEventsEnabled_.store(false);
         return PA_FAULT; // Do NOT clear maps if deregistration failed
     }
 
@@ -596,6 +600,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManager
         throttledApnEventsCallbacks_.clear();
         qosTftEventsCallbacks_.clear();
         hwAccelerationEventsCallbacks_.clear();
+        throughputEventsCallbacks_.clear();
+        // Explicitly reset the throughput events gate flag to ensure a consistent
+        // state. During deinit the callbacks are cleared directly (not via
+        // PaRemoveThroughputEventsCallback), so the flag must be reset here.
+        bThroughputEventsEnabled_.store(false);
 
         PA_INFO("Cleared all callback vectors");
     }
@@ -654,8 +663,13 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks
                 auto listenerIt = dataConnectionListenersMap_.find((SlotId)slotId);
                 if (listenerIt != dataConnectionListenersMap_.end())
                 {
-                    if (managerIt->second->registerListener(listenerIt->second) ==
-                        telux::common::Status::SUCCESS)
+                    // Register for DEFAULT indications only.
+                    // The THROUGHPUT indication is registered separately in
+                    // PaAddThroughputEventsCallback() when the first throughput callback is
+                    // added, and deregistered in PaRemoveThroughputEventsCallback() when the
+                    // last throughput callback is removed.
+                    if (managerIt->second->registerListener(listenerIt->second,
+                        telux::data::DEFAULT_INDICATIONS) == telux::common::Status::SUCCESS)
                     {
                         PA_INFO("Data connection listener for slot ID %d registered.", slotId);
                         bDataConnectionListenersRegistered_[slotId - 1] = true;
@@ -706,8 +720,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaDeregisterDataConnCallbac
         {
             if (dataConnectionManagersMap_.find((SlotId)slotId) != dataConnectionManagersMap_.end())
             {
+                // Deregister from DEFAULT indications only.
+                // The THROUGHPUT indication is managed independently by
+                // PaAddThroughputEventsCallback() and PaRemoveThroughputEventsCallback().
                 telux::common::Status status = dataConnectionManagersMap_[(SlotId)slotId]->
-                    deregisterListener(dataConnectionListenersMap_[(SlotId)slotId]);
+                    deregisterListener(dataConnectionListenersMap_[(SlotId)slotId],
+                                      telux::data::DEFAULT_INDICATIONS);
 
                 if (telux::common::Status::SUCCESS == status)
                 {
@@ -1106,6 +1124,8 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
     return PA_OK;
 }
 
+
+
 pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
 (
     const taf::pa::data::PhoneId_e        phoneId,
@@ -1140,8 +1160,9 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
     std::future<std::pair<std::vector<telux::data::APNThrottleInfo>, telux::common::ErrorCode>> fut
             = promisePtr->get_future();
 
-    // Lambda callback - captures promisePtr by value (shared ownership)
-    auto requestThrottledApnInfoCallback = [promisePtr]
+    // Single SDK call — the callback only fulfils the promise, nothing else.
+    status = dataConnectionManagersMap_[slotId]->requestThrottledApnInfo(
+    [promisePtr]
     (
         const std::vector<telux::data::APNThrottleInfo> &throttleInfoList,
         telux::common::ErrorCode error
@@ -1157,30 +1178,26 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
             PA_ERROR("Future error in callback: %s", e.what());
             // Try to set promise to unblock waiting thread
             try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
-                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
         }
         catch (const std::exception& e)
         {
-                        PA_ERROR("Exception in callback: %s", e.what());
+            PA_ERROR("Exception in callback: %s", e.what());
             try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
-                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
         }
         catch (...)
         {
-                        PA_ERROR("Unknown error in requestThrottledApnInfo callback.");
+            PA_ERROR("Unknown error in requestThrottledApnInfo callback.");
             try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
-                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
         }
-    };
-
-    status = dataConnectionManagersMap_[slotId]->requestThrottledApnInfo(
-                                                            requestThrottledApnInfoCallback);
+    });
     if (telux::common::Status::SUCCESS != status)
     {
         PA_ERROR("requestThrottledApnInfo failed. Status: %d", TO_INT(status));
         return PA_FAULT;
     }
-
     PA_DEBUG("Wait for callback ...");
 
     std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
@@ -1218,11 +1235,9 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
     return PA_OK;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
 /**
  * SDK to PA event callbacks
  */
-////////////////////////////////////////////////////////////////////////////////////////////////////
 void taf::pa::data::TafPaTeluxDataConnection::PaSendHwAccelerationEventInfoToClients
 (
     const HwAccelerationChangeEvent_t &hwAccelerationEventInfo
@@ -1303,7 +1318,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveHwAccelerationChang
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p", id, cbk);
+            PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
             hwAccelerationEventsCallbacks_.erase(cbk);
             return PA_OK;
         }
@@ -1390,7 +1405,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveQosTftEventsCallbac
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p", id, cbk);
+            PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
             qosTftEventsCallbacks_.erase(cbk);
             return PA_OK;
         }
@@ -1478,7 +1493,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThrottledApnEventsC
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p", id, cbk);
+            PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
             throttledApnEventsCallbacks_.erase(cbk);
             return PA_OK;
         }
@@ -1564,11 +1579,286 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveDataCallEventsCallb
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p", id, cbk);
+            PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
             dataCallEventsCallbacks_.erase(cbk);
             return PA_OK;
         }
     }
     PA_WARN("Callback not found. Id: %d", id);
     return PA_NOT_FOUND;
+}
+
+/*
+ * Throughput Events Implementation
+*/
+
+void taf::pa::data::TafPaTeluxDataConnection::PaSendThroughputEventInfoToClients
+(
+    const std::vector<ThroughputInfo_t> &throughputInfoList
+)
+{
+    // Gate: suppress SDK throughput events until at least one PA-level callback is registered.
+    // This keeps the gating logic exclusively in the PA layer.
+    if (!bThroughputEventsEnabled_.load())
+    {
+        PA_DEBUG("Throughput events gated: no callbacks registered yet, dropping event.");
+        return;
+    }
+    PA_DEBUG("Calling registered callbacks...");
+    std::vector<ThroughputEventsCallbackEntry_t> localCbksCopy;
+    {
+        // Lock and get a copy of the callbacks.
+        std::shared_lock lock(dataConnectionCbksMtx_);
+        localCbksCopy = throughputEventsCallbacks_;
+    }
+    for (auto &cbk : localCbksCopy)
+    {
+        try
+        {
+            PA_DEBUG("Calling callback: %d", cbk.id);
+            cbk.callBack(throughputInfoList, cbk.context);
+        }
+        catch (const std::exception &e)
+        {
+            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown exception in callback %d", cbk.id);
+        }
+    }
+}
+
+pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThroughputEventsCallback
+(
+    taf_pa_data_ThroughputEventsCb callBack,
+    ///< [IN] The callback function.
+    std::shared_ptr<void> context,
+    ///< [IN] The context pointer.
+    uint16_t &id
+    ///< [OUT] The ID of the registered callback.
+)
+{
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
+    SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+                                                             "PA phone manager not initialized.");
+
+    bool needRegister = false;
+    {
+        std::unique_lock lock(dataConnectionCbksMtx_);
+        // Add the callback
+        ThroughputEventsCallbackEntry_t entry = {throughputEventsCallbackId_, callBack, context};
+        throughputEventsCallbacks_.push_back(entry);
+        // Give ID back to app
+        id = throughputEventsCallbackId_;
+        // Increment the ID.
+        throughputEventsCallbackId_++;
+        PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+        PA_INFO("Number of registered callbacks: %zu", throughputEventsCallbacks_.size());
+
+        // Decide first-registration under the lock, but do NOT call TelSDK while holding it.
+        needRegister = (throughputEventsCallbacks_.size() == 1);
+    } // Lock released here before any TelSDK call
+
+    if (needRegister)
+    {
+        PA_INFO("First throughput callback added: registering THROUGHPUT indication with SDK.");
+        telux::data::DataConnectionIndications throughputIndication;
+        throughputIndication.set(
+            telux::data::DataConnectionIndicationsType::THROUGHPUT);
+
+        for (auto slotId = 1; slotId <= TO_INT(slotCount_); slotId++)
+        {
+            auto managerIt = dataConnectionManagersMap_.find((SlotId)slotId);
+            auto listenerIt = dataConnectionListenersMap_.find((SlotId)slotId);
+            if (managerIt != dataConnectionManagersMap_.end() &&
+                listenerIt != dataConnectionListenersMap_.end())
+            {
+                telux::common::Status status = managerIt->second->registerListener(
+                    listenerIt->second, throughputIndication);
+                if (telux::common::Status::SUCCESS == status)
+                {
+                    PA_INFO("THROUGHPUT indication registered for slot ID %d.", slotId);
+                }
+                else
+                {
+                    PA_ERROR("Failed to register THROUGHPUT indication for slot ID %d.", slotId);
+                }
+            }
+        }
+        bThroughputEventsEnabled_.store(true);
+        PA_INFO("Throughput events gate opened: SDK events will now be forwarded to clients.");
+    }
+    return PA_OK;
+}
+
+pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThroughputEventsCallback
+(
+    uint16_t id
+    ///< [IN] The ID of the registered callback.
+)
+{
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
+    SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+                                                             "PA phone manager not initialized.");
+    bool needDeregister = false;
+    bool found = false;
+    {
+        std::unique_lock lock(dataConnectionCbksMtx_);
+        // Iterate over the vector and remove the one with the provided id.
+        for (
+            auto cbk = throughputEventsCallbacks_.begin();
+            cbk != throughputEventsCallbacks_.end();
+            ++cbk)
+        {
+            if (cbk->id == id)
+            {
+                PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
+                throughputEventsCallbacks_.erase(cbk);
+                found = true;
+                needDeregister = throughputEventsCallbacks_.empty();
+                // Close the gate immediately under the lock so no further events are forwarded
+                // while we are about to deregister from TelSDK.
+                if (needDeregister)
+                    bThroughputEventsEnabled_.store(false);
+                break;
+            }
+        }
+    } // Lock released here before any TelSDK call
+
+    if (!found)
+    {
+        PA_WARN("Callback not found. Id: %d", id);
+        return PA_NOT_FOUND;
+    }
+
+    if (needDeregister)
+    {
+        PA_INFO("Last throughput callback removed: deregistering THROUGHPUT indication "
+                "from SDK.");
+        telux::data::DataConnectionIndications throughputIndication;
+        throughputIndication.set(
+            telux::data::DataConnectionIndicationsType::THROUGHPUT);
+
+        for (auto slotId = 1; slotId <= TO_INT(slotCount_); slotId++)
+        {
+            auto managerIt = dataConnectionManagersMap_.find((SlotId)slotId);
+            auto listenerIt = dataConnectionListenersMap_.find((SlotId)slotId);
+            if (managerIt != dataConnectionManagersMap_.end() &&
+                listenerIt != dataConnectionListenersMap_.end())
+            {
+                telux::common::Status status = managerIt->second->deregisterListener(
+                    listenerIt->second, throughputIndication);
+                if (telux::common::Status::SUCCESS == status)
+                {
+                    PA_INFO("THROUGHPUT indication deregistered for slot ID %d.", slotId);
+                }
+                else
+                {
+                    PA_ERROR("Failed to deregister THROUGHPUT indication for slot ID %d.",
+                             slotId);
+                }
+            }
+        }
+        PA_INFO("Throughput events gate closed: no remaining callbacks.");
+    }
+    return PA_OK;
+}
+
+pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetThroughputReportInterval
+(
+    PhoneId_e phoneId,
+    uint32_t reportInterval
+)
+{
+    taf::pa::data::SlotId_e slotIDpa;
+    telux::common::ErrorCode errorCode;
+
+    auto &teluxPaData = TafPaTeluxData::GetInstance();
+    SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+                                                             "PA phone manager not initialized.");
+    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
+    if (PA_OK != result)
+    {
+        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        return result;
+    }
+    PA_INFO("Phone Id: %d, Slot Id: %d, Interval: %u ms", TO_INT(phoneId), TO_INT(slotIDpa),
+            reportInterval);
+
+    SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
+
+    if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
+    {
+        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return PA_FAULT;
+    }
+
+    errorCode = dataConnectionManagersMap_[slotId]->setThroughputInterval(reportInterval);
+    if (telux::common::ErrorCode::SUCCESS != errorCode)
+    {
+        PA_ERROR("setThroughputInterval failed. ErrorCode: %d", TO_INT(errorCode));
+        return PA_FAULT;
+    }
+
+    PA_INFO("setThroughputInterval succeeded");
+    return PA_OK;
+}
+
+pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetLastThroughputInfo
+(
+    PhoneId_e phoneId,
+    std::vector<ThroughputInfo_t> &throughputInfoList
+)
+{
+    taf::pa::data::SlotId_e slotIDpa;
+    telux::common::ErrorCode errorCode;
+
+    auto &teluxPaData = TafPaTeluxData::GetInstance();
+    SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+                                                             "PA phone manager not initialized.");
+    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
+    if (PA_OK != result)
+    {
+        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        return result;
+    }
+    PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIDpa));
+
+    SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
+
+    if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
+    {
+        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return PA_FAULT;
+    }
+
+    std::vector<telux::data::ThroughputInfo> sdkThroughputInfoList;
+    errorCode = dataConnectionManagersMap_[slotId]->getLastThroughputInfo(sdkThroughputInfoList);
+    if (telux::common::ErrorCode::SUCCESS != errorCode)
+    {
+        PA_ERROR("getLastThroughputInfo failed. ErrorCode: %d", TO_INT(errorCode));
+        return PA_FAULT;
+    }
+
+    PA_INFO("getLastThroughputInfo succeeded. Count: %zu", sdkThroughputInfoList.size());
+
+    // Convert SDK throughput info to PA throughput info
+    throughputInfoList.clear();
+    for (const auto &sdkInfo : sdkThroughputInfoList)
+    {
+        ThroughputInfo_t paInfo;
+        taf::pa::data::Utils::ConvertThroughputInfo(sdkInfo, paInfo);
+        // Add phone ID to the info
+        paInfo.phoneId = phoneId;
+        throughputInfoList.push_back(paInfo);
+    }
+
+    return PA_OK;
 }

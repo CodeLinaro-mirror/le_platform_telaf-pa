@@ -445,3 +445,59 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onServiceStatusChange
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.SetSubsysState(slotIdPa, sState, true);
 }
+
+void taf::pa::data::TafPaTeluxDataConnectionListener::onThroughputInfoAvailable
+(
+    const std::vector<telux::data::ThroughputInfo> &info
+)
+{
+    SET_SDK_THREAD_NAME();
+    PA_DEBUG("Slot ID: %d, Throughput info count: %zu", TO_INT(slotId_), info.size());
+
+    // Early return if no data
+    if (info.empty())
+    {
+        PA_DEBUG("No throughput info received, returning");
+        return;
+    }
+
+    // Convert slot ID
+    SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(slotId_);
+
+    // Get phone ID
+    PhoneId_e phoneId;
+    auto &teluxPaData = TafPaTeluxData::GetInstance();
+    pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(slotIdPa, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result,
+                            "PaGetPhoneIdFromSlotId err: %d. Dropping event", result);
+
+    // Convert throughput info from SDK to PA format
+    std::vector<ThroughputInfo_t> paThroughputInfoList;
+    paThroughputInfoList.reserve(info.size()); // Pre-allocate for efficiency
+
+    for (const auto &sdkInfo : info)
+    {
+        ThroughputInfo_t paInfo;
+        taf::pa::data::Utils::ConvertThroughputInfo(sdkInfo, paInfo);
+
+        // Add phone ID (ConvertThroughputInfo sets slotId from sdkInfo.slot)
+        paInfo.phoneId = phoneId;
+
+        paThroughputInfoList.push_back(paInfo);
+
+        // Detailed logging for debugging
+        PA_DEBUG("Profile ID: %d, Slot: %d",
+                 TO_INT(paInfo.profileId), TO_INT(paInfo.slotId));
+        PA_DEBUG("  UL: throughput=%u kbps, maxThroughput=%u kbps, queueSize=%u bytes",
+                 paInfo.ulThroughput.throughput,
+                 paInfo.ulThroughput.maxThroughput,
+                 paInfo.ulThroughput.queueSize);
+        PA_DEBUG("  DL: throughput=%u kbps",
+                 paInfo.dlThroughput.throughput);
+    }
+
+    // Send to registered clients
+    PA_INFO("Sending %zu throughput info entries to clients", paThroughputInfoList.size());
+    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+    teluxPaDataConn.PaSendThroughputEventInfoToClients(paThroughputInfoList);
+}
