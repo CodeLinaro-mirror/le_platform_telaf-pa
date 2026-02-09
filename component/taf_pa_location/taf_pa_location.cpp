@@ -24,6 +24,7 @@
 #include "taf_pa_common.h"
 
 #define MAX_INIT_TIMEOUT 5
+#define CLEANUP_TIMEOUT_SECONDS 5
 #define SEC_TO_NANOS 1000000000
 
 using namespace telux::loc;
@@ -375,7 +376,7 @@ void LocationPAController::PALocationClient::CleanUp()
     if(locationManager_ != nullptr)
     {
         PA_INFO("locationManager_ --> CleanUp: %p", locationManager_.get());
-        auto status = locationManager_->deRegisterListenerEx(shared_from_this());
+        auto status = locationManager_->deRegisterListenerEx(weak_from_this());
         if(status == telux::common::Status::SUCCESS)
         {
             PA_INFO("Deregistered a listener!!");
@@ -384,14 +385,50 @@ void LocationPAController::PALocationClient::CleanUp()
         {
             PA_ERROR("Failed to deregister a listener");
         }
-        status = locationManager_->deRegisterForSystemInfoUpdates(shared_from_this());
-        if(status == telux::common::Status::SUCCESS)
-        {
-            PA_INFO("Deregistered a listener for location system information");
+
+        // Synchronize deRegister callback to prevent manager teardown overlap
+        try {
+            PA_INFO("Deregistering system info updates with callback synchronization");
+            auto deregisterPromisePtr = std::make_shared<std::promise<void>>();
+            auto deregisterStatus = locationManager_->deRegisterForSystemInfoUpdates(
+                weak_from_this(),
+                [deregisterPromisePtr](telux::common::ErrorCode error) {
+                    try {
+                        if(error == telux::common::ErrorCode::SUCCESS) {
+                            PA_INFO("Successfully deregistered system info updates");
+                        } else {
+                            PA_ERROR("Failed to deregister system info updates, error: %d",
+                                    static_cast<int>(error));
+                        }
+                        deregisterPromisePtr->set_value();
+                    }
+                    catch (const std::future_error& e) {
+                        PA_ERROR("Future error in deRegister callback: %s", e.what());
+                    }
+                    catch (const std::exception& e) {
+                        PA_ERROR("Exception in deRegister callback: %s", e.what());
+                    }
+                    catch (...) {
+                        PA_ERROR("Unknown error in deRegister callback");
+                    }
+                });
+
+            if(deregisterStatus == telux::common::Status::SUCCESS) {
+                // Wait for deregister to complete with CLEANUP_TIMEOUT_SECONDS timeout
+                auto deregisterFuture = deregisterPromisePtr->get_future();
+                if(deregisterFuture.wait_for(std::chrono::seconds(CLEANUP_TIMEOUT_SECONDS))
+                        == std::future_status::ready) {
+                    PA_INFO("DeRegisterForSystemInfoUpdates completed successfully");
+                } else {
+                    PA_ERROR("Timeout waiting for deRegisterForSystemInfoUpdates to complete");
+                }
+            } else {
+                PA_ERROR("DeRegisterForSystemInfoUpdates failed to initiate with status: %d",
+                        static_cast<int>(deregisterStatus));
+            }
         }
-        else
-        {
-            PA_ERROR("Failed to deregister a listener for location system information");
+        catch (const std::exception& e) {
+            PA_ERROR("Exception during deRegisterForSystemInfoUpdates in cleanup: %s", e.what());
         }
     }
     else
