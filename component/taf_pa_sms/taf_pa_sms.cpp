@@ -940,7 +940,7 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
         std::lock_guard<std::mutex> lk(pACtrl->cbFilterMutex);
         pACtrl->CBFilterList = std::move(filters);
     }
-    return pACtrl->CBFilterList.empty() ? PA_FAULT : PA_OK;
+    return PA_OK;
 }
 
 pa_result_t tafpa::sms::taf_pa_sms_AddCellBroadcastIds
