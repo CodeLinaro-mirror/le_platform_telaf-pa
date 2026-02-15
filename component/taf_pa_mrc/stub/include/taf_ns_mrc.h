@@ -27,7 +27,7 @@ typedef enum
     TAF_NS_MRC_STATUS_INITIATED = 1,
     TAF_NS_MRC_STATUS_RESUMED = 2,
     TAF_NS_MRC_STATUS_SUCCEEDED = 3,
-    TAF_NS_MRC_STATUS_FAILED = 4
+    TAF_NS_MRC_STATUS_FAILED = 4,
 } taf_ns_mrc_Status_t;
 
 typedef enum
@@ -76,6 +76,19 @@ typedef void (*taf_ns_mrc_ProcessStatusHdlrFunc_t)
     void* contextPtr
 );
 
+typedef struct
+{
+    uint8_t slotToggleRequested;
+} taf_ns_mrc_ScrubStatusIndication_t;
+
+typedef struct taf_ns_mrc_ScrubStatusHandler* taf_ns_mrc_ScrubStatusHandlerRef_t;
+
+typedef void (*taf_ns_mrc_ScrubStatusHdlrFunc_t)
+(
+    taf_ns_mrc_ScrubStatusIndication_t indication,
+    void* contextPtr
+);
+
 NS_SHARED int32_t taf_ns_mrc_Init
 (
     void
@@ -112,6 +125,17 @@ NS_SHARED int32_t taf_ns_mrc_SetTimerPeriod
 (
     taf_ns_mrc_Timer_t timer,
     uint32_t period
+);
+
+NS_SHARED taf_ns_mrc_ScrubStatusHandlerRef_t taf_ns_mrc_AddScrubStatusHandler
+(
+    taf_ns_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
+    void* contextPtr
+);
+
+NS_SHARED int32_t taf_ns_mrc_AckSlotToggle
+(
+    int32_t success
 );
 
 #ifdef __cplusplus

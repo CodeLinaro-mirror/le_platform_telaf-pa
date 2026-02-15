@@ -27,7 +27,7 @@ typedef enum
     TAF_PA_MRC_STATUS_INITIATED = 1,
     TAF_PA_MRC_STATUS_RESUMED = 2,
     TAF_PA_MRC_STATUS_SUCCEEDED = 3,
-    TAF_PA_MRC_STATUS_FAILED = 4
+    TAF_PA_MRC_STATUS_FAILED = 4,
 } taf_pa_mrc_Status_t;
 
 typedef enum
@@ -76,6 +76,19 @@ typedef void (*taf_pa_mrc_ProcessStatusHdlrFunc_t)
     void* contextPtr
 );
 
+typedef struct
+{
+    uint8_t slotToggleRequested;
+} taf_pa_mrc_ScrubStatusIndication_t;
+
+typedef struct taf_pa_mrc_ScrubStatusHandler* taf_pa_mrc_ScrubStatusHandlerRef_t;
+
+typedef void (*taf_pa_mrc_ScrubStatusHdlrFunc_t)
+(
+    taf_pa_mrc_ScrubStatusIndication_t indication,
+    void* contextPtr
+);
+
 PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_Init
 (
     void
@@ -117,6 +130,17 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_SetTimerPeriod
 PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_PerformABSync
 (
     void
+);
+
+PA_SHARED PA_WEAK taf_pa_mrc_ScrubStatusHandlerRef_t taf_pa_mrc_AddScrubStatusHandler
+(
+    taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
+    void* contextPtr
+);
+
+PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_AckSlotToggle
+(
+    int32_t success
 );
 
 #ifdef __cplusplus

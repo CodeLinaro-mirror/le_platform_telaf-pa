@@ -70,6 +70,7 @@ typedef struct
 typedef struct
 {
     Handler_t processStatus;
+    Handler_t scrubStatus;
 } Indicator_t;
 
 typedef struct
@@ -286,6 +287,25 @@ static void ProcessStatusHandler
     }
 }
 
+static void ScrubStatusHandler
+(
+    taf_ns_mrc_ScrubStatusIndication_t indication,
+    void* contextPtr
+)
+{
+    PA_INFO("Scrub GPIO toggle requested");
+    auto& pa = PlatformAdaptor::GetInstance();
+
+    taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFunc =
+        (taf_pa_mrc_ScrubStatusHdlrFunc_t)pa.indicators.scrubStatus.handlerFuncPtr;
+    if (handlerFunc != nullptr)
+    {
+        taf_pa_mrc_ScrubStatusIndication_t paIndication;
+        paIndication.slotToggleRequested = indication.slotToggleRequested;
+        handlerFunc(paIndication, pa.indicators.scrubStatus.contextPtr);
+    }
+}
+
 pa_result_t taf_pa_mrc_Init()
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -302,6 +322,7 @@ pa_result_t taf_pa_mrc_Init()
     else if (result == 0)
     {
         taf_ns_mrc_AddProcessStatusHandler(ProcessStatusHandler, nullptr);
+        taf_ns_mrc_AddScrubStatusHandler(ScrubStatusHandler, nullptr);
         PA_INFO("MRC proprietary platform adaptor initialization is done.");
     }
 
@@ -486,4 +507,24 @@ pa_result_t taf_pa_mrc_SetTimerPeriod
 {
     taf_ns_mrc_Timer_t nsTimer = Utility::Convert::Timer(timer);
     return taf_ns_mrc_SetTimerPeriod(nsTimer, period);
+}
+
+taf_pa_mrc_ScrubStatusHandlerRef_t taf_pa_mrc_AddScrubStatusHandler
+(
+    taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
+    void* contextPtr
+)
+{
+    auto& pa = PlatformAdaptor::GetInstance();
+    pa.indicators.scrubStatus.handlerFuncPtr = (void*)handlerFuncPtr;
+    pa.indicators.scrubStatus.contextPtr = contextPtr;
+    return nullptr;
+}
+
+pa_result_t taf_pa_mrc_AckSlotToggle
+(
+    int32_t success
+)
+{
+    return taf_ns_mrc_AckSlotToggle(success);
 }

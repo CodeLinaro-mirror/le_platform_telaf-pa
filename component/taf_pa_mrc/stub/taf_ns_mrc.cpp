@@ -7,6 +7,25 @@
 
 #include "taf_ns_mrc.h"
 
+taf_ns_mrc_ScrubStatusHandlerRef_t taf_ns_mrc_AddScrubStatusHandler
+(
+    taf_ns_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
+    void* contextPtr
+)
+{
+    NS_INFO("Function is not implemented in stub PA.");
+    return nullptr;
+}
+
+int32_t taf_ns_mrc_AckSlotToggle
+(
+    int32_t success
+)
+{
+    NS_INFO("Function is not implemented in stub PA.");
+    return -ENOSYS;
+}
+
 int32_t taf_ns_mrc_Init
 (
     void
