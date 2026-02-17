@@ -67,7 +67,7 @@ private:
     std::bitset<MAX_LOCATION_IDS> idMask_;
 };
 
-class LocationPAController{
+class LocationPAController:public telux::loc::IDgnssStatusListener,public std::enable_shared_from_this<LocationPAController>{
 public:
     static std::shared_ptr<LocationPAController> getInstance()
     {
@@ -76,11 +76,46 @@ public:
     }
 
     pa_result_t initialize();
+    telux::common::Status RegisterDgnssManager();
+    telux::common::Status InitializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,taf_pa_location_GeneralCb callback,std::any context);
+    telux::common::Status DeInitializeDgnss(taf_pa_location_GeneralCb callback,std::any context);
     pa_result_t MapStatus(telux::common::Status status);
     pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
 
     LocationPAController() = default;
-    ~LocationPAController() = default;
+
+    ~LocationPAController()
+    {
+        PA_INFO("~LocationPAController - cleaning up");
+
+        // Lock mutex to prevent callback execution during cleanup
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // CRITICAL: Deregister BEFORE destruction completes
+        if (mDgnssManager)
+        {
+            PA_INFO("Deregistering DGNSS listener in destructor mDgnssManager: %p",mDgnssManager);
+
+            // Clear listener first to prevent callbacks
+            dgnssListener_ = nullptr;
+
+           // Deregister synchronously without callbacks
+            auto status = mDgnssManager->deRegisterListener();
+            if (status == telux::common::Status::SUCCESS)
+            {
+                PA_INFO("Successfully deregistered Dgnss manager in destructor");
+            }
+            else
+            {
+                PA_ERROR("Failed to deregister Dgnss in destructor: %d", (int)status);
+            }
+
+            // Clear the pointer
+            mDgnssManager.reset();
+        }
+    }
+    void onDgnssStatusUpdate(DgnssStatus status) override;
+    taf_pa_location_DgnssDataStatus_t convertTeluxToDgnssDataStatus(DgnssStatus dgnssStatus);
 
     class PALocationClient : public telux::loc::ILocationListener,
         public telux::loc::ILocationSystemInfoListener,
@@ -108,6 +143,7 @@ public:
 
         void Init();
         void CleanUp();
+        taf_pa_location_NavigationSolutionType_t convertTeluxToNavigationSolutionType(telux::loc::NavigationSolution naviSolution);
 
         telux::common::Status StartDetailedEngineReports(uint32_t optInterval, uint16_t engineType, taf_pa_location_GeneralCb callback, uint32_t reportMask, std::any context);
         telux::common::Status StopReports(taf_pa_location_GeneralCb callback, std::any context);
@@ -145,18 +181,34 @@ public:
     telux::common::Status RequestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context);
     telux::common::Status InjectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context);
     telux::common::Status ConfigureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context);
-
+    telux::common::Status ConfigureEngineIntegrityRisk(telux::loc::EngineType engineType,uint32_t integrityRisk,taf_pa_location_GeneralCb callback, std::any context);
+    telux::common::Status InjectCorrectionData(const uint8_t*injectionData,
+    uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context);
+    telux::common::Status CreateDgnssSource(telux::loc::DgnssDataFormat dgnssFormat,
+    taf_pa_location_GeneralCb callback,std::any context);
+    telux::common::Status ReleaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context);
     std::shared_ptr<PALocationClient> GetClientPtr(taf_pa_location_LocationId id);
     taf_pa_location_LocationId CreateLocationClient();
     pa_result_t ReleaseLocationClient(taf_pa_location_LocationId id);
+    std::shared_ptr<telux::loc::IDgnssManager> getDgnssManager()
+    {
+        return mDgnssManager;
+    }
+    pa_result_t RegisterDgnssEventListener(
+        taf_pa_location_DgnssEventListener* listener,
+        std::any context);
+    pa_result_t DeregisterDgnssEventListener(std::any context);
 private:
     LocationPAController(const LocationPAController&) = delete;
     LocationPAController& operator=(const LocationPAController&) = delete;
     std::shared_ptr<telux::loc::ILocationConfigurator> mLocationConfigurator = nullptr;
+    std::shared_ptr<telux::loc::IDgnssManager> mDgnssManager = nullptr;
     static std::shared_ptr<LocationPAController> instance;
     std::map<taf_pa_location_LocationId, std::shared_ptr<PALocationClient>> locationClients_;
     ReusableIdGenerator id_generator_;
     std::mutex mutex_;
+    taf_pa_location_DgnssEventListener* dgnssListener_ = nullptr;
+    std::any dgnssListenerContext_;
 };
 
 pa_result_t LocationPAController::PALocationClient::RegisterEventListener(
@@ -177,6 +229,48 @@ pa_result_t LocationPAController::PALocationClient::RegisterEventListener(
         eventListenerContext_ = std::move(context);
     }
 
+    return PA_OK;
+}
+
+pa_result_t LocationPAController::RegisterDgnssEventListener(
+    taf_pa_location_DgnssEventListener* listener,
+    std::any context) {
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (listener != nullptr) {
+        dgnssListener_ = listener;
+    } else {
+        PA_ERROR("Dgnss Listener is NULL");
+        return PA_BAD_PARAMETER;
+    }
+
+    if (context.has_value())
+    {
+        dgnssListenerContext_ = std::move(context);
+    }
+    return PA_OK;
+}
+
+pa_result_t LocationPAController::DeregisterDgnssEventListener(std::any context)
+{
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (dgnssListener_ != nullptr)
+    {
+        dgnssListener_ = nullptr;
+        PA_INFO("dgnssListener_ is NULL");
+    }
+    else
+    {
+        PA_INFO("Dgnss dgnssListener_ is aready deregistered");
+    }
+
+    if (context.has_value())
+    {
+        dgnssListenerContext_ = std::move(context);
+    }
     return PA_OK;
 }
 
@@ -306,6 +400,78 @@ void LocationPAController::PALocationClient::CleanUp()
     }
 }
 
+taf_pa_location_NavigationSolutionType_t LocationPAController::PALocationClient:: convertTeluxToNavigationSolutionType(telux::loc::NavigationSolution naviSolution)
+{
+    PA_INFO("convertTeluxToNavigationSolutionType naviSolution-> %lu",naviSolution.to_ulong());
+    taf_pa_location_NavigationSolutionType_t navSolution = (taf_pa_location_NavigationSolutionType_t) 0;
+
+    // Check if naviSolution is empty/invalid
+    if(naviSolution.to_ulong() == 0) {
+        PA_ERROR("Invalid navigation solution type: value is 0");
+        return navSolution;  // Return 0 safely
+    }
+
+    if(naviSolution.to_ulong() & (1 << telux::loc::NAV_SBAS_SOLUTION_IONO))
+    {
+        PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_IONO");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_SBAS_SOLUTION_IONO);
+    }
+    if(naviSolution.to_ulong() & (1<<telux::loc::NAV_SBAS_SOLUTION_FAST))
+    {
+        PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_FAST");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_SBAS_SOLUTION_FAST);
+    }
+    if(naviSolution.to_ulong() & (1<<telux::loc::NAV_SBAS_SOLUTION_LONG))
+    {
+        PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_LONG");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_SBAS_SOLUTION_LONG);
+    }
+    if(naviSolution.to_ulong() & (1<<telux::loc::NAV_SBAS_INTEGRITY))
+    {
+        PA_DEBUG("telux::loc::NAV_SBAS_INTEGRITY");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_SBAS_INTEGRITY);
+    }
+    if(naviSolution.to_ulong() & (1<<telux::loc::NAV_DGNSS_SOLUTION))
+    {
+        PA_DEBUG("telux::loc::NAV_DGNSS_SOLUTION");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_DGNSS_SOLUTION);
+    }
+    if(naviSolution.to_ulong() & (1<<telux::loc::NAV_RTK_SOLUTION))
+    {
+        PA_DEBUG("telux::loc::NAV_RTK_SOLUTION");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_RTK_SOLUTION);
+    }
+    if(naviSolution.to_ulong() & (1<<telux::loc::NAV_PPP_SOLUTION))
+    {
+        PA_DEBUG("telux::loc::NAV_PPP_SOLUTION");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_PPP_SOLUTION);
+    }
+    if(naviSolution.to_ulong() & (1<<telux::loc::NAV_RTK_FIXED_SOLUTION))
+    {
+        PA_DEBUG("telux::loc::NAV_RTK_FIXED_SOLUTION");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_RTK_FIXED_SOLUTION);
+    }
+    if(naviSolution.to_ulong() & (1<<telux::loc::NAV_ONLY_SBAS_CORRECTED_SV_USED))
+    {
+        PA_DEBUG("telux::loc::NAV_ONLY_SBAS_CORRECTED_SV_USED");
+        navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
+        navSolution | TAF_PA_LOCATION_NAV_ONLY_SBAS_CORRECTED_SV_USED);
+    }
+
+    // Log if no valid bits were found (but still return the value)
+    if(navSolution == 0) {
+        PA_ERROR("Invalid navigation solution type: no recognized bits set in value %lu", naviSolution.to_ulong());
+    }
+    return navSolution;
+}
 
 taf_pa_location_LocationId LocationPAController::CreateLocationClient()
 {
@@ -361,7 +527,7 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
     }
 
     std::shared_ptr<LocationPAController::PALocationClient> paLocationClient =
-        std::make_shared<LocationPAController::PALocationClient>(sdkLocationManager);
+    std::make_shared<LocationPAController::PALocationClient>(sdkLocationManager);
 
     paLocationClient->Init();
 
@@ -447,6 +613,33 @@ pa_result_t tafpa::location::taf_pa_location_RegisterListener(
     return PA_FAULT;
 }
 
+pa_result_t tafpa::location::taf_pa_location_registerDgnssEventListener(
+    taf_pa_location_DgnssEventListener* eventListener,std::any context) {
+
+    auto paCtrl = LocationPAController::getInstance();
+
+    pa_result_t result = paCtrl->RegisterDgnssEventListener(eventListener, context);
+    if (result == PA_OK) {
+        PA_INFO("Register Dgnss Event Listener successfully ");
+        return PA_OK;
+    }
+    PA_ERROR("Failed to register Dgnss event listener");
+    return PA_FAULT;
+}
+
+pa_result_t tafpa::location::taf_pa_location_deregisterDgnssEventListener(std::any context) {
+
+    auto paCtrl = LocationPAController::getInstance();
+
+    pa_result_t result = paCtrl->DeregisterDgnssEventListener(context);
+    if (result == PA_OK) {
+        PA_INFO("Deregister Dgnss Event Listener successfully ");
+        return PA_OK;
+    }
+    PA_ERROR("Failed to deregister Dgnss event listener");
+    return PA_FAULT;
+}
+
 pa_result_t LocationPAController::initialize()
 {
     PA_INFO("initialize!!");
@@ -510,8 +703,39 @@ pa_result_t LocationPAController::initialize()
         PA_ERROR("LocationConfigurator not available");
         return PA_FAULT;
     }
-
     return PA_OK;
+}
+
+telux::common::Status LocationPAController::RegisterDgnssManager()
+{
+    PA_INFO("RegisterDgnssManager");
+    auto status = telux::common::Status::FAILED;
+    auto paCtrl = LocationPAController::getInstance();
+
+    if(!paCtrl) {
+        PA_ERROR("Failed to get LocationPAController instance");
+        return status;
+    }
+    PA_INFO("RegisterDgnssManager mDgnssManager: %p",mDgnssManager);
+    if(mDgnssManager != nullptr)
+    {
+        status = mDgnssManager->registerListener(shared_from_this());
+        if(status == telux::common::Status::SUCCESS)
+        {
+            PA_INFO("registerListener Dgnss listener!!");
+        }
+        else
+        {
+            PA_ERROR("Failed to register Dgnss listener");
+            return status;
+        }
+    }
+    else
+    {
+        PA_INFO("paCtrl->mDgnssManager is null");
+    }
+
+    return status;
 }
 
 pa_result_t tafpa::location::taf_pa_location_Init() {
@@ -1823,6 +2047,347 @@ pa_result_t tafpa::location::taf_pa_location_configureOsnma(bool enableOsnma, ta
     return paCtrl->MapStatus(status);
 }
 
+telux::common::Status LocationPAController::ConfigureEngineIntegrityRisk(telux::loc::EngineType engineType,uint32_t integrityRisk,taf_pa_location_GeneralCb callback, std::any context)
+{
+    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto paCtrl = LocationPAController::getInstance();
+
+    //Sdk Callback
+    auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
+        try{
+            if(error == telux::common::ErrorCode::SUCCESS) {
+                promisePtr->set_value(PA_OK);
+            }
+            else{
+                pa_result_t res = paCtrl->MapErrorCode(error);
+                promisePtr->set_value(res);
+            }
+        }
+        catch (const std::future_error& e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const std::exception& e)
+        {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown error in callback.");
+        }
+    };
+    telux::common::Status status = telux::common::Status::FAILED;
+    status =  mLocationConfigurator->configureEngineIntegrityRisk(engineType,integrityRisk,cb);
+    if(status == telux::common::Status::SUCCESS){
+        auto futResult = promisePtr->get_future();
+        if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
+            == std::future_status::ready)
+        {
+            pa_result_t selfResult = futResult.get();
+            if(callback)
+            {
+                callback(selfResult,context);
+            }
+        }
+        else
+        {
+            PA_ERROR("configureEngineIntegrityRisk Timeout waiting for result..");
+        }
+    }
+    return status;
+}
+pa_result_t tafpa::location::taf_pa_location_configureEngineIntegrityRisk(taf_pa_location_EngineType_t engineType,uint32_t integrityRisk,taf_pa_location_GeneralCb callback, std::any context)
+{
+    auto paCtrl = LocationPAController::getInstance();
+    PA_INFO("taf_pa_location_ConfigureEngineIntegrityRisk");
+    telux::common::Status status = paCtrl->ConfigureEngineIntegrityRisk((telux::loc::EngineType)engineType,integrityRisk,callback,context);
+    return paCtrl->MapStatus(status);
+}
+//dgns
+telux::common::Status LocationPAController::InjectCorrectionData(const uint8_t *injectionData, uint32_t injectionDataSize, taf_pa_location_GeneralCb  callback,std::any context)
+{
+    telux::common::Status status = telux::common::Status::FAILED;
+    if (!mDgnssManager) {
+        PA_ERROR("DGNSS Manager not initialized");
+        if(callback) {
+            callback(PA_FAULT, context);
+        }
+        return status;
+    }
+
+    status =  mDgnssManager->injectCorrectionData(injectionData, injectionDataSize);
+    if(status == telux::common::Status::SUCCESS)
+    {
+        if(callback)
+        {
+            callback(PA_OK,context);
+        }
+        PA_INFO("Injecting correction data is success");
+    }
+    else
+    {
+        PA_INFO("Injecting correction data is failed");
+    }
+    return status;
+}
+
+pa_result_t tafpa::location::taf_pa_location_injectCorrectionData(const uint8_t *injectionData, 
+uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context)
+{
+    if (!injectionData || injectionDataSize == 0) {
+        PA_ERROR("Invalid injection data: pointer is null or size is zero");
+        return PA_BAD_PARAMETER;
+    }
+    auto paCtrl = LocationPAController::getInstance();
+
+    auto status = paCtrl->InjectCorrectionData(injectionData, injectionDataSize, callback,context);
+    if(status != telux::common::Status::SUCCESS){
+        PA_ERROR("InjectCorrectionData failed with status code %d",static_cast<int>(status));
+        return PA_FAULT;
+    }
+    return paCtrl->MapStatus(status);
+}
+
+telux::common::Status LocationPAController::CreateDgnssSource(telux::loc::DgnssDataFormat
+dgnssFormat, taf_pa_location_GeneralCb  callback,std::any context)
+{
+    telux::common::Status status = telux::common::Status::FAILED;
+
+    if (!mDgnssManager) {
+        PA_ERROR("DGNSS Manager not initialized");
+        if(callback) {
+            callback(PA_FAULT, context);
+        }
+        return status;
+    }
+
+    status =  mDgnssManager->createSource(dgnssFormat);
+    if(status == telux::common::Status::SUCCESS)
+    {
+        if(callback)
+        {
+            callback(PA_OK,context);
+        }
+        PA_INFO("taf_pa_location_createDgnssSource is success");
+    }
+    else
+    {
+        PA_INFO("taf_pa_location_createDgnssSource is failed");
+    }
+    return status;
+}
+
+pa_result_t tafpa::location::taf_pa_location_createDgnssSource(taf_pa_location_DgnssDataFormat_t dgnssFormat,taf_pa_location_GeneralCb callback,std::any context)
+{
+    auto paCtrl = LocationPAController::getInstance();
+
+    auto status = paCtrl->CreateDgnssSource((telux::loc::DgnssDataFormat)dgnssFormat,callback,context);
+    if(status != telux::common::Status::SUCCESS){
+        PA_ERROR("taf_pa_location_createDgnssSource failed with status code %d",static_cast<int>(status));
+        return PA_FAULT;
+    }
+    return paCtrl->MapStatus(status);
+}
+
+telux::common::Status LocationPAController::ReleaseDgnssSource(taf_pa_location_GeneralCb
+callback,std::any context)
+{
+    telux::common::Status status = telux::common::Status::FAILED;
+
+    if (!mDgnssManager) {
+        PA_ERROR("DGNSS Manager not initialized");
+        if(callback) {
+            callback(PA_FAULT, context);
+        }
+        return status;
+    }
+
+    status =  mDgnssManager->releaseSource();
+    if(status == telux::common::Status::SUCCESS)
+    {
+        if(callback)
+        {
+            callback(PA_OK,context);
+        }
+        PA_INFO("ReleaseDgnssSource is success");
+    }
+    else
+    {
+        PA_INFO("ReleaseDgnssSource is failed");
+    }
+    return status;
+}
+
+pa_result_t tafpa::location::taf_pa_location_releaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context)
+{
+    auto paCtrl = LocationPAController::getInstance();
+
+    auto status = paCtrl->ReleaseDgnssSource(callback,context);
+    if(status != telux::common::Status::SUCCESS){
+        PA_ERROR("taf_pa_location_releaseDgnssSource failed with status code %d",static_cast<int>(status));
+        return PA_FAULT;
+    }
+    return paCtrl->MapStatus(status);
+}
+
+telux::common::Status LocationPAController::InitializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,
+taf_pa_location_GeneralCb callback,std::any context)
+{
+    PA_INFO("InitializeDgnss!!");
+    telux::common::Status statusDgnss;
+    telux::common::Status status;
+    status = telux::common::Status::SUCCESS;
+    statusDgnss = telux::common::Status::SUCCESS;
+    auto paCtrl = LocationPAController::getInstance();
+
+    PA_INFO("InitializeDgnss!! mDgnssManager: %p",mDgnssManager);
+    if(mDgnssManager == nullptr)
+    {
+        auto promDgnss = std::make_shared<std::promise<ServiceStatus>>();
+        auto &locationFactory = telux::loc::LocationFactory::getInstance();
+        mDgnssManager = locationFactory.getDgnssManager((telux::loc::DgnssDataFormat)dataFormat,[&promDgnss]
+                (telux::common::ServiceStatus status) {
+                try {
+                    if (status == ServiceStatus::SERVICE_AVAILABLE) {
+                        promDgnss->set_value(ServiceStatus::SERVICE_AVAILABLE);
+                        PA_INFO("SERVICE_AVAILABLE");
+                    } else {
+                        promDgnss->set_value(ServiceStatus::SERVICE_UNAVAILABLE);
+                        PA_INFO("SERVICE_UNAVAILABLE");
+                    }
+                }
+                catch (const std::future_error& e) {
+                    PA_ERROR("Future error in callback: %s", e.what());
+                }
+                catch (const std::exception& e) {
+                    PA_ERROR("Exception in callback: %s", e.what());
+                }
+                catch (...) {
+                    PA_ERROR("Unknown error in callback.");
+                }
+        });
+        if (!mDgnssManager)
+        {
+            PA_CRIT("*** ERROR - dgnssManager is NULL");
+            return telux::common::Status::FAILED;
+        }
+
+        std::chrono::time_point<std::chrono::system_clock> startTimeDgnss, endTimeDgnss;
+        startTimeDgnss = std::chrono::system_clock::now();
+        ServiceStatus dgnssMgrStatus = mDgnssManager->getServiceStatus();
+        if(dgnssMgrStatus != ServiceStatus::SERVICE_AVAILABLE){
+            PA_INFO("Dgnss subsystem is not ready, Please wait");
+        }
+        std::future<telux::common::ServiceStatus> initFutureDgnss = promDgnss->get_future();
+        std::future_status waitStatusDgnss = initFutureDgnss.wait_for(std::chrono::seconds(5));
+        telux::common::ServiceStatus serviceStatusDgnss;
+        if (std::future_status::timeout == waitStatusDgnss)
+        {
+            PA_ERROR("Timeout waiting for dgnss manager");
+            return telux::common::Status::FAILED;
+        } else {
+            serviceStatusDgnss = initFutureDgnss.get();
+            if (serviceStatusDgnss == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                endTimeDgnss = std::chrono::system_clock::now();
+                std::chrono::duration<double> elapsedTimeDgnss = endTimeDgnss - startTimeDgnss;
+                PA_INFO("Elapsed Time for dgnss subsystems to ready : %lf",elapsedTimeDgnss.count());
+            }else{
+                PA_ERROR("ERROR - Unable to initialize dgnss manager subsystem");
+                statusDgnss = telux::common::Status::FAILED;
+            }
+        }
+    }
+    else
+    {
+        PA_CRIT("dgnss manager is already initialized");
+        return telux::common::Status::FAILED;
+    }
+
+    if (statusDgnss != telux::common::Status::SUCCESS) {
+        PA_ERROR("dgnss manager not available");
+        return telux::common::Status::FAILED;
+    }
+    if(callback)
+    {
+        callback(PA_OK,context);
+    }
+    return telux::common::Status::SUCCESS;
+}
+
+pa_result_t tafpa::location::taf_pa_location_initializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,
+taf_pa_location_GeneralCb callback,std::any context)
+{
+    PA_INFO("taf_pa_location_initializeDgnss");
+    auto paCtrl = LocationPAController::getInstance();
+
+    auto status = paCtrl->InitializeDgnss(dataFormat,callback,context);
+    if(status != telux::common::Status::SUCCESS){
+        PA_ERROR("taf_pa_location_initializeDgnss failed with status code %d",static_cast<int>(status));
+        return PA_FAULT;
+    }
+
+    auto resDgnss = paCtrl->RegisterDgnssManager();
+    if (resDgnss == telux::common::Status::SUCCESS)
+    {
+        PA_INFO("Dgnss manager registration is success.");
+    }
+    else {
+        PA_ERROR("Dgnss manager registration is failed.");
+    }
+
+    return paCtrl->MapStatus(resDgnss);
+}
+
+telux::common::Status LocationPAController::DeInitializeDgnss(taf_pa_location_GeneralCb callback,
+std::any context)
+{
+    PA_INFO("DeInitializeDgnss!!");
+
+    auto paCtrl = LocationPAController::getInstance();
+    if (mDgnssManager)
+    {
+        PA_INFO("InitializeDgnss!! mDgnssManager: %p",mDgnssManager);
+
+        // Deregister synchronously without callbacks
+        auto status = mDgnssManager->deRegisterListener();
+        if (status == telux::common::Status::SUCCESS)
+        {
+            PA_INFO("Successfully deregistered Dgnss manager");
+        }
+        else
+        {
+            PA_ERROR("Failed to deregister Dgnss %d", (int)status);
+            return telux::common::Status::FAILED;
+        }
+        // Clear the pointer
+        mDgnssManager.reset();
+    }
+    else
+    {
+        PA_INFO("DeInitializeDgnss is already done");
+    }
+    if(callback)
+    {
+        callback(PA_OK,context);
+    }
+    return telux::common::Status::SUCCESS;
+}
+
+pa_result_t tafpa::location::taf_pa_location_deInitializeDgnss(taf_pa_location_GeneralCb callback,
+std::any context)
+{
+    PA_INFO("taf_pa_location_deInitializeDgnss");
+    auto paCtrl = LocationPAController::getInstance();
+
+    auto status = paCtrl->DeInitializeDgnss(callback,context);
+    if(status != telux::common::Status::SUCCESS){
+        PA_ERROR("taf_pa_location_deInitializeDgnss failed with status code %d",static_cast<int>(status));
+        return PA_FAULT;
+    }
+
+    return paCtrl->MapStatus(status);
+}
+
 void LocationPAController::PALocationClient::onCapabilitiesInfo(const telux::loc::LocCapability capabilityInfo)
 {
     PA_DEBUG( "**** onCapabilitiesInfo Information-->PA ****" );
@@ -1905,6 +2470,85 @@ void LocationPAController::PALocationClient::onXtraStatusUpdate(const telux::loc
     }
     else{
         PA_ERROR("unable to find event Listener for onXtraStatusUpdate");
+    }
+}
+
+taf_pa_location_DgnssDataStatus_t LocationPAController::convertTeluxToDgnssDataStatus(DgnssStatus dgnssStatus)
+{
+    PA_INFO("convertTeluxToDgnssDataStatus");
+    switch(dgnssStatus)
+    {
+        case DgnssStatus::DATA_SOURCE_NOT_SUPPORTED:
+        {
+            PA_DEBUG("telux::loc::DATA_SOURCE_NOT_SUPPORTED");
+            return TAF_PA_LOCATION_DATA_SOURCE_NOT_SUPPORTED;
+        }
+        break;
+        case DgnssStatus::DATA_FORMAT_NOT_SUPPORTED:
+        {
+            PA_DEBUG("telux::loc::DATA_FORMAT_NOT_SUPPORTED");
+            return TAF_PA_LOCATION_DATA_FORMAT_NOT_SUPPORTED;
+        }
+        break;
+        case DgnssStatus::OTHER_SOURCE_IN_USE:
+        {
+            PA_DEBUG("telux::loc::OTHER_SOURCE_IN_USE");
+            return TAF_PA_LOCATION_OTHER_SOURCE_IN_USE;
+        }
+        break;
+        case DgnssStatus::MESSAGE_PARSE_ERROR:
+        {
+            PA_DEBUG("telux::loc::MESSAGE_PARSE_ERROR");
+            return TAF_PA_LOCATION_MESSAGE_PARSE_ERROR;
+        }
+        break;
+        case DgnssStatus::DATA_SOURCE_USABLE:
+        {
+            PA_DEBUG("telux::loc::DATA_SOURCE_USABLE");
+            return TAF_PA_LOCATION_DATA_SOURCE_USABLE;
+        }
+        break;
+        case DgnssStatus::DATA_SOURCE_NOT_USABLE :
+        {
+            PA_DEBUG("telux::loc::DATA_SOURCE_NOT_USABLE");
+            return TAF_PA_LOCATION_DATA_SOURCE_NOT_USABLE;
+        }
+        break;
+        case DgnssStatus::CDFW_STOP_SOURCE_INJECT :
+        {
+            PA_DEBUG("telux::loc::CDFW_STOP_SOURCE_INJECT");
+            return TAF_PA_LOCATION_CDFW_STOP_SOURCE_INJECT;
+        }
+        break;
+        default:
+            PA_INFO("Invalid Dgnss data status");
+            return TAF_PA_LOCATION_DATA_SOURCE_NOT_SUPPORTED;
+        break;
+    }
+}
+
+void LocationPAController::onDgnssStatusUpdate(DgnssStatus status)
+{
+    PA_DEBUG( "**** onDgnssStatusUpdate Information -->PA****" );
+
+    // Guard against calls during/after deregistration
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Guard against calls during/after deregistration
+    if (!mDgnssManager) {
+        PA_INFO("Ignoring DGNSS status update - manager is null");
+        return;
+    }
+
+    auto onDgnssStatusUpdateData = std::make_shared<taf_pa_location_DgnssStatus_t>();
+
+    onDgnssStatusUpdateData->status = (taf_pa_location_DgnssDataStatus_t)convertTeluxToDgnssDataStatus(status);
+
+    if(dgnssListener_ && dgnssListener_->onDgnssStatusUpdate){
+        dgnssListener_->onDgnssStatusUpdate(onDgnssStatusUpdateData,dgnssListenerContext_);
+    }
+    else{
+        PA_ERROR("unable to find event Listener for onDgnssStatusUpdate");
     }
 }
 
@@ -2093,7 +2737,22 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
         LocationEngineInfodata->posTechnology = (taf_pa_location_GnssPositionTechType_t)locationInfo->getPositionTechnology();
         LocationEngineInfodata->mAltType = (taf_pa_location_AltitudeType_t)locationInfo->getAltitudeType();
         LocationEngineInfodata->reportStatus = (taf_pa_location_ReportStatus_t) locationInfo->getReportStatus();
-
+        telux::loc::NavigationSolution navSol = locationInfo->getNavigationSolution();
+        if (navSol.to_ulong() != 0) {
+            LocationEngineInfodata->naviSolution = (taf_pa_location_NavigationSolutionType_t)convertTeluxToNavigationSolutionType(navSol);
+            PA_DEBUG("LocationEngineInfodata->naviSolution :%lu",LocationEngineInfodata->naviSolution);
+        } else {
+            PA_ERROR("Received invalid navigation solution from locationInfo, setting to 0");
+            LocationEngineInfodata->naviSolution = (taf_pa_location_NavigationSolutionType_t)0;
+        }
+        LocationEngineInfodata->dgnssStationIds = locationInfo->getDgnssStationIds();
+        LocationEngineInfodata->integrityRiskUsed = locationInfo->getIntegrityRiskUsed();
+        PA_DEBUG("LocationEngineInfodata->integrityRiskUsed -> %d",LocationEngineInfodata->integrityRiskUsed);
+        LocationEngineInfodata->protectionlevelAlongTrack = locationInfo->getProtectionLevelAlongTrack();
+        LocationEngineInfodata->protectionlevelCrossTrack = locationInfo->getProtectionLevelCrossTrack();
+        LocationEngineInfodata->protectionlevelVertical = locationInfo->getProtectionLevelVertical();
+        LocationEngineInfodata->ageOfCorrections = locationInfo->getAgeOfCorrections();
+        LocationEngineInfodata->baselineLength = locationInfo->getBaselineLength();
         std::vector<telux::loc::GnssMeasurementInfo> measInfo = locationInfo->getmeasUsageInfo();
         for (const auto &info : measInfo) {
             taf_pa_location_GnssMeasurementInfo_t converted;

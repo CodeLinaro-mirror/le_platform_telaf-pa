@@ -369,11 +369,44 @@ TAF_PA_LOCATION_YES = 0,
 TAF_PA_LOCATION_NO = 1
 }taf_pa_location_SVInfoAvailability_t;
 
+typedef enum {
+TAF_PA_LOCATION_NAV_SBAS_SOLUTION_IONO = (1 << 0),
+TAF_PA_LOCATION_NAV_SBAS_SOLUTION_FAST = (1 << 1),
+TAF_PA_LOCATION_NAV_SBAS_SOLUTION_LONG = (1 << 2),
+TAF_PA_LOCATION_NAV_SBAS_INTEGRITY = (1 << 3),
+TAF_PA_LOCATION_NAV_DGNSS_SOLUTION = (1 << 4),
+TAF_PA_LOCATION_NAV_RTK_SOLUTION = (1 << 5),
+TAF_PA_LOCATION_NAV_PPP_SOLUTION = (1 << 6),
+TAF_PA_LOCATION_NAV_RTK_FIXED_SOLUTION = (1 << 7),
+TAF_PA_LOCATION_NAV_ONLY_SBAS_CORRECTED_SV_USED = (1 << 8)
+}taf_pa_location_NavigationSolutionType_t;
+
+typedef enum{
+TAF_PA_LOCATION_DATA_SOURCE_NOT_SUPPORTED = 1,
+TAF_PA_LOCATION_DATA_FORMAT_NOT_SUPPORTED = 2,
+TAF_PA_LOCATION_OTHER_SOURCE_IN_USE = 3,
+TAF_PA_LOCATION_MESSAGE_PARSE_ERROR = 4,
+TAF_PA_LOCATION_DATA_SOURCE_USABLE = 5,
+TAF_PA_LOCATION_DATA_SOURCE_NOT_USABLE = 6,
+TAF_PA_LOCATION_CDFW_STOP_SOURCE_INJECT = 7
+}taf_pa_location_DgnssDataStatus_t;
+
+typedef enum{
+TAF_PA_LOCATION_DATA_FORMAT_UNKNOWN = 0,
+TAF_PA_LOCATION_DATA_FORMAT_RTCM_3 = 1,
+TAF_PA_LOCATION_DATA_FORMAT_3GPP_RTK_R15 = 2,
+}taf_pa_location_DgnssDataFormat_t;
+
 struct taf_pa_location_XtraStatus_t {
 bool featureEnabled;
 taf_pa_location_XtraDataStatus_t xtraDataStatus;
 uint32_t xtraValidForHours;
 };
+
+struct taf_pa_location_DgnssStatus_t {
+taf_pa_location_DgnssDataStatus_t status;
+};
+
 
 struct taf_pa_location_NmeaConfig_t {
 uint32_t sentenceConfig;
@@ -592,6 +625,14 @@ taf_pa_location_LocationAggregationType_t locationEngType;
 taf_pa_location_LocationReliability_t horiReliablity;
 taf_pa_location_LocationReliability_t vertReliablity;
 taf_pa_location_LocationTechnologyType_t techMask;
+taf_pa_location_NavigationSolutionType_t naviSolution;
+std::vector<uint16_t> dgnssStationIds;
+uint32_t integrityRiskUsed;
+float protectionlevelAlongTrack;
+float protectionlevelCrossTrack;
+float protectionlevelVertical;
+uint64_t ageOfCorrections;
+double baselineLength;
 };
 
 struct taf_pa_location_GnssSVInfo_t
@@ -759,6 +800,7 @@ using taf_pa_location_onGnssSignalInfo = std::function<void(taf_pa_location_Loca
 using taf_pa_location_onXtraStatusUpdate = std::function<void(taf_pa_location_LocationId clientId, const std::shared_ptr<taf_pa_location_XtraStatus_t>& xtraStatus, std::any context)>;
 using taf_pa_location_onGnssMeasurementsInfo = std::function<void(taf_pa_location_LocationId clientId, const std::shared_ptr<taf_pa_location_GnssMeasurements_t>& measurementInfo, std::any context)>;
 using taf_pa_location_onDetailedEngineLocationUpdate = std::function<void(taf_pa_location_LocationId clientId, const std::vector<std::shared_ptr<taf_pa_location_LocEngineInfo_t>>& locationEngineInfo, std::any context)>;
+using taf_pa_location_onDgnssStatusUpdate = std::function<void(const std::shared_ptr<taf_pa_location_DgnssStatus_t>& dgnssStatus, std::any context)>;
 
 struct taf_pa_location_EventListener{
     taf_pa_location_onCapabilitiesInfo onCapabilitiesInfo;
@@ -769,6 +811,10 @@ struct taf_pa_location_EventListener{
     taf_pa_location_onXtraStatusUpdate onXtraStatusUpdate;
     taf_pa_location_onGnssMeasurementsInfo onGnssMeasurementsInfo;
     taf_pa_location_onDetailedEngineLocationUpdate onDetailedEngineLocationUpdate;
+};
+
+struct taf_pa_location_DgnssEventListener{
+    taf_pa_location_onDgnssStatusUpdate onDgnssStatusUpdate;
 };
 
 using taf_pa_location_GeneralCb = std::function<void(pa_result_t result, std::any context)>;
@@ -810,7 +856,18 @@ PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestMinGpsWeek(taf_pa_location
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context);
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_injectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context);
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context);
-
+PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureEngineIntegrityRisk(taf_pa_location_EngineType_t engineType,uint32_t integrityRisk, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED PA_WEAK pa_result_t taf_pa_location_injectCorrectionData(const uint8_t *injectionData,
+uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context);
+PA_SHARED PA_WEAK pa_result_t taf_pa_location_createDgnssSource(taf_pa_location_DgnssDataFormat_t dgnssFormat,taf_pa_location_GeneralCb callback,std::any context);
+PA_SHARED PA_WEAK pa_result_t taf_pa_location_releaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context);
+PA_SHARED PA_WEAK  pa_result_t taf_pa_location_registerDgnssEventListener(
+taf_pa_location_DgnssEventListener* eventListener, std::any context);
+PA_SHARED PA_WEAK pa_result_t taf_pa_location_initializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,
+taf_pa_location_GeneralCb callback,std::any context);
+PA_SHARED PA_WEAK pa_result_t taf_pa_location_deregisterDgnssEventListener(std::any context);
+PA_SHARED PA_WEAK pa_result_t taf_pa_location_deInitializeDgnss(taf_pa_location_GeneralCb callback,
+std::any context);
 } // namespace tafpa::location
 
 #endif /* TAF_PA_LOCATION_H */
