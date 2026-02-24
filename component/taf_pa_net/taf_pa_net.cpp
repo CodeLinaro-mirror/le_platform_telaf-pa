@@ -4,6 +4,7 @@
  */
 
 
+#include <set>
 #include "taf_pa_net.hpp"
 #include "taf_pa_socks.hpp"
 #include "taf_pa_vlan.hpp"
@@ -221,4 +222,54 @@ pa_result_t taf_pa_net_GetSlotIdFromPhoneId
     PA_DEBUG("result =%d, slotId = %d, phoneId = %d",result, *slotIdPtr, phoneId);
 
     return result;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Return supported slot IDs
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
+{
+    slotIds.clear();
+
+    auto &pNetAdaptor = taf_NetAdaptor::getInstance();
+    auto phoneMgr = pNetAdaptor.getPhoneManager();
+    if (!phoneMgr)
+    {
+        PA_ERROR("Phone manager is NULL");
+        return PA_FAULT;
+    }
+
+    // Get phone IDs from TelSDK
+    std::vector<int> phoneIds;
+    telux::common::Status status = phoneMgr->getPhoneIds(phoneIds);
+    if (status != telux::common::Status::SUCCESS)
+    {
+        PA_ERROR("getPhoneIds failed, status=%d", static_cast<int>(status));
+        return PA_FAULT;
+    }
+
+    // Convert to slot IDs and deduplicate
+    std::set<int> uniqueSlots;
+    for (int phoneId : phoneIds)
+    {
+        int slot = phoneMgr->getSlotIdFromPhoneId(phoneId);
+        if (slot > 0)
+        {
+            uniqueSlots.insert(slot);
+        }
+        else
+        {
+            PA_WARN("getSlotIdFromPhoneId(%d) returned %d", phoneId, slot);
+        }
+    }
+
+    for (int slot : uniqueSlots)
+    {
+        slotIds.push_back(static_cast<uint8_t>(slot));
+    }
+
+    PA_INFO("Supported slots count: %zu", slotIds.size());
+    return PA_OK;
 }

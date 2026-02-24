@@ -571,8 +571,8 @@ pa_result_t taf_pa_net_RemoveVlanInterface
 
 pa_result_t taf_pa_net_BindWithProfile
 (
-     const taf_pa_Vlan_t vlan,
-     const taf_pa_VlanBindConfig_t vlanBindConfig
+    const taf_pa_Vlan_t vlan,
+    const taf_pa_VlanBindConfig_t vlanBindConfig
 )
 {
     auto &pVlanAdaptor = taf_VlanAdaptor::getInstance();
@@ -588,7 +588,7 @@ pa_result_t taf_pa_net_BindWithProfile
     std::chrono::seconds span(OPERATION_TIMEOUT);
     uint8_t slotId;
     uint32_t profileId;
-    uint16_t vlanId=0;
+    uint16_t vlanId = 0;
 
     vlanId = vlan.vlanId;
     slotId = vlanBindConfig.slotId;
@@ -596,7 +596,7 @@ pa_result_t taf_pa_net_BindWithProfile
 
     SlotId slot = (SlotId)slotId;
 
-    PA_INFO("bindwithProfile: vlanid %d slotId %d profileId %d", vlanId,slotId,profileId);
+    PA_INFO("bindwithProfile: vlanid %d slotId %d profileId %d", vlanId, slotId, profileId);
 
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
 
@@ -604,34 +604,38 @@ pa_result_t taf_pa_net_BindWithProfile
     {
         try
         {
-         if (error != telux::common::ErrorCode::SUCCESS)
-         {
-             PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
-             promisePtr->set_value(PA_FAULT);
-         }
-         else
-         {
-             PA_DEBUG("Request processed successfully \n");
-             promisePtr->set_value(PA_OK);
-         }
-      }
-      catch (const std::future_error& e)
-      {
-          PA_ERROR("Future error in callback: %s", e.what());
-      }
-      catch (const std::exception& e)
-      {
-         PA_ERROR("Exception in callback: %s", e.what());
-      }
-      catch (...)
-      {
-         PA_ERROR("Unknown error in VLAN callback.");
-      }
-   };
+            if (error == telux::common::ErrorCode::NOT_SUPPORTED)
+            {
+                PA_ERROR("Request not supported, errorCode: %d", static_cast<int>(error));
+                promisePtr->set_value(PA_UNSUPPORTED);
+            }
+            else if (error != telux::common::ErrorCode::SUCCESS)
+            {
+                PA_ERROR("Request failed with errorCode: %d", static_cast<int>(error));
+                promisePtr->set_value(PA_FAULT);
+            }
+            else
+            {
+                PA_DEBUG("Request processed successfully");
+                promisePtr->set_value(PA_OK);
+            }
+        }
+        catch (const std::future_error &e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const std::exception &e)
+        {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown error in VLAN callback.");
+        }
+    };
 
-    telux::common::Status status = vlanManager->bindWithProfile(
-                                              profileId, vlanId, bindVlanWithProfileRespCb,slot);
-
+    auto status = vlanManager->bindWithProfile(
+        profileId, vlanId, bindVlanWithProfileRespCb, slot);
     if (status == telux::common::Status::SUCCESS)
     {
         std::future<pa_result_t> futureResult = promisePtr->get_future();
@@ -651,22 +655,21 @@ pa_result_t taf_pa_net_BindWithProfile
     }
     else
     {
-        PA_ERROR( "ERROR - Failed to bind vlan , Status:%d ", static_cast<int>(status));
+        PA_ERROR("ERROR - Failed to bind vlan , Status:%d ", static_cast<int>(status));
         return PA_FAULT;
     }
 }
 
-
 pa_result_t taf_pa_net_UnbindWithProfile
 (
-     const taf_pa_Vlan_t vlan,
-     const taf_pa_VlanBindConfig_t vlanBindConfig
+    const taf_pa_Vlan_t vlan,
+    const taf_pa_VlanBindConfig_t vlanBindConfig
 )
 {
     auto &pVlanAdaptor = taf_VlanAdaptor::getInstance();
     auto vlanManager = pVlanAdaptor.getVlanManager();
 
-        if (!vlanManager)
+    if (!vlanManager)
     {
         PA_ERROR("VLAN Manager not available");
         return PA_FAULT;
@@ -676,7 +679,7 @@ pa_result_t taf_pa_net_UnbindWithProfile
     std::chrono::seconds span(OPERATION_TIMEOUT);
     uint8_t slotId;
     uint32_t profileId;
-    uint16_t vlanId=0;
+    uint16_t vlanId = 0;
 
     vlanId = vlan.vlanId;
     slotId = vlanBindConfig.slotId;
@@ -690,34 +693,38 @@ pa_result_t taf_pa_net_UnbindWithProfile
     {
         try
         {
-         if (error != telux::common::ErrorCode::SUCCESS)
-         {
-             PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
-             promisePtr->set_value(PA_FAULT);
-         }
-         else
-         {
-             PA_DEBUG("Request processed successfully \n");
-             promisePtr->set_value(PA_OK);
-         }
-      }
-      catch (const std::future_error& e)
-      {
-          PA_ERROR("Future error in callback: %s", e.what());
-      }
-      catch (const std::exception& e)
-      {
-         PA_ERROR("Exception in callback: %s", e.what());
-      }
-      catch (...)
-      {
-         PA_ERROR("Unknown error in VLAN callback.");
-      }
-   };
+            if (error == telux::common::ErrorCode::NOT_SUPPORTED)
+            {
+                PA_ERROR("Request not supported, errorCode: %d", static_cast<int>(error));
+                promisePtr->set_value(PA_UNSUPPORTED);
+            }
+            else if (error != telux::common::ErrorCode::SUCCESS)
+            {
+                PA_ERROR("Request failed with errorCode: %d", static_cast<int>(error));
+                promisePtr->set_value(PA_FAULT);
+            }
+            else
+            {
+                PA_DEBUG("Request processed successfully");
+                promisePtr->set_value(PA_OK);
+            }
+        }
+        catch (const std::future_error &e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const std::exception &e)
+        {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown error in VLAN callback.");
+        }
+    };
 
-    telux::common::Status status = vlanManager->unbindFromProfile(
-                                              profileId, vlanId, unbindVlanWithProfileRespCb,slot);
-
+    auto status = vlanManager->unbindFromProfile(
+        profileId, vlanId, unbindVlanWithProfileRespCb, slot);
     if (status == telux::common::Status::SUCCESS)
     {
         std::future<pa_result_t> futureResult = promisePtr->get_future();
@@ -737,15 +744,15 @@ pa_result_t taf_pa_net_UnbindWithProfile
     }
     else
     {
-        PA_ERROR( "ERROR - Failed to Unbind vlan , Status:%d ", static_cast<int>(status));
+        PA_ERROR("ERROR - Failed to Unbind vlan , Status:%d ", static_cast<int>(status));
         return PA_FAULT;
     }
 }
 
 pa_result_t taf_pa_net_BindWithBackhaul
 (
-     const taf_pa_Vlan_t vlanConfig,
-     const taf_pa_VlanBindConfig_t vlanBindConfig
+    const taf_pa_Vlan_t vlanConfig,
+    const taf_pa_VlanBindConfig_t vlanBindConfig
 )
 {
     auto &pVlanAdaptor = taf_VlanAdaptor::getInstance();
@@ -758,7 +765,6 @@ pa_result_t taf_pa_net_BindWithBackhaul
     }
 
     telux::data::net::VlanBindConfig vlanBind = {};
-
     vlanBind.vlanId = vlanConfig.vlanId;
 
     std::chrono::seconds span(OPERATION_TIMEOUT);
@@ -785,13 +791,13 @@ pa_result_t taf_pa_net_BindWithBackhaul
             PA_ERROR("Invalid backhaul type (%d).", vlanBindConfig.backhaulType);
             return PA_BAD_PARAMETER;
     }
-    
-    if(vlanBindConfig.backhaulType == TAF_PA_VLAN_BH_WWAN)
+
+    if (vlanBindConfig.backhaulType == TAF_PA_VLAN_BH_WWAN)
     {
         vlanBind.bhInfo.slotId = (SlotId)vlanBindConfig.slotId;
         vlanBind.bhInfo.profileId = vlanBindConfig.profileId;
     }
-    else  // for ETH and rest where SIM does not exist.
+    else
     {
         vlanBind.bhInfo.vlanId = vlanBindConfig.vlanIdBackhaul; // BH is vlan
     }
@@ -802,33 +808,37 @@ pa_result_t taf_pa_net_BindWithBackhaul
     {
         try
         {
-         if (error != telux::common::ErrorCode::SUCCESS)
-         {
-             PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
-             promisePtr->set_value(PA_FAULT);
-         }
-         else
-         {
-             PA_DEBUG("Request processed successfully \n");
-             promisePtr->set_value(PA_OK);
-         }
-      }
-      catch (const std::future_error& e)
-      {
-          PA_ERROR("Future error in callback: %s", e.what());
-      }
-      catch (const std::exception& e)
-      {
-         PA_ERROR("Exception in callback: %s", e.what());
-      }
-      catch (...)
-      {
-         PA_ERROR("Unknown error in VLAN callback.");
-      }
-   };
+            if (error == telux::common::ErrorCode::NOT_SUPPORTED)
+            {
+                PA_ERROR("Request not supported, errorCode: %d", static_cast<int>(error));
+                promisePtr->set_value(PA_UNSUPPORTED);
+            }
+            else if (error != telux::common::ErrorCode::SUCCESS)
+            {
+                PA_ERROR("Request failed with errorCode: %d", static_cast<int>(error));
+                promisePtr->set_value(PA_FAULT);
+            }
+            else
+            {
+                PA_DEBUG("Request processed successfully");
+                promisePtr->set_value(PA_OK);
+            }
+        }
+        catch (const std::future_error &e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const std::exception &e)
+        {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown error in VLAN callback.");
+        }
+    };
 
-    telux::common::Status status = vlanManager->bindToBackhaul(vlanBind, bindVlanWithBHRespCb);
-
+    auto status = vlanManager->bindToBackhaul(vlanBind, bindVlanWithBHRespCb);
     if (status == telux::common::Status::SUCCESS)
     {
         std::future<pa_result_t> futureResult = promisePtr->get_future();
@@ -848,15 +858,15 @@ pa_result_t taf_pa_net_BindWithBackhaul
     }
     else
     {
-        PA_ERROR( "ERROR - Failed to bind vlan , Status:%d ", static_cast<int>(status));
+        PA_ERROR("ERROR - Failed to bind vlan , Status:%d ", static_cast<int>(status));
         return PA_FAULT;
     }
 }
 
 pa_result_t taf_pa_net_UnbindWithBackhaul
 (
-     const taf_pa_Vlan_t vlanConfig,
-     const taf_pa_VlanBindConfig_t vlanBindConfig
+    const taf_pa_Vlan_t vlanConfig,
+    const taf_pa_VlanBindConfig_t vlanBindConfig
 )
 {
     auto &pVlanAdaptor = taf_VlanAdaptor::getInstance();
@@ -869,7 +879,6 @@ pa_result_t taf_pa_net_UnbindWithBackhaul
     }
 
     telux::data::net::VlanBindConfig vlanBind = {};
-
     vlanBind.vlanId = vlanConfig.vlanId;
 
     std::chrono::seconds span(OPERATION_TIMEOUT);
@@ -896,13 +905,13 @@ pa_result_t taf_pa_net_UnbindWithBackhaul
             PA_ERROR("Invalid backhaul type (%d).", vlanBindConfig.backhaulType);
             return PA_BAD_PARAMETER;
     }
-    
-    if(vlanBindConfig.backhaulType == TAF_PA_VLAN_BH_WWAN)
+
+    if (vlanBindConfig.backhaulType == TAF_PA_VLAN_BH_WWAN)
     {
         vlanBind.bhInfo.slotId = (SlotId)vlanBindConfig.slotId;
         vlanBind.bhInfo.profileId = vlanBindConfig.profileId;
     }
-    else  // for ETH and rest where SIM does not exist.
+    else
     {
         vlanBind.bhInfo.vlanId = vlanBindConfig.vlanIdBackhaul; // BH is vlan
     }
@@ -913,33 +922,37 @@ pa_result_t taf_pa_net_UnbindWithBackhaul
     {
         try
         {
-         if (error != telux::common::ErrorCode::SUCCESS)
-         {
-             PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
-             promisePtr->set_value(PA_FAULT);
-         }
-         else
-         {
-             PA_DEBUG("Request processed successfully \n");
-             promisePtr->set_value(PA_OK);
-         }
-      }
-      catch (const std::future_error& e)
-      {
-          PA_ERROR("Future error in callback: %s", e.what());
-      }
-      catch (const std::exception& e)
-      {
-         PA_ERROR("Exception in callback: %s", e.what());
-      }
-      catch (...)
-      {
-         PA_ERROR("Unknown error in VLAN callback.");
-      }
-   };
+            if (error == telux::common::ErrorCode::NOT_SUPPORTED)
+            {
+                PA_ERROR("Request not supported, errorCode: %d", static_cast<int>(error));
+                promisePtr->set_value(PA_UNSUPPORTED);
+            }
+            else if (error != telux::common::ErrorCode::SUCCESS)
+            {
+                PA_ERROR("Request failed with errorCode: %d", static_cast<int>(error));
+                promisePtr->set_value(PA_FAULT);
+            }
+            else
+            {
+                PA_DEBUG("Request processed successfully");
+                promisePtr->set_value(PA_OK);
+            }
+        }
+        catch (const std::future_error &e)
+        {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const std::exception &e)
+        {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...)
+        {
+            PA_ERROR("Unknown error in VLAN callback.");
+        }
+    };
 
-    telux::common::Status status = vlanManager->unbindFromBackhaul(vlanBind, unbindVlanWithBHRespCb);
-
+    auto status = vlanManager->unbindFromBackhaul(vlanBind, unbindVlanWithBHRespCb);
     if (status == telux::common::Status::SUCCESS)
     {
         std::future<pa_result_t> futureResult = promisePtr->get_future();
@@ -959,7 +972,7 @@ pa_result_t taf_pa_net_UnbindWithBackhaul
     }
     else
     {
-        PA_ERROR( "ERROR - Failed to bind vlan , Status:%d ", static_cast<int>(status));
+        PA_ERROR("ERROR - Failed to bind vlan , Status:%d ", static_cast<int>(status));
         return PA_FAULT;
     }
 }
