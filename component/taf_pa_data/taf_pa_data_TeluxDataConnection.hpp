@@ -92,7 +92,6 @@ namespace data
         SlotId slotId_;
         // Mutex
         std::mutex listenerMtx_;
-        std::atomic<bool> bWaitingForDataCallBitratePromise_ = {false};
 
         // The current calls status of IDataCall objects
         std::map<
@@ -278,15 +277,6 @@ namespace data
         // Use a share mutex for registering, deregistering and calling callbacks.
         std::shared_mutex dataConnectionCbksMtx_;
 
-        // Promise for PaGetDefaultProfile
-        std::promise<std::tuple<int, SlotId, telux::common::ErrorCode>> getDefProfilePromise_;
-        // Mutex for PaGetDefaultProfile
-        std::mutex getDefProfileMtx_;
-        // Promise for setDefaultProfile
-        std::promise<telux::common::ErrorCode> setDefProfilePromise_;
-        // Mutex for PaSetDefaultProfile
-        std::mutex setDefProfileMtx_;
-
         // Functions
         // The callback fuction for TelSDK startDataCall()
         static void startDataCallCallback
@@ -300,16 +290,6 @@ namespace data
             const std::shared_ptr<telux::data::IDataCall> &iCall,
             telux::common::ErrorCode errorCode
         );
-        // The callback fuction for TelSDK requestThrottledApnInfo()
-        static void requestThrottledApnInfoCallback
-        (
-            const std::vector<telux::data::APNThrottleInfo> &throttleInfoList,
-            telux::common::ErrorCode error
-        );
-        // The promise for requestThrottledApnInfo()
-        std::promise<std::pair<std::vector<
-          telux::data::APNThrottleInfo>, telux::common::ErrorCode>> requestThrottledApnInfoPromise_;
-        std::mutex requestThrottledApnInfoMtx_;
 
         void initDataConnectionManagers();
         pa_result_t deInitDataConnectionManagers();
