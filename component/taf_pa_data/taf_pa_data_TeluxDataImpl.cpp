@@ -65,27 +65,75 @@ void taf::pa::data::TafPaTeluxData::initPhoneManager()
 {
     PA_INFO("Initialize phone manager");
     auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
-    phoneManager_ = phoneFactory.getPhoneManager();
 
-    // Check if telephony subsystem is ready
-    bool subSystemStatus = phoneManager_->isSubsystemReady();
-    if (!subSystemStatus)
+    phoneManager_ = phoneFactory.getPhoneManager();
+    if (!phoneManager_)
     {
-        PA_INFO("Wait for telephony subsystem to be ready...");
-        std::future<bool> fut = phoneManager_->onSubsystemReady();
-        //  Wait until the subsystem is ready.
-        std::chrono::seconds span(taf::pa::SUBSYSTEM_INIT_TIMEOUT); // 30 seconds
-        std::future_status waitStatus = fut.wait_for(span);
-        if (std::future_status::timeout == waitStatus)
+        PA_ERROR("Failed to get Phone Manager instance");
+        return;
+    }
+
+    telux::common::ServiceStatus phoneManagerStatus = phoneManager_->getServiceStatus();
+
+    if (phoneManagerStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_INFO("Phone Manager subsystem is not ready, waiting for it to be ready...");
+
+        auto phoneMgrPromPtr =
+            std::make_shared<std::promise<telux::common::ServiceStatus>>();
+
+        phoneManager_ = phoneFactory.getPhoneManager(
+            [phoneMgrPromPtr](telux::common::ServiceStatus status)
+            {
+                PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
+                try {
+                    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                        phoneMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_AVAILABLE);
+                    } else {
+                        phoneMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_FAILED);
+                    }
+                } catch (const std::exception &e) {
+                    PA_ERROR("Exception setting phone manager promise: %s", e.what());
+                } catch (...) {
+                    PA_ERROR("Unknown error setting phone manager promise");
+                }
+            });
+
+        if (!phoneManager_)
         {
-            PA_ERROR("Phone manager subsystem ready promise timeout");
+            PA_ERROR("Failed to get Phone Manager instance with init callback");
             return;
         }
 
-        FUTURE_GET_RET_NIL(fut, subSystemStatus);
+        std::future<telux::common::ServiceStatus> initFuture =
+            phoneMgrPromPtr->get_future();
+        std::future_status waitStatus =
+            initFuture.wait_for(std::chrono::seconds(taf::pa::SUBSYSTEM_INIT_TIMEOUT));
+
+        if (std::future_status::timeout == waitStatus)
+        {
+            PA_ERROR("Timeout waiting for Phone Manager subsystem");
+            return;
+        }
+        else
+        {
+            phoneManagerStatus = initFuture.get();
+        }
     }
-    dataPhoneMngrInitState_ = SubsystemState_e::AVAILABLE;
-    PA_INFO("Phone manager initialized.");
+
+    PA_INFO("Phone Manager status: %d", TO_INT(phoneManagerStatus));
+
+    if (telux::common::ServiceStatus::SERVICE_AVAILABLE == phoneManagerStatus)
+    {
+        dataPhoneMngrInitState_ = SubsystemState_e::AVAILABLE;
+        PA_INFO("Phone manager initialized.");
+    }
+    else
+    {
+        PA_ERROR("Phone Manager subsystem not available. Status: %d", TO_INT(phoneManagerStatus));
+    }
 }
 
 pa_result_t taf::pa::data::TafPaTeluxData::GetServinSystemInitState
