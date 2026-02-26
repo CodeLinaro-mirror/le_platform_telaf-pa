@@ -60,8 +60,42 @@ taf_prop_sim_RefreshChangeHandlerRef_t taf_prop_sim_AddRefreshChangeHandler
     void* contextPtr
 )
 {
-	PROP_INFO("Function is not implemented in stub PA.");
+    PROP_INFO("Function is not implemented in stub PA.");
     return NULL;
+}
+
+taf_prop_sim_ProfileInfo_t taf_prop_sim_GetActiveSimProfile
+(
+    uint8_t slot
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+    taf_prop_sim_ProfileInfo_t info{};
+    info.profileId   = 0;
+    info.profileType = TAF_PROP_SIM_PROFILE_TYPE_UNKNOWN;
+    info.isActive    = false;
+    return info;
+}
+
+taf_prop_sim_Result_t taf_prop_sim_SetSimProfileById
+(
+    uint8_t slot,
+    uint8_t profileId
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+    return TAF_PROP_SIM_RESULT_BAD_PARAMETER;
+}
+
+taf_prop_sim_Result_t taf_prop_sim_GetProfileList
+(
+    uint8_t slot,
+    taf_prop_sim_ProfileInfo_t *profiles,
+    uint32_t *profilesLenPtr
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+    return TAF_PROP_SIM_RESULT_BAD_PARAMETER;
 }
 
 //--------------------------------------------------------------------------------------------------

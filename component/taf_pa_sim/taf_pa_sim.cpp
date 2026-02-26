@@ -114,6 +114,68 @@ class Utility
         };
 };
 
+static taf_pa_sim_ProfileType_t ConvertToPaProfileType(taf_prop_sim_ProfileType_t t)
+{
+    switch (t)
+    {
+        case TAF_PROP_SIM_PROFILE_TYPE_REGULAR:
+            return TAF_PA_SIM_PROFILE_TYPE_REGULAR;
+        case TAF_PROP_SIM_PROFILE_TYPE_EMERGENCY:
+            return TAF_PA_SIM_PROFILE_TYPE_EMERGENCY;
+        default:
+            return TAF_PA_SIM_PROFILE_TYPE_UNKNOWN;
+    }
+}
+
+static taf_pa_sim_SlotId_t IndexToSlot(uint8_t idx)
+{
+    switch (idx)
+    {
+        case 1: return TAF_PA_SIM_SLOT_1;
+        case 2: return TAF_PA_SIM_SLOT_2;
+        default: return TAF_PA_SIM_SLOT_UNKNOWN;
+    }
+}
+
+static uint8_t SlotToIndex(taf_pa_sim_SlotId_t slot)
+{
+    switch (slot)
+    {
+        case TAF_PA_SIM_SLOT_1: return 1;
+        case TAF_PA_SIM_SLOT_2: return 2;
+        default:                return 1; // choose safe default
+    }
+}
+
+static uint8_t ProfileEnumToId(taf_pa_sim_ProfileId_t pid)
+{
+    switch (pid)
+    {
+        case TAF_PA_SIM_PROFILE_ID_1: return 1;
+        case TAF_PA_SIM_PROFILE_ID_2: return 2;
+        default: return 0; // invalid
+    }
+}
+
+static taf_pa_sim_ProfileId_t ProfileIdToEnum(uint8_t pid)
+{
+    switch (pid)
+    {
+        case 1: return TAF_PA_SIM_PROFILE_ID_1;
+        case 2: return TAF_PA_SIM_PROFILE_ID_2;
+        default: return TAF_PA_SIM_PROFILE_ID_UNKNOWN;
+    }
+}
+
+static taf_pa_sim_ProfileInfo_t MakeInvalidProfileInfo()
+{
+    taf_pa_sim_ProfileInfo_t info;
+    info.profileId = TAF_PA_SIM_PROFILE_ID_UNKNOWN;
+    info.type      = TAF_PA_SIM_PROFILE_TYPE_UNKNOWN;
+    info.state     = TAF_PA_SIM_PROFILE_STATE_UNKNOWN;
+    return info;
+}
+
 PlatformAdaptor& PlatformAdaptor::GetInstance
 (
     void
@@ -351,6 +413,118 @@ void taf_pa_sim_RemoveRefreshChangeHandler
   pa.indicators.refreshSvcStatus.contextPtr = nullptr;
 }
 
+uint8_t taf_pa_sim_GetProfileNum
+(
+    taf_pa_sim_SlotId_t slot
+)
+{
+    if (slot == TAF_PA_SIM_SLOT_UNKNOWN)
+    {
+        PA_ERROR("invalid slot");
+        return 0;
+    }
 
+    uint8_t slotIndex = SlotToIndex(slot);
+    const uint32_t MAX_PROFILES = 8;
 
+    taf_prop_sim_ProfileInfo_t propProfiles[MAX_PROFILES];
+    memset(propProfiles, 0, sizeof(propProfiles));
 
+    uint32_t count = MAX_PROFILES;
+    taf_prop_sim_Result_t r = taf_prop_sim_GetProfileList(slotIndex, propProfiles, &count);
+    pa_result_t paRes = Utility::Convert::Result(r);
+
+    if (paRes != TAF_PA_SIM_RESULT_OK)
+    {
+        PA_ERROR("taf_prop_sim_GetProfileList failed (res=%d)", (int)r);
+        return 0;
+    }
+
+    return (uint8_t)count;
+}
+
+taf_pa_sim_ProfileInfo_t taf_pa_sim_GetProfile
+(
+    taf_pa_sim_SlotId_t slot,
+    uint8_t index
+)
+{
+    taf_pa_sim_ProfileInfo_t info = MakeInvalidProfileInfo();
+
+    if (slot == TAF_PA_SIM_SLOT_UNKNOWN)
+    {
+        PA_ERROR("invalid slot");
+        return info;
+    }
+
+    uint8_t slotIndex = SlotToIndex(slot);
+
+    const uint32_t MAX_PROFILES = 8;
+    taf_prop_sim_ProfileInfo_t propProfiles[MAX_PROFILES];
+    memset(propProfiles, 0, sizeof(propProfiles));
+
+    uint32_t count = MAX_PROFILES;
+    taf_prop_sim_Result_t r = taf_prop_sim_GetProfileList(slotIndex, propProfiles, &count);
+    pa_result_t paRes = Utility::Convert::Result(r);
+
+    if (paRes != TAF_PA_SIM_RESULT_OK)
+    {
+        PA_ERROR("taf_prop_sim_GetProfileList failed (res=%d)", (int)r);
+        return info;
+    }
+
+    if (index >= count)
+    {
+        PA_ERROR("index %u out of range (count=%u)", (unsigned)index, (unsigned)count);
+        return info;
+    }
+
+    auto &src = propProfiles[index];
+
+    info.profileId = ProfileIdToEnum(src.profileId);
+    info.type      = ConvertToPaProfileType(src.profileType);
+    info.state     = src.isActive
+                     ? TAF_PA_SIM_PROFILE_STATE_ACTIVE
+                     : TAF_PA_SIM_PROFILE_STATE_INACTIVE;
+
+    return info;
+}
+
+pa_result_t taf_pa_sim_SetActiveProfile
+(
+    taf_pa_sim_SlotId_t slot,
+    taf_pa_sim_ProfileId_t profileId
+)
+{
+    if (slot == TAF_PA_SIM_SLOT_UNKNOWN || profileId == TAF_PA_SIM_PROFILE_ID_UNKNOWN)
+    {
+        PA_ERROR("invalid slot or profileId");
+        return TAF_PA_SIM_RESULT_BAD_PARAMETER;
+    }
+
+    uint8_t slotIndex   = SlotToIndex(slot);
+    uint8_t profileIdU8 = ProfileEnumToId(profileId);
+
+    if (profileIdU8 == 0)
+    {
+        PA_ERROR("profileId enum maps to invalid id");
+        return TAF_PA_SIM_RESULT_BAD_PARAMETER;
+    }
+
+    PA_INFO("slot=%u, profileId=%u", (unsigned)slotIndex, (unsigned)profileIdU8);
+
+    // QMI_UIM_SET_SIM_PROFILE with enable_profile = QMI_ENABLE
+    taf_prop_sim_Result_t r = taf_prop_sim_SetSimProfileById(slotIndex, profileIdU8);
+    pa_result_t paRes = Utility::Convert::Result(r);
+
+    if (paRes == TAF_PA_SIM_RESULT_OK)
+    {
+        PA_INFO("SetActiveProfile OK");
+    }
+    else
+    {
+        PA_ERROR("SetActiveProfile FAIL, res=%d", (int)r);
+    }
+
+    return paRes;
+}
