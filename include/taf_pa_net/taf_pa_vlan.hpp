@@ -103,6 +103,7 @@ typedef struct
     uint8_t priority;
     taf_pa_vlan_network_type_t nwType;
     taf_pa_vlan_iface_type_t   iface;
+    bool isBridgeEnabled = true;
 } taf_pa_Vlan_t;
 
 

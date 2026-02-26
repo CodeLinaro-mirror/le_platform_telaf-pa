@@ -120,6 +120,8 @@ pa_result_t  taf_VlanAdaptor::ConvertVlanInfo(const telux::data::VlanConfig &tel
        vlanConfig.nwType = TAF_PA_VLAN_NETWORK_UNKNOWN;
     }
 
+    vlanConfig.isBridgeEnabled = telVlanConfig.createBridge;
+
     return PA_OK;
 }
 
@@ -420,12 +422,17 @@ pa_result_t taf_pa_net_AddVlanInterface
         vconfig.nwType = (telux::data::NetworkType)vlanConfig.nwType;
     }
 
-    if (vlanConfig.nwType == TAF_PA_VLAN_NETWORK_WAN) { // bridge is not supported for WAN network type
+    // Set bridge enabled from vlanConfig
+    vconfig.createBridge = vlanConfig.isBridgeEnabled;
+
+    if (vlanConfig.nwType == TAF_PA_VLAN_NETWORK_WAN)
+    { // bridge is not supported for WAN network type
         vconfig.createBridge = false;
+        PA_WARN("bridge is not supported for WAN hence setting to false");
     }
 
     PA_DEBUG("NetworkType %d createBridge %d ", static_cast<int>(vconfig.nwType),
-                                                static_cast<int>(vconfig.createBridge));
+                                                static_cast<bool>(vconfig.createBridge));
 
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
 
