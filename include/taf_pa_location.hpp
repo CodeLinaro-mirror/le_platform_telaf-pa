@@ -808,6 +808,8 @@ PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureMinGpsWeek(uint16_t minG
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureNmea(const taf_pa_location_NmeaConfig_t& nmeaConfigData, taf_pa_location_GeneralCb callback, std::any context);
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestMinGpsWeek(taf_pa_location_RequestMinGpsWeekCb callback, std::any context);
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context);
+PA_SHARED PA_WEAK  pa_result_t taf_pa_location_injectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context);
 
 } // namespace tafpa::location
 
