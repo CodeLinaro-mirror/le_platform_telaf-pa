@@ -18,7 +18,7 @@ taf_prop_sim_Result_t taf_prop_sim_RefreshRegister
 )
 {
     PROP_INFO("Function is not implemented in stub PA.");
-    return TAF_PROP_SIM_RESULT_BAD_PARAMETER;
+    return TAF_PROP_SIM_RESULT_NOT_SUPPORTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ taf_prop_sim_Result_t taf_prop_sim_RefreshOk
 )
 {
     PROP_INFO("Function is not implemented in stub PA.");
-    return TAF_PROP_SIM_RESULT_BAD_PARAMETER;
+    return TAF_PROP_SIM_RESULT_NOT_SUPPORTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -46,7 +46,7 @@ taf_prop_sim_Result_t taf_prop_sim_RefreshComplete
     taf_prop_sim_SessionType_t sessionType
 )
 {   PROP_INFO("Function is not implemented in stub PA.");
-    return TAF_PROP_SIM_RESULT_BAD_PARAMETER;
+    return TAF_PROP_SIM_RESULT_NOT_SUPPORTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ taf_prop_sim_RefreshChangeHandlerRef_t taf_prop_sim_AddRefreshChangeHandler
     void* contextPtr
 )
 {
-	PROP_INFO("Function is not implemented in stub PA.");
+    PROP_INFO("Function is not implemented in stub PA.");
     return NULL;
 }
 
@@ -74,7 +74,6 @@ taf_prop_sim_Result_t taf_prop_sim_Init
     void
 )
 {
-    
     PROP_INFO("Function is not implemented in stub PA.");
-    return TAF_PROP_SIM_RESULT_BAD_PARAMETER;
+    return TAF_PROP_SIM_RESULT_NOT_SUPPORTED;
 }
