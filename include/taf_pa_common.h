@@ -72,6 +72,23 @@ typedef enum
     TAF_PA_COMMON_LOG_LEVEL_EMERG = 7
 } taf_pa_common_LogLevel_t;
 
+typedef enum
+{
+    TAF_PA_COMMON_LOG_BACKEND_SYSLOG = 0,
+    TAF_PA_COMMON_LOG_BACKEND_DLT,
+    TAF_PA_COMMON_LOG_BACKEND_AUTO
+} taf_pa_common_LogBackend_t;
+
+PA_SHARED PA_WEAK pa_result_t taf_pa_common_LogInit
+(
+    taf_pa_common_LogBackend_t backend
+);
+
+PA_SHARED PA_WEAK pa_result_t taf_pa_common_LogSetBackend
+(
+    taf_pa_common_LogBackend_t backend
+);
+
 PA_SHARED void taf_pa_common_LogSetlevel
 (
     taf_pa_common_LogLevel_t level

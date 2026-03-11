@@ -65,6 +65,31 @@ typedef enum
     TAF_NS_COMMON_LOG_LEVEL_EMERG = 7
 } taf_ns_common_LogLevel_t;
 
+/* ===== Injected logging interface (vtable) =====
+ * Provided by PA at runtime. PA-noship must not call syslog/DLT directly.
+ */
+typedef struct
+{
+    /* ABI guard for compatibility */
+    unsigned int abi_version;
+    unsigned int size;
+
+    /* printf-style logging using va_list */
+    void (*log_vprintf)(taf_ns_common_LogLevel_t level,
+                        const char* file,
+                        const char* func,
+                        int line,
+                        const char* fmt,
+                        va_list ap);
+
+    /* optional: allow PA to push policy (can be NULL) */
+    void (*set_level)(taf_ns_common_LogLevel_t level);
+
+} taf_ns_common_LogVtable_t;
+
+/* Called by PA to inject/clear the vtable. */
+NS_SHARED void taf_ns_common_LogBind(const taf_ns_common_LogVtable_t* vt);
+
 NS_SHARED void taf_ns_common_LogSetlevel
 (
     taf_ns_common_LogLevel_t level
@@ -98,4 +123,3 @@ NS_SHARED void taf_ns_common_LogMessage
 #endif
 
 #endif // TAF_NS_COMMON_H
-
