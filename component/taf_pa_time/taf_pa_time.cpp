@@ -11,6 +11,9 @@
 
 #include "taf_pa_time.hpp"
 
+static constexpr int SUBSYSTEM_INIT_TIMEOUT = 30;
+
+
 //For GNSS time
 #include <telux/platform/PlatformFactory.hpp>
 #include <telux/platform/TimeManager.hpp>
@@ -138,7 +141,17 @@ pa_result_t taf_pa_gnss_Init(void)
     {
         // Wait for time manager to be ready
         std::unique_lock<std::mutex> lck(mtx);
-        cv.wait(lck, [&statusUpdated] { return statusUpdated; });
+        bool success = cv.wait_for(
+            lck,
+            std::chrono::seconds(SUBSYSTEM_INIT_TIMEOUT),
+            [&statusUpdated] { return statusUpdated; }
+        );
+
+        if (!success)
+        {
+            PA_ERROR("Timeout waiting for Time Manager subsystem");
+            return PA_TIMEOUT;
+        }
     }
 
     if (servicStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
@@ -237,25 +250,82 @@ pa_result_t IsPhoneSubSystemReady()
     if (phoneManager == nullptr)
     {
         auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
+
+        // First, try to get phone manager without callback to check if already ready
         phoneManager = phoneFactory.getPhoneManager();
-    }
-
-    if (phoneManager != nullptr)
-    {
-        // Check if telephony subsystem is ready
-        bool subSystemStatus = phoneManager->isSubsystemReady();
-        if (!subSystemStatus)
+        if (!phoneManager)
         {
-            PA_INFO("Telephony subsystem wait to be ready...");
-            std::future<bool> f = phoneManager->onSubsystemReady();
-            //  Wait until the subsystem is ready.
-            subSystemStatus = f.get();
+            PA_ERROR("Failed to get Phone Manager instance");
+            return PA_UNAVAILABLE;
         }
-        return PA_OK;
+
+        telux::common::ServiceStatus phoneManagerStatus = phoneManager->getServiceStatus();
+
+        if (phoneManagerStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            PA_INFO("Phone Manager subsystem is not ready, waiting for it to be ready...");
+
+            // Use promise/future with timeout
+            auto phoneMgrPromPtr =
+                std::make_shared<std::promise<telux::common::ServiceStatus>>();
+
+            phoneManager = phoneFactory.getPhoneManager(
+                [phoneMgrPromPtr](telux::common::ServiceStatus status)
+                {
+                    PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
+                    try {
+                        if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                            phoneMgrPromPtr->set_value(
+                                telux::common::ServiceStatus::SERVICE_AVAILABLE);
+                        } else {
+                            phoneMgrPromPtr->set_value(
+                                telux::common::ServiceStatus::SERVICE_FAILED);
+                        }
+                    } catch (const std::exception &e) {
+                        PA_ERROR("Exception setting phone manager promise: %s", e.what());
+                    } catch (...) {
+                        PA_ERROR("Unknown error setting phone manager promise");
+                    }
+                });
+
+            if (!phoneManager)
+            {
+                PA_ERROR("Failed to get Phone Manager instance with init callback");
+                return PA_UNAVAILABLE;
+            }
+
+            std::future<telux::common::ServiceStatus> initFuture =
+                phoneMgrPromPtr->get_future();
+            std::future_status waitStatus =
+                initFuture.wait_for(std::chrono::seconds(30)); // 30 seconds timeout
+
+            if (std::future_status::timeout == waitStatus)
+            {
+                PA_ERROR("Timeout waiting for Phone Manager subsystem");
+                return PA_TIMEOUT;
+            }
+            else
+            {
+                phoneManagerStatus = initFuture.get();
+            }
+        }
+
+        PA_INFO("Phone Manager status: %d", static_cast<int>(phoneManagerStatus));
+
+        if (telux::common::ServiceStatus::SERVICE_AVAILABLE == phoneManagerStatus)
+        {
+            PA_INFO("Telephony subsystem is ready");
+            return PA_OK;
+        }
+        else
+        {
+            PA_ERROR("Telephony subsystem is not ready. Status: %d",
+                     static_cast<int>(phoneManagerStatus));
+            return PA_UNAVAILABLE;
+        }
     }
 
-    PA_ERROR("Telephony subsystem is not ready");
-    return PA_UNAVAILABLE;
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -282,31 +352,49 @@ pa_result_t taf_pa_network_Init
 
     if (servingSystemManagers[slotId] == nullptr)
     {
-        servingSystemManagers[slotId] =
-             telux::tel::PhoneFactory::getInstance().getServingSystemManager(slotId);
-    }
-
-    if (servingSystemManagers[slotId] != nullptr)
-    {
-        // Check if serving subsystem is ready
-        bool servingSystemStatus = servingSystemManagers[slotId]->isSubsystemReady();
-        if (!servingSystemStatus)
+        bool statusUpdated = false;
+        auto serviceStatus = telux::common::ServiceStatus::SERVICE_UNAVAILABLE;
+        auto statusCb = [&statusUpdated, &serviceStatus](telux::common::ServiceStatus status)
         {
-            PA_INFO("Serving subsystem wait to be ready...");
-            std::future<bool> f = servingSystemManagers[slotId]->onSubsystemReady();
-            //  Wait until the subsystem is ready.
-            servingSystemStatus = f.get();
+            std::lock_guard<std::mutex> lock(mtx);
+            statusUpdated = true;
+            serviceStatus = status;
+            cv.notify_all();
+        };
+
+        servingSystemManagers[slotId] =
+             telux::tel::PhoneFactory::getInstance().getServingSystemManager(slotId, statusCb);
+
+        if (servingSystemManagers[slotId])
+        {
+            // Wait for serving system manager to be ready
+            std::unique_lock<std::mutex> lck(mtx);
+            bool success = cv.wait_for(
+                lck,
+                std::chrono::seconds(SUBSYSTEM_INIT_TIMEOUT),
+                [&statusUpdated] { return statusUpdated; }
+            );
+
+            if (!success)
+            {
+                PA_ERROR("Timeout waiting for Serving System Manager for slot %d", slotId);
+                return PA_TIMEOUT;
+            }
         }
 
-        if (servingSystemStatus)
+        if (serviceStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
         {
             PA_INFO("Serving subsystem is ready");
             return PA_OK;
         }
+        else
+        {
+            PA_ERROR("Serving manager system is not ready");
+            return PA_FAULT;
+        }
     }
 
-    PA_ERROR("Serving manager system is not ready");
-    return PA_FAULT;
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
