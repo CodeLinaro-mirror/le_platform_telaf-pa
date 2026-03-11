@@ -12,6 +12,7 @@
 #define PA_WEAK
 #endif
 
+#include <vector>
 #include "taf_pa_common.h"
 
 PA_SHARED PA_WEAK pa_result_t taf_pa_net_Init();
@@ -44,6 +45,20 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetSlotIdFromPhoneId
 (
     uint8_t phoneId,     ///< [IN] Phone ID
     uint8_t *slotIdPtr   ///< [OUT] Slot ID
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get supported slot IDs
+ *
+ * @return PA_OK            Success
+ *         PA_BAD_PARAMETER Invalid parameter
+ *         PA_FAULT         Failure
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetSupportedSlotIds
+(
+    std::vector<uint8_t> &slotIds   ///< [OUT] Slot IDs
 );
 
 #endif /* TAF_PA_NET_HPP */
