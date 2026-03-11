@@ -729,3 +729,42 @@ telux::data::BandPriority Utils::ConvertBandIntPriority
         return telux::data::BandPriority::N79;
     };
 }
+
+void Utils::ConvertUplinkThroughputInfo
+(
+    const telux::data::UplinkThroughputInfo &sdkInfo,
+    UplinkThroughputInfo_t &paInfo
+)
+{
+    paInfo.throughput = sdkInfo.throughput;
+    paInfo.maxThroughput = sdkInfo.maxThroughput;
+    paInfo.queueSize = sdkInfo.queueSize;
+}
+
+void Utils::ConvertDownlinkThroughputInfo
+(
+    const telux::data::DownlinkThroughputInfo &sdkInfo,
+    DownlinkThroughputInfo_t &paInfo
+)
+{
+    paInfo.throughput = sdkInfo.throughput;
+}
+
+void Utils::ConvertThroughputInfo
+(
+    const telux::data::ThroughputInfo &sdkInfo,
+    ThroughputInfo_t &paInfo
+)
+{
+    PA_DEBUG("Converting throughput info for profile %d", sdkInfo.profileId);
+
+    // Convert basic fields
+    paInfo.slotId = ConvertSlotId(sdkInfo.slot);
+    paInfo.profileId = static_cast<ProfileId_e>(sdkInfo.profileId);
+
+    // Convert uplink info
+    ConvertUplinkThroughputInfo(sdkInfo.ulThroughput, paInfo.ulThroughput);
+
+    // Convert downlink info
+    ConvertDownlinkThroughputInfo(sdkInfo.dlThroughput, paInfo.dlThroughput);
+}

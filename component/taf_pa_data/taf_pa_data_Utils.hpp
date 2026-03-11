@@ -102,6 +102,24 @@ class Utils
             const taf::pa::data::BandIntPriority_e bandPriority
         );
 
+        static void ConvertThroughputInfo
+        (
+            const telux::data::ThroughputInfo &sdkInfo,
+            ThroughputInfo_t &paInfo
+        );
+
+        static void ConvertUplinkThroughputInfo
+        (
+            const telux::data::UplinkThroughputInfo &sdkInfo,
+            UplinkThroughputInfo_t &paInfo
+        );
+
+        static void ConvertDownlinkThroughputInfo
+        (
+            const telux::data::DownlinkThroughputInfo &sdkInfo,
+            DownlinkThroughputInfo_t &paInfo
+        );
+
         // String conversions
         static const char *CallStatusToString(telux::data::DataCallStatus status);
         static const char *IpFamilyTypeToString(telux::data::IpFamilyType ipType);
