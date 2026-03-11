@@ -25,6 +25,7 @@ typedef enum
     TAF_PROP_SIM_RESULT_INIT_ERROR = -1,
     TAF_PROP_SIM_RESULT_BAD_PARAMETER = -2,
     TAF_PROP_SIM_RESULT_QMI_REQ_ERROR = -3,
+    TAF_PROP_SIM_RESULT_NOT_SUPPORTED = -4,
 }taf_prop_sim_Result_t;
 
 typedef enum
@@ -170,4 +171,3 @@ PROP_SHARED taf_prop_sim_RefreshChangeHandlerRef_t taf_prop_sim_AddRefreshChange
 #endif
 
 #endif /* TAF_PROP_SIM_H */
-
