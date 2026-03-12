@@ -71,7 +71,7 @@ typedef struct {
     taf_pa_sim_RefreshStage_t refreshStage;
 }taf_pa_sim_RefreshChangeInd_t;
 
-typedef enum States
+typedef enum
 {
     TAF_PA_SIM_PRESENT,
     TAF_PA_SIM_ABSENT,
@@ -94,7 +94,7 @@ typedef enum
     TAF_PA_SIM_ID_MAX
 }taf_pa_sim_Id_t;
 
-typedef enum Command
+typedef enum
 {
     TAF_PA_SIM_READ_BINARY = 0xb0,
     TAF_PA_SIM_READ_RECORD = 0xb2,
@@ -136,7 +136,8 @@ typedef enum
    TAF_PA_SIM_FDN  = 4
 }taf_pa_sim_LockType_t;
 
-typedef enum AppType {
+typedef enum
+{
    TAF_PA_APPTYPE_UNKNOWN = 0,
    TAF_PA_APPTYPE_SIM = 1,
    TAF_PA_APPTYPE_USIM = 2,
@@ -145,7 +146,7 @@ typedef enum AppType {
    TAF_PA_APPTYPE_ISIM = 5
 }taf_pa_sim_AppType_t;
 
-typedef enum LockResponse
+typedef enum
 {
     TAF_PA_CHANGE_PIN,
     TAF_PA_UNLOCK_BY_PIN,
@@ -196,6 +197,7 @@ struct taf_pa_sim_CardLockResponseInfo_t
 };
 
 using taf_pa_sim_GeneralCb = std::function<void(pa_result_t result, std::any context)>;
+
 using taf_pa_sim_onSubscriptionInfoChanged =
       std::function<void(const std::shared_ptr<taf_pa_sim_Iccid_t>& iccidDataInfo)>;
 
@@ -232,7 +234,7 @@ typedef struct {
 
 typedef void (*taf_pa_sim_RefreshChangeHandlerFunc_t)
 (
-   taf_pa_sim_RefreshChangeInd_t refreshChangeInd, void* contextPtr
+    taf_pa_sim_RefreshChangeInd_t refreshChangeInd, void* contextPtr
 );
 
 typedef struct taf_pa_sim_RefreshChangeHandler* taf_pa_sim_RefreshChangeHandlerRef_t;
@@ -255,14 +257,14 @@ typedef enum
 {
     TAF_PA_SIM_SLOT_UNKNOWN = -1,
     TAF_PA_SIM_SLOT_1       = 0,
-    TAF_PA_SIM_SLOT_2       = 1,
+    TAF_PA_SIM_SLOT_2       = 1
 } taf_pa_sim_SlotId_t;
 
 typedef enum
 {
     TAF_PA_SIM_PROFILE_ID_UNKNOWN = -1,
     TAF_PA_SIM_PROFILE_ID_1       = 0,
-    TAF_PA_SIM_PROFILE_ID_2       = 1,
+    TAF_PA_SIM_PROFILE_ID_2       = 1
 } taf_pa_sim_ProfileId_t;
 
 typedef struct
@@ -272,6 +274,7 @@ typedef struct
     taf_pa_sim_ProfileState_t state;
 } taf_pa_sim_ProfileInfo_t;
 
+// Number of profiles for a given slot
 PA_SHARED PA_WEAK uint8_t taf_pa_sim_GetProfileNum
 (
     taf_pa_sim_SlotId_t slot
@@ -291,17 +294,9 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_SetActiveProfile
     taf_pa_sim_ProfileId_t profileId
 );
 
-/**
- * Initialize SIM platform adaptor.
- */
-//--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_sim_Init(void);
-
-//--------------------------------------------------------------------------------------------------
-
 //--------------------------------------------------------------------------------------------------
 /**
- *  UIM refresh register.
+ *  PA refresh register.
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED PA_WEAK pa_result_t taf_pa_sim_RefreshRegister
@@ -313,7 +308,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_RefreshRegister
 
 //--------------------------------------------------------------------------------------------------
 /**
- *  UIM refresh ok.
+ *  PA refresh ok.
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED PA_WEAK pa_result_t taf_pa_sim_RefreshOk
@@ -324,7 +319,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_RefreshOk
 
 //--------------------------------------------------------------------------------------------------
 /**
- *  UIM refresh complete.
+ *  PA refresh complete.
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED PA_WEAK pa_result_t taf_pa_sim_RefreshComplete
@@ -353,6 +348,15 @@ PA_SHARED PA_WEAK void taf_pa_sim_RemoveRefreshChangeHandler
    taf_pa_sim_RefreshChangeHandlerRef_t handlerRef ///< [IN] Handler reference.
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Initialize PA SIM
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_Init
+(
+
+);
 
 
 //--------------------------------------------------------------------------------------------------
@@ -382,6 +386,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_DeregisterListeners
 (
 
 );
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Get Iccid.
@@ -747,7 +752,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_ExchangeSimIO
     std::any context
 );
 
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
 /**
  * Register event listeners.
  * @return
@@ -755,7 +760,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_ExchangeSimIO
  *  - PA_FAULT on failure
  *
  */
-//--------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
 PA_SHARED PA_WEAK pa_result_t taf_pa_sim_RegisterEventListener
 (
     taf_pa_sim_EventListener* eventListener,
@@ -791,7 +796,6 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetRemainingPukTries
     taf_pa_sim_Id_t simId,
     uint32_t*  remainingPukTries
 );
-
 #ifdef __cplusplus
 }
 #endif

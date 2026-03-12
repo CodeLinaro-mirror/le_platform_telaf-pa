@@ -61,7 +61,7 @@ taf_prop_sim_RefreshChangeHandlerRef_t taf_prop_sim_AddRefreshChangeHandler
 )
 {
     PROP_INFO("Function is not implemented in stub PA.");
-    return NULL;
+    return nullptr;
 }
 
 taf_prop_sim_ProfileInfo_t taf_prop_sim_GetActiveSimProfile
