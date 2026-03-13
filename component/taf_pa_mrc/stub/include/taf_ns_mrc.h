@@ -133,6 +133,12 @@ NS_SHARED taf_ns_mrc_ScrubStatusHandlerRef_t taf_ns_mrc_AddScrubStatusHandler
     void* contextPtr
 );
 
+/**
+ * Acknowledge slot toggle request.
+ *
+ * @param success Status code: 0 = SUCCESS, 1 = FAILED
+ * @return 0 on success, negative error code on failure
+ */
 NS_SHARED int32_t taf_ns_mrc_AckSlotToggle
 (
     int32_t success
