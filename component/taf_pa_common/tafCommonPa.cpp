@@ -236,8 +236,6 @@ static taf_pa_common_LogLevel_t PropLevelToPaLevel(taf_prop_common_LogLevel_t le
 void taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
 {
     gLogLevel = level;
-    taf_prop_common_LogSetlevel(LogLevelToPropLogLevel(level));
-    taf_ns_common_LogSetlevel(LogLevelToNsLogLevel(level));
 }
 
 pa_result_t taf_pa_common_LogSetBackend(taf_pa_common_LogBackend_t backend)
