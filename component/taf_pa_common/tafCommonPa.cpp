@@ -16,12 +16,9 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <stdbool.h>
+#include <dlt/dlt.h>
 
-#if defined(PA_ENABLE_DLT)
-  #include <dlt/dlt.h>
-  DLT_DECLARE_CONTEXT(log_ctx);
-  static bool gDltRegistered = false;
-#endif
+DltContext* DltCtxPtr = NULL;
 
 #define MAX_MSG_SIZE 1024
 
@@ -59,7 +56,7 @@ static const char* LogLevelToStr
     return " INFO";
 }
 
-#if defined(PA_ENABLE_DLT)
+
 static DltLogLevelType LogLevelToDlt(taf_pa_common_LogLevel_t level)
 {
     switch (level)
@@ -75,7 +72,7 @@ static DltLogLevelType LogLevelToDlt(taf_pa_common_LogLevel_t level)
         default:                             return DLT_LOG_INFO;
     }
 }
-#endif
+
 
 static int LogLevelToSyslog
 (
@@ -176,12 +173,7 @@ static taf_pa_common_LogBackend_t DetectBackendFromEnv(void)
         if (strcasecmp(env, "SYSLOG") == 0) return TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
     }
 
-#if defined(PA_ENABLE_DLT)
-    // // Build-time DLT support is available; default runtime backend to DLT unless overridden by env.
-    return TAF_PA_COMMON_LOG_BACKEND_DLT;
-#else
     return TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
-#endif
 }
 
 static const char* Basename(const char* path)
@@ -243,10 +235,6 @@ pa_result_t taf_pa_common_LogSetBackend(taf_pa_common_LogBackend_t backend)
     if (backend == TAF_PA_COMMON_LOG_BACKEND_AUTO)
         backend = DetectBackendFromEnv();
 
-#if !defined(PA_ENABLE_DLT)
-    if (backend == TAF_PA_COMMON_LOG_BACKEND_DLT)
-        backend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
-#endif
     gLogBackend = backend;
     return PA_OK;
 }
@@ -265,15 +253,13 @@ static void EmitLog(taf_pa_common_LogLevel_t level, const char* msg)
 {
     switch (GetBackend())
     {
-#if defined(PA_ENABLE_DLT)
         case TAF_PA_COMMON_LOG_BACKEND_DLT:
-            if (gDltRegistered)
+            if (DltCtxPtr != NULL)
             {
-                DLT_LOG(log_ctx, LogLevelToDlt(level), DLT_STRING(msg));
+                DLT_LOG(*DltCtxPtr, LogLevelToDlt(level), DLT_STRING(msg));
                 break;
             }
-            /* fallthrough */
-#endif
+
         case TAF_PA_COMMON_LOG_BACKEND_SYSLOG:
         default:
             syslog(LogLevelToSyslog(level), "%s", msg);
@@ -337,35 +323,6 @@ static void taf_pa_common_LogVMessage(taf_pa_common_LogLevel_t level,
     EmitLog(level, buf);
 }
 
-pa_result_t taf_pa_common_LogInit(taf_pa_common_LogBackend_t backend)
-{
-    if (backend == TAF_PA_COMMON_LOG_BACKEND_AUTO)
-        backend = DetectBackendFromEnv();
-
-    gLogBackend = backend;
-
-    if (gInited)
-        return PA_OK;
-    gInited = true;
-
-    openlog("taf_pa", LOG_PID | LOG_NDELAY, LOG_USER);
-
-#if defined(PA_ENABLE_DLT)
-    if (backend == TAF_PA_COMMON_LOG_BACKEND_DLT)
-    {
-        const char* app = getenv("TAF_DLT_APP_ID");
-        const char* ctx = getenv("TAF_DLT_CTX_ID");
-        const char* appid = (app && strlen(app) >= 3) ? app : "TAFA";
-        const char* ctxid = (ctx && strlen(ctx) >= 3) ? ctx : "TAFC";
-
-        DLT_REGISTER_APP(appid, "TAF PA Logging");
-        DLT_REGISTER_CONTEXT(log_ctx, ctxid, "TAF PA Context");
-        gDltRegistered = true;
-    }
-#endif
-    return PA_OK;
-}
-
 static void PaProp_SetLevel(taf_prop_common_LogLevel_t level)
 {
     /* Optional: keep PA log level in sync if desired */
@@ -382,7 +339,7 @@ static void PaProp_LogVprintf(taf_prop_common_LogLevel_t level,
     taf_pa_common_LogVMessage(PropLevelToPaLevel(level), file, func, line, fmt, ap);
 }
 
-static const taf_prop_common_LogVtable_t gPropLogVt = {
+static const taf_prop_common_LogVtable_t PropLogVt = {
     .abi_version = 1,
     .size = sizeof(taf_prop_common_LogVtable_t),
     .log_vprintf = PaProp_LogVprintf,
@@ -423,50 +380,54 @@ static void PaNs_LogVprintf(taf_ns_common_LogLevel_t level,
     taf_pa_common_LogVMessage(NsLevelToPaLevel(level), file, func, line, fmt, ap);
 }
 
-static const taf_ns_common_LogVtable_t gNsLogVt = {
+static const taf_ns_common_LogVtable_t NsLogVt = {
     .abi_version = 1,
     .size = sizeof(taf_ns_common_LogVtable_t),
     .log_vprintf = PaNs_LogVprintf,
     .set_level   = PaNs_SetLevel,
 };
 
-/* Auto-initialize logging when the shared library is loaded.
- * Note: This relies on GCC/Clang constructor support on ELF platforms.
- */
-__attribute__((constructor))
-static void taf_pa_common_ctor(void)
+pa_result_t taf_pa_common_LogInit(
+    taf_pa_common_LogBackend_t backend,
+    taf_pa_common_LogLevel_t initLogLevel,
+    void* logCtxPtr
+)
 {
-    /* Use AUTO to respect runtime env override (TAF_PA_LOG_BACKEND) and
-     * your build-time default behavior (DLT available => default DLT).
-     */
-    taf_pa_common_LogInit(TAF_PA_COMMON_LOG_BACKEND_AUTO);
+    if (gInited)
+        return PA_OK;
+    gInited = true;
+
+    if (backend == TAF_PA_COMMON_LOG_BACKEND_AUTO)
+        backend = DetectBackendFromEnv();
+
+    gLogBackend = backend;
+
+    gLogLevel = initLogLevel;
+
+    // Initialize DLT context from the provided pointer
+    if (logCtxPtr != NULL) {
+        DltCtxPtr = (DltContext*)logCtxPtr;
+    }
 
     /* Inject PA logging vtable into PA-prop and PA-noship. */
-    taf_prop_common_LogBind(&gPropLogVt);
-    taf_ns_common_LogBind(&gNsLogVt);
 
+    taf_prop_common_LogBind(&PropLogVt);
+    taf_ns_common_LogBind(&NsLogVt);
+    return PA_OK;
 }
 
-/* Optional: cleanup when the shared library is unloaded.
- * If your process never unloads the .so, you can omit this.
- *
- * If you later add a public taf_pa_common_LogDeinit(), call it here instead.
- */
-__attribute__((destructor))
-static void taf_pa_common_dtor(void)
+pa_result_t taf_pa_common_LogDeinit(void)
 {
-    /* Clear injected vtables first to avoid dangling pointer if unloaded. */
+    if (!gInited)
+        return PA_OK;
+
+    // Clear injected vtables to avoid dangling pointers
     taf_prop_common_LogBind(NULL);
     taf_ns_common_LogBind(NULL);
 
-#if defined(PA_ENABLE_DLT)
-    if (gDltRegistered)
-    {
-        DLT_UNREGISTER_CONTEXT(log_ctx);
-        DLT_UNREGISTER_APP();
-        gDltRegistered = false;
-    }
-#endif
-    closelog();
+    // Clear DLT context pointer
+    DltCtxPtr = NULL;
+
     gInited = false;
+    return PA_OK;
 }
