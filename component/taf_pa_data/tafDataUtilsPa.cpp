@@ -9,6 +9,11 @@
  *
  */
 #include "tafDataUtilsPa.hpp"
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <unistd.h>
+#include <cstring>
+#include <bsd/string.h>
 
 using namespace taf::pa::data;
 
@@ -767,4 +772,51 @@ void Utils::ConvertThroughputInfo
 
     // Convert downlink info
     ConvertDownlinkThroughputInfo(sdkInfo.dlThroughput, paInfo.dlThroughput);
+}
+
+pa_result_t Utils::GetMtuFromInterface
+(
+    const std::string& interfaceName,
+    int32_t& mtu
+)
+{
+    PA_DEBUG("Getting MTU for interface: %s", interfaceName.c_str());
+
+    if (interfaceName.empty())
+    {
+        PA_ERROR("Interface name is empty");
+        return PA_BAD_PARAMETER;
+    }
+
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0)
+    {
+        PA_ERROR("Failed to create socket: %s", strerror(errno));
+        return PA_FAULT;
+    }
+
+    struct ifreq ifr;
+    std::memset(&ifr, 0, sizeof(ifr));
+
+    // Copy interface name, ensuring null termination
+    if (strlcpy(ifr.ifr_name, interfaceName.c_str(), IFNAMSIZ) >= IFNAMSIZ)
+    {
+        PA_ERROR("Interface name too long: %s", interfaceName.c_str());
+        close(sockfd);
+        return PA_BAD_PARAMETER;
+    }
+
+    if (ioctl(sockfd, SIOCGIFMTU, &ifr) < 0)
+    {
+        PA_ERROR("IOCTL SIOCGIFMTU failed for interface %s: %s",
+                 interfaceName.c_str(), strerror(errno));
+        close(sockfd);
+        return PA_FAULT;
+    }
+
+    close(sockfd);
+    mtu = ifr.ifr_mtu;
+    PA_DEBUG("MTU for interface %s: %d", interfaceName.c_str(), mtu);
+
+    return PA_OK;
 }

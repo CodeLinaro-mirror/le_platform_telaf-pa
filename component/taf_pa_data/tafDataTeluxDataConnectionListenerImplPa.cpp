@@ -214,6 +214,21 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         eventInfo.ipv4DataCallInfo.gwAddrMask = IPv4Info.addr.gwMask;
         eventInfo.ipv4DataCallInfo.dnsAddrPrimary = IPv4Info.addr.primaryDnsAddress;
         eventInfo.ipv4DataCallInfo.dnsAddrSecondary = IPv4Info.addr.secondaryDnsAddress;
+
+        // Get MTU from the host interface
+        if (!eventInfo.hostIfName.empty())
+        {
+            int32_t mtu = taf::pa::data::MTU_NOT_SET;
+            if (PA_OK == Utils::GetMtuFromInterface(eventInfo.hostIfName, mtu))
+            {
+                eventInfo.ipv4DataCallInfo.mtu = mtu;
+                PA_DEBUG("IPv4 MTU: %d", mtu);
+            }
+            else
+            {
+                PA_WARN("Failed to get MTU for interface %s", eventInfo.hostIfName.c_str());
+            }
+        }
     }
     // Checks status and fill IPv4 call end reason
     if (telux::data::DataCallStatus::NET_NO_NET == IPv4Info.status)
@@ -237,6 +252,21 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         eventInfo.ipv6DataCallInfo.gwAddrMask = IPv6Info.addr.gwMask;
         eventInfo.ipv6DataCallInfo.dnsAddrPrimary = IPv6Info.addr.primaryDnsAddress;
         eventInfo.ipv6DataCallInfo.dnsAddrSecondary = IPv6Info.addr.secondaryDnsAddress;
+
+        // Get MTU from the host interface
+        if (!eventInfo.hostIfName.empty())
+        {
+            int32_t mtu = taf::pa::data::MTU_NOT_SET;
+            if (PA_OK == Utils::GetMtuFromInterface(eventInfo.hostIfName, mtu))
+            {
+                eventInfo.ipv6DataCallInfo.mtu = mtu;
+                PA_DEBUG("IPv6 MTU: %d", mtu);
+            }
+            else
+            {
+                PA_WARN("Failed to get MTU for interface %s", eventInfo.hostIfName.c_str());
+            }
+        }
     }
     // Checks status and fill IPv6 call end reason
     if (telux::data::DataCallStatus::NET_NO_NET == IPv6Info.status)

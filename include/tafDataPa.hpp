@@ -34,6 +34,13 @@ namespace data
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * MTU not set indicator
+ */
+//--------------------------------------------------------------------------------------------------
+inline constexpr int MTU_NOT_SET = -1;
+
+//--------------------------------------------------------------------------------------------------
+/**
  * Data connection indication types that can be enabled/disabled.
  */
 //--------------------------------------------------------------------------------------------------
@@ -1167,6 +1174,7 @@ struct DataCallInfo_t
     unsigned int        gwAddrMask = 0;   ///< The gateway address mask.
     std::string         dnsAddrPrimary;   ///< The primary DNS address.
     std::string         dnsAddrSecondary; ///< The secondary DNS address.
+    int32_t             mtu = taf::pa::data::MTU_NOT_SET; ///< The MTU size in bytes.
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -1293,7 +1301,7 @@ struct ThroughputInfo_t
  * Initialize the Telux data PA state.
  **
  * Initialize the Telux data PA state.
- 
+
  * @return
  *  - LE_OK              PA completely initialized
  *  - LE_UNAVAILABLE     PA not completely initialized. A part of the PA maybe usable. Check state.
@@ -2026,6 +2034,25 @@ PA_SHARED pa_result_t RemoveThroughputEventsCallback
     uint16_t id
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the MTU (Maximum Transmission Unit) for a network interface.
+ *
+ * This function retrieves the MTU for a network interface identified by its name.
+ *
+ * @param interfaceName The network interface name (e.g., "rmnet_data0").
+ * @param mtu Output parameter for the MTU value in bytes.
+ * @return PA_OK on success, error code otherwise.
+ *         PA_BAD_PARAMETER if interfaceName is invalid or empty.
+ *         PA_NOT_FOUND if the interface does not exist.
+ *         PA_FAULT if MTU retrieval fails.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t GetMtu
+(
+    const std::string& interfaceName,
+    int32_t& mtu
+);
 
 } //data
 } //pa

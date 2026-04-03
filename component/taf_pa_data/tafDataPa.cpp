@@ -864,3 +864,29 @@ pa_result_t taf::pa::data::RemoveThroughputEventsCallback
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaRemoveThroughputEventsCallback(id);
 }
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the MTU (Maximum Transmission Unit) for a network interface.
+ *
+ * This function retrieves the MTU for a network interface by its name.
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::GetMtu
+(
+    const std::string& interfaceName,
+    int32_t& mtu
+)
+{
+    PA_DEBUG("PA implementation. Interface: %s", interfaceName.c_str());
+
+    // Validate input parameter
+    if (interfaceName.empty())
+    {
+        PA_ERROR("Interface name is empty");
+        return PA_BAD_PARAMETER;
+    }
+
+    // Get MTU from the interface using utility function
+    return Utils::GetMtuFromInterface(interfaceName, mtu);
+}
