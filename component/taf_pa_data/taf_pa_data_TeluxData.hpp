@@ -13,13 +13,14 @@
 #ifndef __TAF_PA_DATA_TELUXDATA__
 #define __TAF_PA_DATA_TELUXDATA__
 
-#include "taf_pa_data.hpp"
+#include "tafDataPa.hpp"
 
 #include "telux/common/CommonDefines.hpp"
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
 #include <telux/tel/PhoneFactory.hpp>
 #include "taf_pa_data_TeluxDataServingSys.hpp"
+#include "tafInternalCommonPa.h"
 
 #include <map>
 #include <atomic>

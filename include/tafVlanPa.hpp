@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_VLAN_HPP
-#define TAF_PA_VLAN_HPP
+#ifndef TAF_VLAN_PA_HPP
+#define TAF_VLAN_PA_HPP
 
 #ifdef TAF_PA_DEFAULT
 #define PA_WEAK __attribute__((weak))
@@ -16,7 +16,7 @@
 #include <vector>
 #include <list>
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -204,7 +204,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetIPPassThroughNatConfig
  * MAC address maximum length.
  */
 //--------------------------------------------------------------------------------------------------
-#define  TAF_PA_NET_MAC_ADDR_MAX_LEN 17
+#define TAF_PA_NET_MAC_ADDR_MAX_LEN 17
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -295,7 +295,7 @@ typedef enum
  * The IP address maximum length.
  */
 //--------------------------------------------------------------------------------------------------
-#define  IP_PA_NET_ADDR_MAX_LEN 46
+#define IP_PA_NET_ADDR_MAX_LEN 46
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -347,4 +347,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetIPConfig
     taf_pa_IpConfig_t *ipConfig                     // OUT
 );
 
-#endif /* TAF_PA_VLAN_HPP */
+#endif /* TAF_VLAN_PA_HPP */

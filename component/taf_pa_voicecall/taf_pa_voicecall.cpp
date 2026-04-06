@@ -14,8 +14,8 @@
 #include "telux/tel/PhoneFactory.hpp"
 #include "telux/tel/PhoneManager.hpp"
 #include "telux/common/CommonDefines.hpp"
-#include "taf_pa_common.h"
-#include "taf_pa_voicecall.hpp"
+#include "tafCommonPa.h"
+#include "tafVoicecallPa.hpp"
 
 #define MAX_INIT_TIMEOUT 5
 

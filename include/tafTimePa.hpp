@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 
-#ifndef TAF_PA_TIME_H
-#define TAF_PA_TIME_H
+#ifndef TAF_TIME_PA_HPP
+#define TAF_TIME_PA_HPP
 
 #ifdef TAF_PA_DEFAULT
 #define TAF_PA_WEAK __attribute__((weak))
@@ -117,5 +117,5 @@ PA_SHARED TAF_PA_WEAK pa_result_t taf_pa_time_RequestNetworkTime
 );
 
 
-#endif /* TAF_PA_TIME_H */
+#endif /* TAF_TIME_PA_HPP */
 

@@ -9,8 +9,9 @@
 #include <iostream>
 
 
-#include "taf_pa_socks.hpp"
+#include "tafSocksPa.hpp"
 #include "taf_ns_net.hpp"
+#include "tafInternalCommonPa.h"
 
 #include <telux/data/DataFactory.hpp>
 #include <telux/data/net/SocksManager.hpp>

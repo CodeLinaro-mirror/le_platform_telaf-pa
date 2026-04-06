@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 #include <thread>
 #include <chrono>
 
-#ifndef TAF_PA_HEALTH_H
-#define TAF_PA_HEALTH_H
+#ifndef TAF_HEALTH_PA_HPP
+#define TAF_HEALTH_PA_HPP
 
 #define TAF_HMS_PHONE_MANAGER_TIMEOUT     30        //Phone manager wait timeout
 #define TAF_HMS_SUBSYSTEM_MANAGER_TIMEOUT 30        // Subsytem manager wait timeout
@@ -100,4 +100,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_health_RegModemOperationModeUpdateHandler
     taf_pa_health_ModemOperatingModeUpdateHandler_t handlerFunc
 );
 
-#endif
+#endif // TAF_HEALTH_PA_HPP

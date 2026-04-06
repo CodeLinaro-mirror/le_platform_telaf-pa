@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "taf_pa_pms.hpp"
+#include "tafPmsPa.hpp"
 
 #include <assert.h>
 #include <telux/power/PowerFactory.hpp>

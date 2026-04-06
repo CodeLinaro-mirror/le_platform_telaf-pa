@@ -3,11 +3,11 @@
  *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_AUDIO_HPP
-#define TAF_PA_AUDIO_HPP
+#ifndef TAF_AUDIO_PA_HPP
+#define TAF_AUDIO_PA_HPP
 
 #include <any>
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 #include <chrono>
 #include <future>
 #include <unistd.h>
@@ -372,4 +372,4 @@ PA_SHARED pa_result_t RemoveSubsystemStateChangeListener
 );
 
 }
-#endif /* TAF_PA_AUDIO_HPP */
+#endif /* TAF_AUDIO_PA_HPP */

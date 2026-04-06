@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_SIM_HPP
-#define TAF_PA_SIM_HPP
+#ifndef TAF_SIM_PA_HPP
+#define TAF_SIM_PA_HPP
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 #include <string>
 #include <vector>
 #include <functional> // For std::function
@@ -800,4 +800,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetRemainingPukTries
 }
 #endif
 
-#endif /* TAF_PA_SIM_HPP */
+#endif /* TAF_SIM_PA_HPP */

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "taf_pa_fscrypt.h"
+#include "tafFscryptPa.h"
 #include "taf_prop_fscrypt.h"
 
 //--------------------------------------------------------------------------------------------------

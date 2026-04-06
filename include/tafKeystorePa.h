@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_KEYSTORAGE_H
-#define TAF_PA_KEYSTORAGE_H
+#ifndef TAF_KEYSTORE_PA_H
+#define TAF_KEYSTORE_PA_H
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -764,4 +764,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ks_RegKeySharingHandler
     taf_pa_ks_KeySharingHandler_t handlerFunc
 );
 
-#endif // TAF_PA_KEYSTORAGE_H
+#endif // TAF_KEYSTORE_PA_H

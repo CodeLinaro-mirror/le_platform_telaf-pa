@@ -9,8 +9,8 @@
 #include <unistd.h>
 
 #include <telux/platform/PlatformFactory.hpp>
-#include "taf_pa_common.h"
-#include "taf_pa_deviceinfo.hpp"
+#include "tafCommonPa.h"
+#include "tafDeviceinfoPa.hpp"
 
 #define MAX_INIT_TIMEOUT 5
 

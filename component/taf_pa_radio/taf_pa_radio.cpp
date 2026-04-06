@@ -15,7 +15,7 @@
 #include <telux/data/DataFactory.hpp>
 #include <telux/data/ServingSystemManager.hpp>
 
-#include "taf_pa_radio.hpp"
+#include "tafRadioPa.hpp"
 #include "taf_prop_radio.h"
 
 using namespace std;

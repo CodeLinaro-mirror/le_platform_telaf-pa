@@ -1,16 +1,16 @@
 /*
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
- * SPDX-License-Identifier: BSD-3-Clause-Clear
+ *  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_VOICECALL_HPP
-#define TAF_PA_VOICECALL_HPP
+#ifndef TAF_VOICECALL_PA_HPP
+#define TAF_VOICECALL_PA_HPP
 
 #include <chrono>
 #include <future>
 #include <unistd.h>
 #include <any>
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 namespace tafpa::voicecall {
 
@@ -120,5 +120,5 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_GetCallTermination(const taf_pa_v
 
 }
 
-#endif /* TAF_PA_VOICECALL_HPP */
+#endif /* TAF_VOICECALL_PA_HPP */
 

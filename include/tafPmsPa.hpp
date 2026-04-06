@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef _PM_LAYER_HPP_
-#define _PM_LAYER_HPP_
+#ifndef TAF_PMS_PA_HPP
+#define TAF_PMS_PA_HPP
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 #include <stdint.h>
 #include <vector>
@@ -157,4 +157,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_pms_GetModemWakeupFilter
 }
 #endif
 
-#endif
+#endif // TAF_PMS_PA_HPP

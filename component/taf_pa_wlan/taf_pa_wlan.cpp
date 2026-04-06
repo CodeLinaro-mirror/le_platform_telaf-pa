@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "taf_pa_wlan.hpp"
-#include "taf_pa_common.h"
+#include "tafWlanPa.hpp"
+#include "tafCommonPa.h"
 
 #include <any>
 #include <cstring>

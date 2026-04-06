@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_L2TP_HPP
-#define TAF_PA_L2TP_HPP
+#ifndef TAF_L2TP_PA_HPP
+#define TAF_L2TP_PA_HPP
 
 #ifdef TAF_PA_DEFAULT
 #define PA_WEAK __attribute__((weak))
@@ -16,7 +16,7 @@
 #include <memory>
 #include <vector>
 #include <iostream>
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 #include <mutex>
 #include <condition_variable>
 #include <future>
@@ -196,5 +196,5 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetL2tpConfigSync
     taf_pa_net_L2tpConfig_t& L2tpConfig  // IN
 );
 
-#endif /* TAF_PA_L2TP_HPP */
+#endif /* TAF_L2TP_PA_HPP */
 

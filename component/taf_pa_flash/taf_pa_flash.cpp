@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <unordered_map>
 
-#include "taf_pa_flash.hpp"
+#include "tafFlashPa.hpp"
 
 #include "taf_ns_flash.h"
 

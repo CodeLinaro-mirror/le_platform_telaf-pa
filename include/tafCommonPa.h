@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef PA_COMMON_H
-#define PA_COMMON_H
+#ifndef TAF_COMMON_PA_H
+#define TAF_COMMON_PA_H
 
 #include <stdint.h>
 #include <stdarg.h>
@@ -16,7 +16,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <inttypes.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -117,48 +116,8 @@ PA_SHARED void taf_pa_common_LogMessage
 #define PA_FATAL_IF(condition, fmt, ...) if (condition) { PA_FATAL(fmt, ##__VA_ARGS__) }
 #define PA_ASSERT(condition) PA_FATAL_IF(!(condition), "Assert Failed: '%s'", #condition)
 
-//--------------------------------------------------------------------------------------------------
-/**
- * Mark a variable as unused.
- *
- */
-//--------------------------------------------------------------------------------------------------
-#define PA_UNUSED(v) ((void)(v))
-
-//--------------------------------------------------------------------------------------------------
-/**
- * Return from function if condition is true.
- *
- */
-//--------------------------------------------------------------------------------------------------
-#define TAF_PA_ERROR_IF_RET_NIL(condition, formatString, ...) \
-    do                                                        \
-    {                                                         \
-        if (condition)                                        \
-        {                                                     \
-            PA_ERROR(formatString, ##__VA_ARGS__);            \
-            return;                                           \
-        }                                                     \
-    } while (0);
-
-//--------------------------------------------------------------------------------------------------
-/**
- * Return specified value from function if condition is true.
- *
- */
-//--------------------------------------------------------------------------------------------------
-#define TAF_PA_ERROR_IF_RET_VAL(condition, val, formatString, ...) \
-    do                                                             \
-    {                                                              \
-        if (condition)                                             \
-        {                                                          \
-            PA_ERROR(formatString, ##__VA_ARGS__);                 \
-            return (val);                                          \
-        }                                                          \
-    } while (0);
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif // PA_COMMON_H
+#endif // TAF_COMMON_PA_H

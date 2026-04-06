@@ -1,16 +1,16 @@
 /*
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. 
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_DEVICEINFO_H
-#define TAF_PA_DEVICEINFO_H
+#ifndef TAF_DEVICEINFO_PA_HPP
+#define TAF_DEVICEINFO_PA_HPP
 
 #include <chrono>
 #include <future>
 #include <unistd.h>
 #include <any>
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 namespace tafpa::deviceinfo{
 
@@ -20,4 +20,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_deviceinfo_GetIMEI(char* imeiPtr, size_t nu
 
 }
 
-#endif /* TAF_PA_DEVICEINFO_H */
+#endif /* TAF_DEVICEINFO_PA_HPP */

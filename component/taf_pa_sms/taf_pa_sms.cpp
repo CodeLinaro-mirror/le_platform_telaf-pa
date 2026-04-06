@@ -14,7 +14,7 @@
 #include <telux/tel/PhoneFactory.hpp>
 #include <telux/tel/SmsManager.hpp>
 
-#include "taf_pa_sms.hpp"
+#include "tafSmsPa.hpp"
 
 #define MAX_INIT_TIMEOUT 5
 #define MIN_SIM_SLOT_COUNT 1

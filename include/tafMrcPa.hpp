@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_MRC_HPP
-#define TAF_PA_MRC_HPP
+#ifndef TAF_MRC_PA_HPP
+#define TAF_MRC_PA_HPP
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,15 +58,15 @@ typedef struct
 
 typedef struct
 {
-    uint32_t peCountLen;
-    uint32_t peCount[TAF_PA_MRC_EFS_PARTITION_BLOCKS];
-} taf_pa_mrc_EfsPeStatus_t;
-
-typedef struct
-{
     uint32_t maxEraseCount;
     uint32_t totalBadBlocks;
 } taf_pa_mrc_EfsBlockStatus_t;
+
+typedef struct
+{
+    uint32_t peCountLen;
+    uint32_t peCount[TAF_PA_MRC_EFS_PARTITION_BLOCKS];
+} taf_pa_mrc_EfsPeStatus_t;
 
 typedef struct taf_pa_mrc_ProcessStatusHandler* taf_pa_mrc_ProcessStatusHandlerRef_t;
 
@@ -76,6 +76,16 @@ typedef void (*taf_pa_mrc_ProcessStatusHdlrFunc_t)
     void* contextPtr
 );
 
+typedef void (*taf_pa_mrc_ProcessStatusHdlrFunc_t)
+(
+    taf_pa_mrc_ProcessStatusIndication_t indication,
+    void* contextPtr
+);
+
+/* Scrub / GPIO-toggle indication from MRCD to client via TelAF.
+ * Currently QMI-MRC does not provide slot info, so this is simply a
+ * "toggle requested" flag.
+ */
 typedef struct
 {
     uint8_t slotToggleRequested;
@@ -147,4 +157,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_AckSlotToggle
 }
 #endif
 
-#endif /* TAF_PA_MRC_HPP */
+#endif /* TAF_MRC_PA_HPP */

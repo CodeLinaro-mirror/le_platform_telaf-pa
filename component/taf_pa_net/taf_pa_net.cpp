@@ -5,10 +5,10 @@
 
 
 #include <set>
-#include "taf_pa_net.hpp"
-#include "taf_pa_socks.hpp"
-#include "taf_pa_vlan.hpp"
-#include "taf_pa_l2tp.hpp"
+#include "tafNetPa.hpp"
+#include "tafSocksPa.hpp"
+#include "tafVlanPa.hpp"
+#include "tafL2tpPa.hpp"
 
 #include "taf_ns_net.hpp"
 

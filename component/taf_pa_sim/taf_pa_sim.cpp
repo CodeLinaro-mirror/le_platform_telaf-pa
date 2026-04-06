@@ -13,8 +13,9 @@
 #include <telux/common/Utils.hpp>
 #include <telux/tel/PhoneDefines.hpp>
 #include <telux/tel/PhoneFactory.hpp>
+#include "tafInternalCommonPa.h"
 
-#include "taf_pa_sim.hpp"
+#include "tafSimPa.hpp"
 #include "taf_prop_sim.hpp"
 
 using namespace telux::tel;

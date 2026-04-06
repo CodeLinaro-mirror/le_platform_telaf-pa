@@ -11,10 +11,10 @@
  * It abstracts the underlying Telux thermal SDK APIs.
  */
 
-#ifndef TAF_PA_THERM_H
-#define TAF_PA_THERM_H
+#ifndef TAF_THERM_PA_HPP
+#define TAF_THERM_PA_HPP
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -308,4 +308,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
 //--------------------------------------------------------------------------------------------------
 PA_SHARED PA_WEAK pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void);
 
-#endif // TAF_PA_THERM_H
+#endif // TAF_THERM_PA_HPP

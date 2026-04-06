@@ -4,7 +4,7 @@
  */
 
 
-#include "taf_pa_nat.hpp"
+#include "tafNatPa.hpp"
 
 #include <telux/data/DataFactory.hpp>
 #include <telux/data/net/NatManager.hpp>

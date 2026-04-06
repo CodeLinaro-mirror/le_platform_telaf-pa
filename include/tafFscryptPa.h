@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_FSCRYPT_H
-#define TAF_PA_FSCRYPT_H
+#ifndef TAF_FSCRYPT_PA_H
+#define TAF_FSCRYPT_PA_H
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -71,4 +71,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_fsc_DeleteKey
     KeyMgt_KeyFileRef_t keyFileRef          ///< [IN] Key file reference
 );
 
-#endif // TAF_PA_FSCRYPT_H
+#endif // TAF_FSCRYPT_PA_H

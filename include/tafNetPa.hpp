@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_NET_HPP
-#define TAF_PA_NET_HPP
+#ifndef TAF_NET_PA_HPP
+#define TAF_NET_PA_HPP
 
 #ifdef TAF_PA_DEFAULT
 #define PA_WEAK __attribute__((weak))
@@ -13,7 +13,7 @@
 #endif
 
 #include <vector>
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 PA_SHARED PA_WEAK pa_result_t taf_pa_net_Init();
 
@@ -61,4 +61,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetSupportedSlotIds
     std::vector<uint8_t> &slotIds   ///< [OUT] Slot IDs
 );
 
-#endif /* TAF_PA_NET_HPP */
+#endif /* TAF_NET_PA_HPP */

@@ -3,8 +3,8 @@
  *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_LOCATION_H
-#define TAF_PA_LOCATION_H
+#ifndef TAF_LOCATION_PA_HPP
+#define TAF_LOCATION_PA_HPP
 
 #include <string>
 #include <vector>
@@ -14,10 +14,10 @@
 #include <memory>     // For std::shared_ptr
 #include <any>        // For std::any context
 
-// Assuming taf_pa_common.hpp defines pa_result_t and PA_SHARED / PA_WEAK
+// Assuming tafCommonPa.hpp defines pa_result_t and PA_SHARED / PA_WEAK
 // If not, you might need to define pa_result_t or similar here,
 // or include a specific header that does.
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 namespace tafpa::location {
 
@@ -406,7 +406,6 @@ uint32_t xtraValidForHours;
 struct taf_pa_location_DgnssStatus_t {
 taf_pa_location_DgnssDataStatus_t status;
 };
-
 
 struct taf_pa_location_NmeaConfig_t {
 uint32_t sentenceConfig;
@@ -825,7 +824,6 @@ using taf_pa_location_RequestRobustLocationCb = std::function<void(pa_result_t r
 using taf_pa_location_RequestSecondaryBandConfigCb = std::function<void(pa_result_t result, const std::set<taf_pa_location_GnssConstellationType_t>& constellationSet, std::any context)>;
 using taf_pa_location_RequestXtraStatusCb = std::function<void(pa_result_t result, const taf_pa_location_XtraStatus_t& xtraStatus, std::any context)>;
 
-
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_Init();
 
 PA_SHARED PA_WEAK  taf_pa_location_LocationId taf_pa_location_CreateClient();
@@ -857,8 +855,7 @@ PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestXtraStatus(taf_pa_location
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_injectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context);
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context);
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureEngineIntegrityRisk(taf_pa_location_EngineType_t engineType,uint32_t integrityRisk, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK pa_result_t taf_pa_location_injectCorrectionData(const uint8_t *injectionData,
-uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context);
+PA_SHARED PA_WEAK pa_result_t taf_pa_location_injectCorrectionData(const uint8_t *injectionData,   uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context);
 PA_SHARED PA_WEAK pa_result_t taf_pa_location_createDgnssSource(taf_pa_location_DgnssDataFormat_t dgnssFormat,taf_pa_location_GeneralCb callback,std::any context);
 PA_SHARED PA_WEAK pa_result_t taf_pa_location_releaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context);
 PA_SHARED PA_WEAK  pa_result_t taf_pa_location_registerDgnssEventListener(
@@ -870,4 +867,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_location_deInitializeDgnss(taf_pa_location_
 std::any context);
 } // namespace tafpa::location
 
-#endif /* TAF_PA_LOCATION_H */
+#endif /* TAF_LOCATION_PA_HPP */

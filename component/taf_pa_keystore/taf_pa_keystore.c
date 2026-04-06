@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "taf_pa_keystore.h"
+#include "tafKeystorePa.h"
 #include "taf_prop_keystore.h"
 
 //--------------------------------------------------------------------------------------------------

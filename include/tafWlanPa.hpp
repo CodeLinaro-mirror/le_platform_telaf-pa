@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_WLAN_HPP
-#define TAF_PA_WLAN_HPP
+#ifndef TAF_WLAN_PA_HPP
+#define TAF_WLAN_PA_HPP
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 #include <any>
 #include <functional>
 #include <string>
@@ -27,12 +27,6 @@ enum class IPType_e
     STATIC           ///< Station is configured with Static IP.
 };
 
-enum class StaId_e
-{
-    ONE,
-    TWO // Reserved for future use
-};
-
 enum class BandIntPriority_e
 {
     UNKNOWN,      ///< Unknown band priority.
@@ -44,7 +38,14 @@ enum class ServiceState_e
 {
     SERVICE_UNAVAILABLE,
     SERVICE_AVAILABLE,
+    SERVICE_READY,
     SERVICE_FAILED
+};
+
+enum class StaId_e
+{
+    ONE,
+    TWO // Reserved for future use
 };
 
 struct StaIpConfig_t
@@ -62,12 +63,10 @@ struct BandInterferenceConfig_t
     uint32_t n79WaitTimeInSec;
 };
 
+// Device listener: (enabled, serviceStatus, context)
 using DeviceListener = std::function<void(bool enabled, ServiceState_e serviceStatus, std::any)>;
 
-PA_SHARED PA_WEAK pa_result_t Init
-(
-    void
-);
+PA_SHARED PA_WEAK pa_result_t Init();
 
 PA_SHARED PA_WEAK pa_result_t RegisterDeviceListener
 (
@@ -100,34 +99,32 @@ PA_SHARED PA_WEAK pa_result_t GetDeviceMode
 PA_SHARED PA_WEAK pa_result_t SetStaBridgeMode
 (
     StaId_e staId,
-    Mode_e mode
+    taf::pa::wlan::Mode_e tafStaMode
 );
 
 PA_SHARED PA_WEAK pa_result_t GetStaBridgeMode
 (
     StaId_e staId,
-    Mode_e &modeOut
+    taf::pa::wlan::Mode_e &tafStaModeOut
 );
 
-// Overload: dynamic IP (no static config)
 PA_SHARED PA_WEAK pa_result_t SetStaIpConfig
 (
     StaId_e staId,
-    IPType_e ipType
+    taf::pa::wlan::IPType_e tafIpType         // taf_wlanSta_IPType_t
 );
 
-// Overload: static IP with config
 PA_SHARED PA_WEAK pa_result_t SetStaIpConfig
 (
     StaId_e staId,
-    IPType_e ipType,
+    taf::pa::wlan::IPType_e tafIpType,        // taf_wlanSta_IPType_t
     const StaIpConfig_t &cfg
 );
 
 PA_SHARED PA_WEAK pa_result_t GetStaIpConfig
 (
     StaId_e staId,
-    IPType_e &ipTypeOut,
+    taf::pa::wlan::IPType_e &tafIpTypeOut,    // taf_wlanSta_IPType_t
     StaIpConfig_t &cfgOut
 );
 
@@ -140,9 +137,9 @@ PA_SHARED PA_WEAK pa_result_t GetBandInterferenceConfig
 PA_SHARED PA_WEAK pa_result_t SetBandInterferenceConfig
 (
     bool enable,
-    const BandInterferenceConfig_t &cfg    // cfg ignored when enable == false
+    const BandInterferenceConfig_t &cfg
 );
 
 } // namespace taf::pa::wlan
 
-#endif // TAF_PA_WLAN_HPP
+#endif // TAF_WLAN_PA_HPP

@@ -4,7 +4,7 @@
  */
 
 
-#include "taf_pa_l2tp.hpp"
+#include "tafL2tpPa.hpp"
 
 #include <telux/data/DataFactory.hpp>
 #include <telux/data/net/L2tpManager.hpp>

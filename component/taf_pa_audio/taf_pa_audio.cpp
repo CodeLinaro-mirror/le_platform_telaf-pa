@@ -13,7 +13,8 @@
 #include "telux/common/Utils.hpp"
 #include "telux/tel/PhoneDefines.hpp"
 #include "telux/tel/PhoneFactory.hpp"
-#include "taf_pa_audio.hpp"
+#include "tafAudioPa.hpp"
+#include "tafInternalCommonPa.h"
 
 #define SUBSYSTEM_TIMEOUT 5
 

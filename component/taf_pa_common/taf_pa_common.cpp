@@ -7,7 +7,7 @@
 
 #include "taf_prop_common.h"
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 #include <stdio.h>
 #include <stdarg.h>

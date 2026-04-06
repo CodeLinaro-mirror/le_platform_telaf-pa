@@ -2,8 +2,8 @@
  *  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-#ifndef __TAF_PA_ECALL_HPP__
-#define __TAF_PA_ECALL_HPP__
+#ifndef TAF_ECALL_PA_HPP
+#define TAF_ECALL_PA_HPP
 
 #include <chrono>
 #include <future>
@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 namespace tafpa::ecall {
 
@@ -820,4 +820,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_RegisterListener(
 
 } // namespace tafpa::ecall
 
-#endif // __TAF_PA_ECALL_HPP__
+#endif // TAF_ECALL_PA_HPP

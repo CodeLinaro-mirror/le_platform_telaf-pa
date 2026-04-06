@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_SMS_H
-#define TAF_PA_SMS_H
+#ifndef TAF_SMS_PA_HPP
+#define TAF_SMS_PA_HPP
 
-#include <chrono>
-#include <future>
+#include <string>
+#include <vector>
+#include <functional>
 #include <unistd.h>
-#include <any>
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 namespace tafpa::sms {
 
@@ -181,4 +181,5 @@ PA_SHARED PA_WEAK int32_t taf_pa_sms_RequestSmsMessageList
 
 }
 
-#endif /* TAF_PA_SMS_H */
+#endif /* TAF_SMS_PA_HPP */
+

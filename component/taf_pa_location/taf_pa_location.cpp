@@ -20,8 +20,8 @@
 #include <telux/loc/LocationListener.hpp>
 #include "telux/loc/LocationFactory.hpp"
 
-#include "taf_pa_location.hpp"
-#include "taf_pa_common.h"
+#include "tafLocationPa.hpp"
+#include "tafCommonPa.h"
 
 #define MAX_INIT_TIMEOUT 5
 #define CLEANUP_TIMEOUT_SECONDS 5

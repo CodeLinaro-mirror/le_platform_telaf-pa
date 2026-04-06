@@ -12,7 +12,7 @@
 #ifndef __TAF_PA_DATA_TELUX_DATA_CONNECTION_HPP__
 #define __TAF_PA_DATA_TELUX_DATA_CONNECTION_HPP__
 
-#include "taf_pa_data.hpp"
+#include "tafDataPa.hpp"
 
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
@@ -60,6 +60,14 @@ namespace data
     {
         uint16_t id;
         taf_pa_data_HwAccelerationEventsCb callBack;
+        std::shared_ptr<void> context;
+    };
+
+    // Throughput events entry
+    struct ThroughputEventsCallbackEntry_t
+    {
+        uint16_t id;
+        taf_pa_data_ThroughputEventsCb callBack;
         std::shared_ptr<void> context;
     };
 

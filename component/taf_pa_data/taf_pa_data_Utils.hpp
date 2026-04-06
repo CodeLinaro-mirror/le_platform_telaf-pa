@@ -13,7 +13,7 @@
 #define __TAF_PA_DATA_UTILS_HPP__
 
 #include "taf_pa_common_defines.hpp"
-#include "taf_pa_dataTypes.hpp"
+#include "tafDataPa.hpp"
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
 #include "telux/common/CommonDefines.hpp"

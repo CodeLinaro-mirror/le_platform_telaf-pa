@@ -8,7 +8,7 @@
  * @brief Telux-based Platform Adapter implementation for Thermal Service
  */
 
-#include "taf_pa_therm.hpp"
+#include "tafThermPa.hpp"
 #include <telux/common/CommonDefines.hpp>
 #include <telux/therm/ThermalDefines.hpp>
 #include <telux/therm/ThermalFactory.hpp>

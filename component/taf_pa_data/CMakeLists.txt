@@ -24,6 +24,7 @@ set(TAF_PA_DATA_SOURCES
 
 
 # common headers
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/data)
 add_library(${TARGET_NAME} SHARED ${TAF_PA_DATA_SOURCES})

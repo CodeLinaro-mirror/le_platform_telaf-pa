@@ -22,7 +22,7 @@ set(TAF_PA_NET_SOURCES
     taf_pa_nat.cpp
 )
 
-
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/taf_pa_net)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)

@@ -13,7 +13,7 @@
 #include <telux/platform/FsDefines.hpp>
 #include <telux/platform/FsManager.hpp>
 
-#include "taf_pa_mrc.hpp"
+#include "tafMrcPa.hpp"
 
 #include "taf_ns_mrc.h"
 

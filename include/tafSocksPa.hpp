@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_SOCKS_HPP
-#define TAF_PA_SOCKS_HPP
+#ifndef TAF_SOCKS_PA_HPP
+#define TAF_SOCKS_PA_HPP
 
 #ifdef TAF_PA_DEFAULT
 #define PA_WEAK __attribute__((weak))
@@ -12,7 +12,7 @@
 #define PA_WEAK
 #endif
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -166,5 +166,5 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_DisableSocksCmdASync
    taf_pa_socks_CallCb callback,void *contextPtr
 );
 
-#endif /* TAF_PA_SOCKS_HPP */
+#endif /* TAF_SOCKS_PA_HPP */
 

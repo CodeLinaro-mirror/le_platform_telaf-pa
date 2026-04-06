@@ -15,7 +15,7 @@
 
 #include "telux/common/CommonDefines.hpp"
 #include "telux/data/DataDefines.hpp"
-#include "taf_pa_dataTypes.hpp"
+#include "tafDataPa.hpp"
 
 namespace taf
 {

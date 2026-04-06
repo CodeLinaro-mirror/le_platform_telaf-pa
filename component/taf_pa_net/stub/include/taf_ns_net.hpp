@@ -6,7 +6,7 @@
 #ifndef TAF_NS_NET_HPP
 #define TAF_NS_NET_HPP
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 #define TAF_NS_NET_RESULT_OK 0
 #define TAF_NS_NET_RESULT_FAULT -6

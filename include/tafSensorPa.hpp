@@ -3,15 +3,15 @@
  *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef __TAF_PA_SENSOR_HPP__
-#define __TAF_PA_SENSOR_HPP__
+#ifndef TAF_SENSOR_PA_HPP
+#define TAF_SENSOR_PA_HPP
 
 #include <functional>
 #include <any>
 #include <vector>
 #include <memory>
 #include <string>
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 namespace tafpa::sensor {
 
@@ -149,4 +149,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_RegisterListener(
 
 } // End namespace tafpa::sensor
 
-#endif // __TAF_PA_SENSOR_HPP__
+#endif // TAF_SENSOR_PA_HPP

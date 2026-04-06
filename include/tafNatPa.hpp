@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_NAT_HPP
-#define TAF_PA_NAT_HPP
+#ifndef TAF_NAT_PA_HPP
+#define TAF_NAT_PA_HPP
 
 #ifdef TAF_PA_DEFAULT
 #define PA_WEAK __attribute__((weak))
@@ -12,7 +12,7 @@
 #define PA_WEAK
 #endif
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 #include <vector>
 
@@ -94,5 +94,5 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_nat_QueryDestNatEntryList(
     std::vector<taf_pa_net_NatConfig_t> &natEntryInfo
 );
 
-#endif /* TAF_PA_NAT_HPP */
+#endif /* TAF_NAT_PA_HPP */
 

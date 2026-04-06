@@ -17,7 +17,7 @@
 #include "telux/sensor/SensorClient.hpp"
 #include "telux/sensor/SensorFactory.hpp"
 
-#include "taf_pa_sensor.hpp"
+#include "tafSensorPa.hpp"
 
 #define MAX_INIT_TIMEOUT 5
 #define SEC_TO_NANOS 1000000000

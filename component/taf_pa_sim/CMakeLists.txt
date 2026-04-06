@@ -19,6 +19,8 @@ set_target_properties(${TARGET_NAME} PROPERTIES
     OUTPUT_NAME ${OUTPUT_NAME}
 )
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
+
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/stub/include)
 
 target_link_libraries(${TARGET_NAME} PRIVATE telux_tel telux_data)

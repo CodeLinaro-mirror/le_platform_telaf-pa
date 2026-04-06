@@ -12,7 +12,7 @@
 #ifndef __TAF_PA_DATA_TELUXDATAPROFILE_HPP__
 #define __TAF_PA_DATA_TELUXDATAPROFILE_HPP__
 
-#include "taf_pa_data.hpp"
+#include "tafDataPa.hpp"
 
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"

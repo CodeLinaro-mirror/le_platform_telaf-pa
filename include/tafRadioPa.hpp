@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PA_RADIO_HPP
-#define TAF_PA_RADIO_HPP
+#ifndef TAF_RADIO_PA_HPP
+#define TAF_RADIO_PA_HPP
 
-#include "taf_pa_common.h"
+#include "tafCommonPa.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1359,5 +1359,4 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
 }
 #endif
 
-#endif /* TAF_PA_RADIO_HPP */
-
+#endif /* TAF_RADIO_PA_HPP */
