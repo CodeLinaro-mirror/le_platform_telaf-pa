@@ -536,6 +536,7 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
 
         case telux::tel::CallEndCause::NORMAL:
         case telux::tel::CallEndCause::NORMAL_UNSPECIFIED:
+        case telux::tel::CallEndCause::CLIENT_END:
             termination = TAF_PA_VOICECALL_TERM_NORMAL;
         break;
 

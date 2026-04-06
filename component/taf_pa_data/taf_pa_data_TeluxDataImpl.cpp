@@ -65,27 +65,75 @@ void taf::pa::data::TafPaTeluxData::initPhoneManager()
 {
     PA_INFO("Initialize phone manager");
     auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
-    phoneManager_ = phoneFactory.getPhoneManager();
 
-    // Check if telephony subsystem is ready
-    bool subSystemStatus = phoneManager_->isSubsystemReady();
-    if (!subSystemStatus)
+    phoneManager_ = phoneFactory.getPhoneManager();
+    if (!phoneManager_)
     {
-        PA_INFO("Wait for telephony subsystem to be ready...");
-        std::future<bool> fut = phoneManager_->onSubsystemReady();
-        //  Wait until the subsystem is ready.
-        std::chrono::seconds span(taf::pa::SUBSYSTEM_INIT_TIMEOUT); // 30 seconds
-        std::future_status waitStatus = fut.wait_for(span);
-        if (std::future_status::timeout == waitStatus)
+        PA_ERROR("Failed to get Phone Manager instance");
+        return;
+    }
+
+    telux::common::ServiceStatus phoneManagerStatus = phoneManager_->getServiceStatus();
+
+    if (phoneManagerStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_INFO("Phone Manager subsystem is not ready, waiting for it to be ready...");
+
+        auto phoneMgrPromPtr =
+            std::make_shared<std::promise<telux::common::ServiceStatus>>();
+
+        phoneManager_ = phoneFactory.getPhoneManager(
+            [phoneMgrPromPtr](telux::common::ServiceStatus status)
+            {
+                PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
+                try {
+                    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                        phoneMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_AVAILABLE);
+                    } else {
+                        phoneMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_FAILED);
+                    }
+                } catch (const std::exception &e) {
+                    PA_ERROR("Exception setting phone manager promise: %s", e.what());
+                } catch (...) {
+                    PA_ERROR("Unknown error setting phone manager promise");
+                }
+            });
+
+        if (!phoneManager_)
         {
-            PA_ERROR("Phone manager subsystem ready promise timeout");
+            PA_ERROR("Failed to get Phone Manager instance with init callback");
             return;
         }
 
-        FUTURE_GET_RET_NIL(fut, subSystemStatus);
+        std::future<telux::common::ServiceStatus> initFuture =
+            phoneMgrPromPtr->get_future();
+        std::future_status waitStatus =
+            initFuture.wait_for(std::chrono::seconds(taf::pa::SUBSYSTEM_INIT_TIMEOUT));
+
+        if (std::future_status::timeout == waitStatus)
+        {
+            PA_ERROR("Timeout waiting for Phone Manager subsystem");
+            return;
+        }
+        else
+        {
+            phoneManagerStatus = initFuture.get();
+        }
     }
-    dataPhoneMngrInitState_ = SubsystemState_e::AVAILABLE;
-    PA_INFO("Phone manager initialized.");
+
+    PA_INFO("Phone Manager status: %d", TO_INT(phoneManagerStatus));
+
+    if (telux::common::ServiceStatus::SERVICE_AVAILABLE == phoneManagerStatus)
+    {
+        dataPhoneMngrInitState_ = SubsystemState_e::AVAILABLE;
+        PA_INFO("Phone manager initialized.");
+    }
+    else
+    {
+        PA_ERROR("Phone Manager subsystem not available. Status: %d", TO_INT(phoneManagerStatus));
+    }
 }
 
 pa_result_t taf::pa::data::TafPaTeluxData::GetServinSystemInitState
@@ -747,12 +795,20 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
                                                               "PA phone manager not initialized.");
 
-    TAF_PA_ERROR_IF_RET_VAL(bGetRoamingStatusInProgress_.load(), PA_BUSY, "Command in progress.");
+    // Atomically check and set the flag to prevent race condition
+    bool expected = false;
+    if (!bGetRoamingStatusInProgress_.compare_exchange_strong(expected, true))
+    {
+        PA_ERROR("Get roaming status already in progress for phone id: %d", TO_INT(phoneId));
+        return PA_BUSY;
+    }
 
     pa_result_t result = PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
     if (PA_OK != result)
     {
         PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        // Reset the flag since we're returning early
+        bGetRoamingStatusInProgress_.store(false);
         return result;
     }
     PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
@@ -762,32 +818,59 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
     if (dataServingSystemManagersMap_.find(slotId) == dataServingSystemManagersMap_.end())
     {
         PA_ERROR("Serving system manager is not init for slot %d", TO_INT(slotId));
+        // Reset the flag since we're returning early
+        bGetRoamingStatusInProgress_.store(false);
         return PA_FAULT;
     }
 
-    // Lock
-    std::lock_guard<std::mutex> lock(getRoamingStatusMtx_);
-    // Set the promise
-    roamingStatusPromise_ =
-                std::promise<std::pair<telux::data::RoamingStatus, telux::common::ErrorCode>>();
-    auto fut = roamingStatusPromise_.get_future();
+    // Create shared promise to ensure it outlives this function scope
+    auto promisePtr = std::make_shared<std::promise<
+                std::pair<telux::data::RoamingStatus, telux::common::ErrorCode>>>();
+    auto fut = promisePtr->get_future();
 
-    // Request
+    // Request - lambda captures promisePtr by value (shared ownership)
     status = dataServingSystemManagersMap_[slotId]->requestRoamingStatus
                     (
-                        [this]
+                        [promisePtr]
                         (
                             telux::data::RoamingStatus roamingStatus,
                             telux::common::ErrorCode error
                         )
                         {
                             SET_SDK_THREAD_NAME();
-                            roamingStatusPromise_.set_value(std::make_pair(roamingStatus, error));
+                            try
+                            {
+                                promisePtr->set_value(std::make_pair(roamingStatus, error));
+                            }
+                            catch (const std::future_error& e)
+                            {
+                                PA_ERROR("Future error in callback: %s", e.what());
+                                // Try to set promise to unblock waiting thread
+                                try { promisePtr->set_value(std::make_pair
+                                    (telux::data::RoamingStatus(),
+                                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                            }
+                            catch (const std::exception& e)
+                            {
+                                PA_ERROR("Exception in callback: %s", e.what());
+                                try { promisePtr->set_value(std::make_pair
+                                    (telux::data::RoamingStatus(),
+                                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                            }
+                            catch (...)
+                            {
+                                PA_ERROR("Unknown error in requestRoamingStatus callback.");
+                                try { promisePtr->set_value(std::make_pair
+                                    (telux::data::RoamingStatus(),
+                                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                            }
                         }
                     );
     if (telux::common::Status::SUCCESS != status)
     {
         PA_ERROR("requestRoamingStatus failed. Status: %d", TO_INT(status));
+        // Reset the in progress flag
+        bGetRoamingStatusInProgress_.store(false);
         return PA_FAULT;
     }
 
@@ -803,8 +886,6 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
         return PA_TIMEOUT;
     }
 
-    // Set the in progress flag
-    bGetRoamingStatusInProgress_.store(true);
     // Wait for the response
     std::pair<telux::data::RoamingStatus, telux::common::ErrorCode> futRsp;
     FUTURE_GET_RET_VAL(fut, futRsp, PA_FAULT);

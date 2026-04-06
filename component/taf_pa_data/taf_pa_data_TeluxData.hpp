@@ -171,8 +171,6 @@ class TafPaTeluxData
 
         // Mutex for synchronizing registering, deregistering and calling client callbacks.
         std::mutex roamingEventsCbksMtx_;
-        // Mutex for PaGetRoamingStatus
-        std::mutex getRoamingStatusMtx_;
 
         // The callback entry vector for subsystem events
         std::vector<SubsystemEventsCallbackEntry_t> subsystemEventsCallbacks_;
@@ -181,9 +179,7 @@ class TafPaTeluxData
         // The callback entry vector for roaming events
         std::vector<RoamingEventsCallbackEntry_t> roamingEventsCallbacks_;
         uint16_t roamingEventsCallbackId_ = 1;
-        // Promise for get roaming status
-        std::promise<std::pair<
-                    telux::data::RoamingStatus, telux::common::ErrorCode>> roamingStatusPromise_;
+        // Atomic flag to track if get roaming status is in progress
         std::atomic<bool> bGetRoamingStatusInProgress_;
 
         // Telux variables

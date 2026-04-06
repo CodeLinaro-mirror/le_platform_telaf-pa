@@ -48,14 +48,14 @@ enum class Subsystem_e
 
 //--------------------------------------------------------------------------------------------------
 /**
- * The PA initialization state.
+ * The PA Subsystem state.
  */
 //--------------------------------------------------------------------------------------------------
 enum class SubsystemState_e
 {
-    AVAILABLE,   ///< PA initialization failed.
-    UNAVAILABLE, ///< PA for profile management is ready.
-    FAILED       ///< PA for call management is ready.
+    AVAILABLE,   ///< Subsystem available.
+    UNAVAILABLE, ///< Subsystem unavailable.
+    FAILED       ///< Subsystem initialization failed.
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -1226,6 +1226,56 @@ struct HwAccelerationChangeEvent_t
 {
     PhoneId_e             phoneId;        ///< The phone id.
     HwAccelerationState_e state;          ///< The HW acceleration state.
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Uplink throughput information.
+ */
+//--------------------------------------------------------------------------------------------------
+struct UplinkThroughputInfo_t
+{
+    uint32_t throughput;        ///< Current UL throughput in kbps.
+    uint32_t maxThroughput;     ///< Max allowed UL throughput in kbps.
+    uint32_t queueSize;         ///< Bytes pending in UL queue.
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Downlink throughput information.
+ */
+//--------------------------------------------------------------------------------------------------
+struct DownlinkThroughputInfo_t
+{
+    uint32_t throughput;        ///< Current DL throughput in kbps.
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Combined throughput information.
+ */
+//--------------------------------------------------------------------------------------------------
+struct ThroughputInfo_t
+{
+    PhoneId_e                  phoneId;        ///< The phone id.
+    SlotId_e                   slotId;         ///< The slot id.
+    ProfileId_e                profileId;      ///< The profile id.
+    UplinkThroughputInfo_t     ulThroughput;   ///< Uplink throughput info.
+    DownlinkThroughputInfo_t   dlThroughput;   ///< Downlink throughput info.
+};
+
+// Forward declaration - actual definition is in taf_pa_data.hpp
+using taf_pa_data_ThroughputEventsCb = std::function<void(
+    const std::vector<ThroughputInfo_t> &throughputInfo,
+    std::shared_ptr<void> context
+)>;
+
+// Throughput event callback entry
+
+struct ThroughputEventsCallbackEntry_t {
+    uint16_t id;
+    taf_pa_data_ThroughputEventsCb callBack;
+    std::shared_ptr<void> context;
 };
 
 } // data

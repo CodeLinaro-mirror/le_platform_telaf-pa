@@ -84,6 +84,8 @@ namespace data
             const std::vector<std::shared_ptr<telux::data::TftChangeInfo>> &tft) override;
         void onHwAccelerationChanged(const telux::data::ServiceState state) override;
         void onServiceStatusChange(telux::common::ServiceStatus status) override;
+        void onThroughputInfoAvailable(
+            const std::vector<telux::data::ThroughputInfo> &info) override;
         void ParseIDataCall(
             const std::shared_ptr<telux::data::IDataCall> &iCall,
             DataCallEventInfo_t &dataCallInfo);
@@ -92,12 +94,14 @@ namespace data
         SlotId slotId_;
         // Mutex
         std::mutex listenerMtx_;
-        std::atomic<bool> bWaitingForDataCallBitratePromise_ = {false};
 
         // The current calls status of IDataCall objects
         std::map<
                 std::shared_ptr<telux::data::IDataCall>, telux::data::DataCallStatus
                 > callStatusMap_;
+
+        // Atomic flag to track if waiting for data call bitrate promise
+        std::atomic<bool> bWaitingForDataCallBitratePromise_ = {false};
 
         // Functions
         void fillCallEndReason(const telux::common::DataCallEndReason&,DataCallEndReason_t&);
@@ -230,6 +234,37 @@ namespace data
             uint16_t id
             ///< [IN] The ID of the registered callback.
         );
+
+        // Throughput events
+        void PaSendThroughputEventInfoToClients
+        (
+            const std::vector<ThroughputInfo_t> &throughputInfoList
+        );
+        pa_result_t PaAddThroughputEventsCallback
+        (
+            taf_pa_data_ThroughputEventsCb callBack,
+            ///< [IN] The callback function.
+            std::shared_ptr<void> context,
+            ///< [IN] The context pointer.
+            uint16_t &id
+            ///< [OUT] The ID of the registered callback.
+        );
+        pa_result_t PaRemoveThroughputEventsCallback
+        (
+            uint16_t id
+            ///< [IN] The ID of the registered callback.
+        );
+        pa_result_t PaSetThroughputReportInterval
+        (
+            PhoneId_e phoneId,
+            uint32_t reportInterval
+        );
+        pa_result_t PaGetLastThroughputInfo
+        (
+            PhoneId_e phoneId,
+            std::vector<ThroughputInfo_t> &throughputInfoList
+        );
+
         void resetCallListClientEntry();
 
     private:
@@ -251,6 +286,14 @@ namespace data
         // The callback for HW acceleration events
         std::vector<HwAccelerationEventsCallbackEntry_t> hwAccelerationEventsCallbacks_;
         uint16_t hwAccelerationEventsCallbackId_ = 1;
+
+        // The callback for throughput events
+        std::vector<ThroughputEventsCallbackEntry_t> throughputEventsCallbacks_;
+        uint16_t throughputEventsCallbackId_ = 1;
+        // Gate flag: throughput events from the SDK are forwarded to clients only after at least
+        // one PA-level callback has been registered via PaAddThroughputEventsCallback().
+        // Resets to false when all callbacks are removed or on Deinit.
+        std::atomic<bool> bThroughputEventsEnabled_ = {false};
 
         std::map<SlotId_e, SubsystemState_e> dataConnectionManagersSubsysStateMap_ = {
             {SlotId_e::SLOT_1, SubsystemState_e::FAILED},
@@ -278,15 +321,6 @@ namespace data
         // Use a share mutex for registering, deregistering and calling callbacks.
         std::shared_mutex dataConnectionCbksMtx_;
 
-        // Promise for PaGetDefaultProfile
-        std::promise<std::tuple<int, SlotId, telux::common::ErrorCode>> getDefProfilePromise_;
-        // Mutex for PaGetDefaultProfile
-        std::mutex getDefProfileMtx_;
-        // Promise for setDefaultProfile
-        std::promise<telux::common::ErrorCode> setDefProfilePromise_;
-        // Mutex for PaSetDefaultProfile
-        std::mutex setDefProfileMtx_;
-
         // Functions
         // The callback fuction for TelSDK startDataCall()
         static void startDataCallCallback
@@ -300,16 +334,6 @@ namespace data
             const std::shared_ptr<telux::data::IDataCall> &iCall,
             telux::common::ErrorCode errorCode
         );
-        // The callback fuction for TelSDK requestThrottledApnInfo()
-        static void requestThrottledApnInfoCallback
-        (
-            const std::vector<telux::data::APNThrottleInfo> &throttleInfoList,
-            telux::common::ErrorCode error
-        );
-        // The promise for requestThrottledApnInfo()
-        std::promise<std::pair<std::vector<
-          telux::data::APNThrottleInfo>, telux::common::ErrorCode>> requestThrottledApnInfoPromise_;
-        std::mutex requestThrottledApnInfoMtx_;
 
         void initDataConnectionManagers();
         pa_result_t deInitDataConnectionManagers();

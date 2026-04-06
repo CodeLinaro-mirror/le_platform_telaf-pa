@@ -387,7 +387,7 @@ using taf_pa_data_SubsystemStateChangeCb =
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Register roaming events callback
+ * Register for subsystem state change events callback
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED pa_result_t AddSubsystemStateChangeCallback
@@ -634,6 +634,68 @@ PA_SHARED pa_result_t RegisterSDKCallbacks
 PA_SHARED pa_result_t DeregisterSDKCallbacks
 (
 
+);
+
+//--------------------------------------------------------------------------------------------------
+// Note: taf_pa_data_ThroughputEventsCb is defined in taf_pa_dataTypes.hpp
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the throughput report interval.
+ *
+ * @param phoneId Phone identifier.
+ * @param reportInterval Interval in milliseconds (min 50ms, 0 to disable).
+ * @return PA_OK on success, error code otherwise.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t SetThroughputReportInterval
+(
+    PhoneId_e phoneId,
+    uint32_t reportInterval
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the last throughput information for all active profiles.
+ *
+ * @param phoneId Phone identifier.
+ * @param throughputInfoList Output vector of throughput information.
+ * @return PA_OK on success, error code otherwise.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t GetLastThroughputInfo
+(
+    PhoneId_e phoneId,
+    std::vector<ThroughputInfo_t> &throughputInfoList
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Register callback for throughput events.
+ *
+ * @param callBack Callback function.
+ * @param context Context pointer.
+ * @param id Output callback ID.
+ * @return PA_OK on success, error code otherwise.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t AddThroughputEventsCallback
+(
+    taf_pa_data_ThroughputEventsCb callBack,
+    std::shared_ptr<void> context,
+    uint16_t &id
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Remove previously registered throughput events callback.
+ *
+ * @param id Callback ID to remove.
+ * @return PA_OK on success, error code otherwise.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t RemoveThroughputEventsCallback
+(
+    uint16_t id
 );
 
 } //data

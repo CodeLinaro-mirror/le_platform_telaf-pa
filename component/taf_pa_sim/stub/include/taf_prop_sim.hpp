@@ -25,6 +25,7 @@ typedef enum
     TAF_PROP_SIM_RESULT_INIT_ERROR = -1,
     TAF_PROP_SIM_RESULT_BAD_PARAMETER = -2,
     TAF_PROP_SIM_RESULT_QMI_REQ_ERROR = -3,
+    TAF_PROP_SIM_RESULT_NOT_SUPPORTED = -4,
 }taf_prop_sim_Result_t;
 
 typedef enum
@@ -78,6 +79,38 @@ typedef void (*taf_prop_sim_RefreshChangeHandlerFunc_t)
 );
 
 typedef struct taf_prop_sim_RefreshChangeHandler* taf_prop_sim_RefreshChangeHandlerRef_t;
+
+typedef enum
+{
+    TAF_PROP_SIM_PROFILE_TYPE_UNKNOWN   = -1,
+    TAF_PROP_SIM_PROFILE_TYPE_REGULAR   = 0,
+    TAF_PROP_SIM_PROFILE_TYPE_EMERGENCY = 1,
+} taf_prop_sim_ProfileType_t;
+
+typedef struct
+{
+    uint8_t                     profileId;
+    taf_prop_sim_ProfileType_t  profileType;
+    bool                        isActive;
+} taf_prop_sim_ProfileInfo_t;
+
+PROP_SHARED taf_prop_sim_Result_t taf_prop_sim_GetProfileList
+(
+    uint8_t slot,
+    taf_prop_sim_ProfileInfo_t *profiles,
+    uint32_t *profilesLenPtr
+);
+
+PROP_SHARED taf_prop_sim_ProfileInfo_t taf_prop_sim_GetActiveSimProfile
+(
+    uint8_t slot
+);
+
+PROP_SHARED taf_prop_sim_Result_t taf_prop_sim_SetSimProfileById
+(
+    uint8_t slot,
+    uint8_t profileId
+);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -138,4 +171,3 @@ PROP_SHARED taf_prop_sim_RefreshChangeHandlerRef_t taf_prop_sim_AddRefreshChange
 #endif
 
 #endif /* TAF_PROP_SIM_H */
-

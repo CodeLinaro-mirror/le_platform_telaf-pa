@@ -22,13 +22,7 @@
 class taf_L2tpAdaptor
 {
     public:
-        taf_L2tpAdaptor() {};
-        ~taf_L2tpAdaptor() {};
-
-        void Init(void);
-
         static taf_L2tpAdaptor &getInstance();
-        void onInitComplete(telux::common::ServiceStatus status);
 
         bool initialize();
 
@@ -51,9 +45,6 @@ class taf_L2tpAdaptor
             return l2tpManager;
         }
         std::shared_ptr<telux::data::net::IL2tpManager> l2tpManager = nullptr;
-        bool IsSubSystemStatusUpdated=false;
-        std::mutex mMutex;
-        std::condition_variable conVar;
 
         /*
         * @brief A callback class must be provided when invoke telsdk API.
@@ -65,9 +56,6 @@ class taf_L2tpAdaptor
             static void disableL2tpAsyncResponse(telux::common::ErrorCode error);
             static void startTunnelAsyncResponse(telux::common::ErrorCode error);
             static void stopTunnelAsyncResponse(telux::common::ErrorCode error);
-
-            tafL2tpCallback(){};
-            ~tafL2tpCallback(){};
             static taf_pa_net_L2tpConfig_t l2tpConfig;
         };
 };
@@ -103,74 +91,74 @@ bool taf_pa_l2tp_Init()
 bool taf_L2tpAdaptor::initialize()
 {
     PA_DEBUG("Enter initialize in PA");
-    bool isReady = false;
 
-    // Get the DataFactory and l2tpManager instances
+    auto &dataFactory = telux::data::DataFactory::getInstance();
+
     if (l2tpManager == nullptr)
     {
-        auto &dataFactory = telux::data::DataFactory::getInstance();
-        auto initCb = std::bind(&taf_L2tpAdaptor::onInitComplete, this, std::placeholders::_1);
-        l2tpManager = dataFactory.getL2tpManager(initCb);
+        l2tpManager = dataFactory.getL2tpManager();
     }
 
-    if(l2tpManager == nullptr )
+    if (l2tpManager == nullptr)
     {
         PA_INFO("L2tp manager initialize error...");
         return false;
     }
-    // Check subsystem status
-    std::unique_lock<std::mutex> lck(mMutex);
 
-    telux::common::ServiceStatus subSystemStatus = l2tpManager->getServiceStatus();
+    telux::common::ServiceStatus subSystemStatus =
+        l2tpManager->getServiceStatus();
 
-    if (subSystemStatus == telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
-    {
-        PA_INFO("L2tp manager initialize...");
-        conVar.wait(lck, [this]{return this->IsSubSystemStatusUpdated;});
-        subSystemStatus = l2tpManager->getServiceStatus();
+    if (subSystemStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+        PA_INFO("L2tp subsystem is not ready, waiting for it to be ready...");
+
+        auto l2tpMgrPromPtr =
+            std::make_shared<std::promise<telux::common::ServiceStatus>>();
+
+        l2tpManager = dataFactory.getL2tpManager(
+            [l2tpMgrPromPtr](telux::common::ServiceStatus status) {
+                PA_INFO("Getting status:%d from L2TP manager", static_cast<int>(status));
+                try {
+                    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                        l2tpMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_AVAILABLE);
+                    } else {
+                        l2tpMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_FAILED);
+                    }
+                } catch (const std::exception &e) {
+                    PA_ERROR("Exception setting L2TP manager promise: %s", e.what());
+                } catch (...) {
+                    PA_ERROR("Unknown error setting L2TP manager promise");
+                }
+            });
+
+        if (l2tpManager == nullptr) {
+            PA_ERROR("Failed to get L2TP manager with init callback");
+            return false;
+        }
+
+        std::future<telux::common::ServiceStatus> initFuture =
+            l2tpMgrPromPtr->get_future();
+        std::future_status waitStatus =
+            initFuture.wait_for(std::chrono::seconds(L2TP_TIMEOUT));
+
+        if (std::future_status::timeout == waitStatus) {
+            PA_ERROR("Timeout waiting for L2TP subsystem");
+            return false;
+        } else {
+            subSystemStatus = initFuture.get();
+        }
     }
 
-    // At this point, initialization should be either AVAILABLE or Failure
-    if (subSystemStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
-    {
-        PA_ERROR("L2tp Manager initialization failed");
+    if (subSystemStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+        PA_INFO("L2tp manager service is available");
+        return true;
+    } else {
+        PA_ERROR("L2tp Manager initialization failed, status=%d",
+                 static_cast<int>(subSystemStatus));
         l2tpManager = nullptr;
         return false;
     }
-
-    isReady = l2tpManager->isSubsystemReady();
-
-    if(isReady == false)
-    {
-        PA_INFO("L2tp component is not ready, wait for it unconditionally...");
-        std::future<bool> readyFunc = l2tpManager->onSubsystemReady();
-        isReady = readyFunc.get();
-    }
-
-    return isReady;
-}
-
-/*======================================================================
-
- FUNCTION        taf_L2tpAdaptor::onInitComplete
-
- DESCRIPTION     Call back function of l2tpManager.
-
- DEPENDENCIES    The initialization of L2tp.
-
- PARAMETERS      [IN] telux::common::ServiceStatus status : L2tp manager service status.
-
- RETURN VALUE    None
-
-======================================================================*/
-
-void taf_L2tpAdaptor::onInitComplete(telux::common::ServiceStatus status)
-{
-    PA_DEBUG("Enter onInitComplete in PA");
-
-    std::lock_guard<std::mutex> lock(mMutex);
-    IsSubSystemStatusUpdated = true;
-    conVar.notify_all();
 }
 
 /*======================================================================

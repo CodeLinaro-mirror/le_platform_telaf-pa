@@ -4,6 +4,7 @@
  */
 
 
+#include <set>
 #include "taf_pa_net.hpp"
 #include "taf_pa_socks.hpp"
 #include "taf_pa_vlan.hpp"
@@ -18,13 +19,7 @@
 class taf_NetAdaptor
 {
         public:
-            taf_NetAdaptor() {};
-            ~taf_NetAdaptor() {};
-
-            void Init(void);
-
             static taf_NetAdaptor &getInstance();
-            void onInitComplete(telux::common::ServiceStatus status);
 
             pa_result_t initialize();
 
@@ -51,23 +46,63 @@ pa_result_t taf_NetAdaptor::initialize()
 
     auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
     phoneManager = phoneFactory.getPhoneManager();
-    //  Check if telephony subsystem is ready
-    bool PhSubSystemStatus = phoneManager->isSubsystemReady();
-
-    if (!PhSubSystemStatus) {
-        PA_INFO("Wait telephony subsystem  to be ready...");
-        std::future<bool> f = phoneManager->onSubsystemReady();
-        //  Wait until the subsystem is ready.
-        PhSubSystemStatus = f.get();
-    }
-
-    PA_INFO("-------waiting result is OK");
-    if(!PhSubSystemStatus)
-    {
-        PA_ERROR("Failed to init telephony subsystem");
+    if (!phoneManager) {
+        PA_CRIT("Failed to get phone manager");
         return PA_FAULT;
     }
-    return PA_OK;
+
+    telux::common::ServiceStatus phoneMgrStatus = phoneManager->getServiceStatus();
+
+    if (phoneMgrStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+        PA_INFO("Telephony subsystem is not ready, waiting for it to be ready...");
+
+        auto phoneMgrPromPtr =
+            std::make_shared<std::promise<telux::common::ServiceStatus>>();
+
+        phoneManager = phoneFactory.getPhoneManager(
+            [phoneMgrPromPtr](telux::common::ServiceStatus status) {
+                PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
+                try {
+                    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                        phoneMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_AVAILABLE);
+                    } else {
+                        phoneMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_FAILED);
+                    }
+                } catch (const std::exception &e) {
+                    PA_ERROR("Exception setting phone manager promise: %s", e.what());
+                } catch (...) {
+                    PA_ERROR("Unknown error setting phone manager promise");
+                }
+            });
+
+        if (!phoneManager) {
+            PA_CRIT("Failed to get phone manager with init callback");
+            return PA_FAULT;
+        }
+
+        std::future<telux::common::ServiceStatus> initFuture =
+            phoneMgrPromPtr->get_future();
+        std::future_status waitStatus =
+            initFuture.wait_for(std::chrono::seconds(30));
+
+        if (std::future_status::timeout == waitStatus) {
+            PA_CRIT("Timeout waiting for telephony subsystem");
+            return PA_TIMEOUT;
+        } else {
+            phoneMgrStatus = initFuture.get();
+        }
+    }
+
+    if (phoneMgrStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+        PA_INFO("Telephony subsystem is ready.");
+        return PA_OK;
+    } else {
+        PA_CRIT("Failed to init telephony subsystem, status=%d",
+                static_cast<int>(phoneMgrStatus));
+        return PA_FAULT;
+    }
 }
 
 pa_result_t taf_pa_net_Init()
@@ -187,4 +222,54 @@ pa_result_t taf_pa_net_GetSlotIdFromPhoneId
     PA_DEBUG("result =%d, slotId = %d, phoneId = %d",result, *slotIdPtr, phoneId);
 
     return result;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Return supported slot IDs
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
+{
+    slotIds.clear();
+
+    auto &pNetAdaptor = taf_NetAdaptor::getInstance();
+    auto phoneMgr = pNetAdaptor.getPhoneManager();
+    if (!phoneMgr)
+    {
+        PA_ERROR("Phone manager is NULL");
+        return PA_FAULT;
+    }
+
+    // Get phone IDs from TelSDK
+    std::vector<int> phoneIds;
+    telux::common::Status status = phoneMgr->getPhoneIds(phoneIds);
+    if (status != telux::common::Status::SUCCESS)
+    {
+        PA_ERROR("getPhoneIds failed, status=%d", static_cast<int>(status));
+        return PA_FAULT;
+    }
+
+    // Convert to slot IDs and deduplicate
+    std::set<int> uniqueSlots;
+    for (int phoneId : phoneIds)
+    {
+        int slot = phoneMgr->getSlotIdFromPhoneId(phoneId);
+        if (slot > 0)
+        {
+            uniqueSlots.insert(slot);
+        }
+        else
+        {
+            PA_WARN("getSlotIdFromPhoneId(%d) returned %d", phoneId, slot);
+        }
+    }
+
+    for (int slot : uniqueSlots)
+    {
+        slotIds.push_back(static_cast<uint8_t>(slot));
+    }
+
+    PA_INFO("Supported slots count: %zu", slotIds.size());
+    return PA_OK;
 }

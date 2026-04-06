@@ -92,42 +92,53 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
         }
     }
 
-    // Promise and future used for synchronization.
-    std::promise<bool> dataCallBitratePromise = std::promise<bool>();
-    std::future<bool> fut = dataCallBitratePromise.get_future();
+    // Create shared promise to ensure it outlives this function scope
+    auto promisePtr = std::make_shared<std::promise<bool>>();
+    std::future<bool> fut = promisePtr->get_future();
     std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
 
-    // requestDataCallBitRate callback lambda
-    auto respCb = [&bitRate, &dataCallBitratePromise, this](telux::data::BitRateInfo &cbkBitRate,
-                                                                telux::common::ErrorCode errorCode)
+    // requestDataCallBitRate callback lambda - captures promisePtr by value
+    auto respCb = [&bitRate, promisePtr](telux::data::BitRateInfo &cbkBitRate,
+                                          telux::common::ErrorCode errorCode)
     {
         SET_SDK_THREAD_NAME();
         bool bResult = false;
-        if (telux::common::ErrorCode::SUCCESS == errorCode)
+        try
         {
-            // Success
-            PA_DEBUG("maxRxRate: %" PRIu64 "", cbkBitRate.maxRxRate);
-            PA_DEBUG("maxTxRate: %" PRIu64 "", cbkBitRate.maxTxRate);
-            bitRate.maxRxRate = cbkBitRate.maxRxRate;
-            bitRate.maxTxRate = cbkBitRate.maxTxRate;
-            bResult = true;
+            if (telux::common::ErrorCode::SUCCESS == errorCode)
+            {
+                // Success
+                PA_DEBUG("maxRxRate: %" PRIu64 "", cbkBitRate.maxRxRate);
+                PA_DEBUG("maxTxRate: %" PRIu64 "", cbkBitRate.maxTxRate);
+                bitRate.maxRxRate = cbkBitRate.maxRxRate;
+                bitRate.maxTxRate = cbkBitRate.maxTxRate;
+                bResult = true;
+            }
+            else
+            {
+                PA_WARN("requestDataCallBitRateCb error: %d", static_cast<int>(errorCode));
+            }
+            promisePtr->set_value(bResult);
         }
-        else
+        catch (const std::future_error& e)
         {
-            PA_WARN("requestDataCallBitRateCb error: %d", static_cast<int>(errorCode));
+            PA_ERROR("Future error in callback: %s", e.what());
+            // Try to set promise to false to unblock waiting thread
+            // suppress this secondary exception since already logged the primary error
+            try { promisePtr->set_value(false); } catch(...) {}
         }
-        if (bWaitingForDataCallBitratePromise_.load())
+        catch (const std::exception& e)
         {
-            PA_DEBUG("dataCallBitratePromise.set_value(%s)", bResult ? "true" : "false");
-            dataCallBitratePromise.set_value(bResult);
+            PA_ERROR("Exception in callback: %s", e.what());
+            try { promisePtr->set_value(false); } catch(...) {}
         }
-        else
+        catch (...)
         {
-            PA_DEBUG("dataCallBitratePromise.set_value() skipped");
+            PA_ERROR("Unknown error in requestDataCallBitRate callback.");
+            try { promisePtr->set_value(false); } catch(...) {}
         }
     };
-    // Mark that future is waiting for promise
-    bWaitingForDataCallBitratePromise_.store(true);
+
     telux::common::Status status = dataCall->requestDataCallBitRate(respCb);
     if (telux::common::Status::SUCCESS == status)
     {
@@ -135,8 +146,6 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
         std::future_status waitStatus = fut.wait_for(span);
         if (std::future_status::timeout == waitStatus)
         {
-            // Mark that future is not waiting for promise
-            bWaitingForDataCallBitratePromise_.store(false);
             PA_ERROR("requestDataCallBitRate promise timeout");
             return PA_TIMEOUT;
         }
@@ -144,16 +153,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
         FUTURE_GET_RET_VAL(fut, bFutResult, PA_FAULT);
         if (bFutResult)
         {
-            // Mark that future is not waiting for promise
-            bWaitingForDataCallBitratePromise_.store(false);
             PA_DEBUG("requestDataCallBitRate SUCCESS");
             return PA_OK;
         }
     }
     else
     {
-        // Mark that future is not waiting for promise
-        bWaitingForDataCallBitratePromise_.store(false);
         PA_WARN("requestDataCallBitRate failed: %d", static_cast<int>(status));
     }
     PA_DEBUG("requestDataCallBitRate failed");
@@ -439,4 +444,60 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onServiceStatusChange
     SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(slotId_);
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.SetSubsysState(slotIdPa, sState, true);
+}
+
+void taf::pa::data::TafPaTeluxDataConnectionListener::onThroughputInfoAvailable
+(
+    const std::vector<telux::data::ThroughputInfo> &info
+)
+{
+    SET_SDK_THREAD_NAME();
+    PA_DEBUG("Slot ID: %d, Throughput info count: %zu", TO_INT(slotId_), info.size());
+
+    // Early return if no data
+    if (info.empty())
+    {
+        PA_DEBUG("No throughput info received, returning");
+        return;
+    }
+
+    // Convert slot ID
+    SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(slotId_);
+
+    // Get phone ID
+    PhoneId_e phoneId;
+    auto &teluxPaData = TafPaTeluxData::GetInstance();
+    pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(slotIdPa, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result,
+                            "PaGetPhoneIdFromSlotId err: %d. Dropping event", result);
+
+    // Convert throughput info from SDK to PA format
+    std::vector<ThroughputInfo_t> paThroughputInfoList;
+    paThroughputInfoList.reserve(info.size()); // Pre-allocate for efficiency
+
+    for (const auto &sdkInfo : info)
+    {
+        ThroughputInfo_t paInfo;
+        taf::pa::data::Utils::ConvertThroughputInfo(sdkInfo, paInfo);
+
+        // Add phone ID (ConvertThroughputInfo sets slotId from sdkInfo.slot)
+        paInfo.phoneId = phoneId;
+
+        paThroughputInfoList.push_back(paInfo);
+
+        // Detailed logging for debugging
+        PA_DEBUG("Profile ID: %d, Slot: %d",
+                 TO_INT(paInfo.profileId), TO_INT(paInfo.slotId));
+        PA_DEBUG("  UL: throughput=%u kbps, maxThroughput=%u kbps, queueSize=%u bytes",
+                 paInfo.ulThroughput.throughput,
+                 paInfo.ulThroughput.maxThroughput,
+                 paInfo.ulThroughput.queueSize);
+        PA_DEBUG("  DL: throughput=%u kbps",
+                 paInfo.dlThroughput.throughput);
+    }
+
+    // Send to registered clients
+    PA_INFO("Sending %zu throughput info entries to clients", paThroughputInfoList.size());
+    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+    teluxPaDataConn.PaSendThroughputEventInfoToClients(paThroughputInfoList);
 }

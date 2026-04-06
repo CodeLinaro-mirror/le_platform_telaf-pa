@@ -7,6 +7,7 @@
 #define TAF_PROP_RADIO_H
 
 #include "taf_prop_common.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

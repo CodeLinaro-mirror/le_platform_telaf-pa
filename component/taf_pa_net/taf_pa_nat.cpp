@@ -20,13 +20,7 @@ using namespace telux::common;
 class taf_NatAdaptor
 {
         public:
-            taf_NatAdaptor() {};
-            ~taf_NatAdaptor() {};
-
-            void Init(void);
-
             static taf_NatAdaptor &getInstance();
-            void onInitComplete(telux::common::ServiceStatus status);
 
             pa_result_t initialize();
             
@@ -36,10 +30,6 @@ class taf_NatAdaptor
             }
 
             std::shared_ptr<telux::data::net::INatManager> staticNatManager = nullptr;
-            bool IsSubSystemStatusUpdated=false;
-            std::mutex mMutex;
-            std::condition_variable conVar;
-
 };
 
 taf_NatAdaptor &taf_NatAdaptor::getInstance
@@ -53,61 +43,74 @@ taf_NatAdaptor &taf_NatAdaptor::getInstance
 
 pa_result_t taf_NatAdaptor::initialize()
 {
-    bool isReady = false;
+    PA_INFO("Initializing NAT adaptor");
+    auto &dataFactory = telux::data::DataFactory::getInstance();
 
-    if (staticNatManager == nullptr)
-    {
-        auto &dataFactory = telux::data::DataFactory::getInstance();
-        auto initCb = std::bind(&taf_NatAdaptor::onInitComplete, this, std::placeholders::_1);
-        staticNatManager = dataFactory.getNatManager(telux::data::OperationType::DATA_LOCAL, initCb);
-    
+    if (staticNatManager == nullptr) {
+        staticNatManager = dataFactory.getNatManager(
+            telux::data::OperationType::DATA_LOCAL);
     }
 
-    if(staticNatManager == nullptr )
-    {
+    if (staticNatManager == nullptr) {
         PA_INFO("Nat manager initialize error...");
-        return PA_FAULT ;
+        return PA_FAULT;
     }
 
-    // 6. Check if subsystem status
-    std::unique_lock<std::mutex> lck(mMutex);
+    telux::common::ServiceStatus subSystemStatus =
+        staticNatManager->getServiceStatus();
 
-    telux::common::ServiceStatus subSystemStatus = staticNatManager->getServiceStatus();
+    if (subSystemStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+        PA_INFO("NAT subsystem is not ready, waiting for it to be ready...");
 
-    if (subSystemStatus == telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
-    {
-        PA_INFO("Nat manager initialize...");
-        conVar.wait(lck, [this]{return this->IsSubSystemStatusUpdated;});
-        subSystemStatus = staticNatManager->getServiceStatus();
+        auto natMgrPromPtr =
+            std::make_shared<std::promise<telux::common::ServiceStatus>>();
+
+        staticNatManager = dataFactory.getNatManager(
+            telux::data::OperationType::DATA_LOCAL,
+            [natMgrPromPtr](telux::common::ServiceStatus status) {
+                PA_INFO("Getting status:%d from NAT manager", static_cast<int>(status));
+                try {
+                    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                        natMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_AVAILABLE);
+                    } else {
+                        natMgrPromPtr->set_value(
+                            telux::common::ServiceStatus::SERVICE_FAILED);
+                    }
+                } catch (const std::exception &e) {
+                    PA_ERROR("Exception setting NAT manager promise: %s", e.what());
+                } catch (...) {
+                    PA_ERROR("Unknown error setting NAT manager promise");
+                }
+            });
+
+        if (staticNatManager == nullptr) {
+            PA_ERROR("Failed to get NAT manager with init callback");
+            return PA_FAULT;
+        }
+
+        std::future<telux::common::ServiceStatus> initFuture =
+            natMgrPromPtr->get_future();
+        std::future_status waitStatus =
+            initFuture.wait_for(std::chrono::seconds(OPERATION_TIMEOUT));
+
+        if (std::future_status::timeout == waitStatus) {
+            PA_ERROR("Timeout waiting for NAT subsystem");
+            return PA_TIMEOUT;
+        } else {
+            subSystemStatus = initFuture.get();
+        }
     }
 
-    //At this point, initialization should be either AVAILABLE or FAIL
-    if (subSystemStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
-    {
-        PA_ERROR("SNAT Manager initialization failed");
+    if (subSystemStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+        PA_INFO("NAT component is ready...");
+        return PA_OK;
+    } else {
+        PA_CRIT("Unable to init NAT component, status=%d",
+                static_cast<int>(subSystemStatus));
         staticNatManager = nullptr;
-        return PA_FAULT ;
+        return PA_FAULT;
     }
-
-    isReady = staticNatManager->isSubsystemReady();
-
-    if(isReady == false)
-    {
-        PA_INFO("Nat component is not ready, wait for it unconditionally...");
-        std::future<bool> readyFunc = staticNatManager->onSubsystemReady();
-        isReady = readyFunc.get();
-    }
-
-    if(isReady)
-    {
-        PA_INFO("nat component is ready...");
-    }
-    else
-    {
-        PA_CRIT("unable to init nat component!");
-    }
-
-    return PA_OK;
 }
 
 pa_result_t taf_pa_nat_Init()
@@ -127,26 +130,6 @@ pa_result_t taf_pa_nat_Init()
     }
 
     return PA_OK;
-}
-
-/*======================================================================
-
- FUNCTION        taf_Nat::onInitComplete
-
- DESCRIPTION     Call back function of natManager.
-
- DEPENDENCIES    The initialization of Nat.
-
- PARAMETERS      [IN] telux::common::ServiceStatus status : Nat manager service status.
-
- RETURN VALUE    None
-
-======================================================================*/
-void taf_NatAdaptor::onInitComplete(telux::common::ServiceStatus status)
-{
-    std::lock_guard<std::mutex> lock(mMutex);
-    IsSubSystemStatusUpdated = true;
-    conVar.notify_all();
 }
 
 //--------------------------------------------------------------------------------------------------

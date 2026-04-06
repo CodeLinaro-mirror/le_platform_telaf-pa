@@ -3,69 +3,65 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_PROP_FSCRYPT_H
-#define TAF_PROP_FSCRYPT_H
-
-#include "legato.h"
-#include "taf_pa_fscrypt.h"
+#include "taf_prop_fscrypt.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Get a key file reference by key name.
+ * PA initialization.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_prop_fsc_GetKey
+void taf_prop_fsc_Init
 (
-    le_msg_SessionRef_t clientSessionRef,   ///< [IN] Client session reference
+    void* cryptoFunc
+)
+{
+    NS_INFO("Telaf fscrypt noship stub initialized.");
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get a key file reference by directory name.
+ */
+//--------------------------------------------------------------------------------------------------
+ns_result_t taf_prop_fsc_GetKey
+(
+    int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
     KeyMgt_KeyFileRef_t* keyFileRefPtr,     ///< [OUT] Key file reference.
     uint8_t* key,                           ///< [OUT] Raw key
     size_t keyLen                           ///< [OUT] Length of raw key
-);
+)
+{
+    return NS_NOT_IMPLEMENTED;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Create AES key and return a key file reference.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_prop_fsc_GenerateAesKey
+ns_result_t taf_prop_fsc_GenerateAesKey
 (
-    le_msg_SessionRef_t clientSessionRef,   ///< [IN] Client session reference
+    int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
     KeyMgt_KeyFileRef_t* keyFileRefPtr,     ///< [OUT] Key file reference
     uint8_t* key,                           ///< [OUT] Raw key
     size_t keyLen                           ///< [OUT] Length of raw key
-);
+)
+{
+    return NS_NOT_IMPLEMENTED;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Delete a key file.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_prop_fsc_DeleteKey
+ns_result_t taf_prop_fsc_DeleteKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
-    KeyMgt_KeyFileRef_t keyFileRef        ///< [IN] Key file reference
-);
-
-//--------------------------------------------------------------------------------------------------
-/**
- * The FSCrypt initialization function.
- */
-//--------------------------------------------------------------------------------------------------
-LE_SHARED void taf_prop_fsc_Init
-(
-    void* cryptoFunc
-);
-
-//--------------------------------------------------------------------------------------------------
-/**
- * The FSCrypt component initialization function.
- */
-//--------------------------------------------------------------------------------------------------
-LE_SHARED void taf_prop_fsc_Component_Init
-(
-    void
-);
-
-#endif // TAF_PROP_FSCRYPT_H
+    int clientSessionFd,                    ///< [IN] Client session Fd
+    KeyMgt_KeyFileRef_t keyFileRef          ///< [IN] Key file reference
+)
+{
+    return NS_NOT_IMPLEMENTED;
+}

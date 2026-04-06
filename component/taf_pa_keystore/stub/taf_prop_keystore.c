@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "legato.h"
-#include "interfaces.h"
 #include "taf_prop_keystore.h"
 
 //--------------------------------------------------------------------------------------------------
@@ -19,6 +17,7 @@ void taf_prop_ks_Component_Init
     void
 )
 {
+    NS_INFO("Telaf keyStore noship stub initialized.");
     return;
 }
 
@@ -31,12 +30,12 @@ void taf_prop_ks_Component_Init
  *      LE_FAULT if there was some other error.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_Init
+ns_result_t taf_prop_ks_Init
 (
     void
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -46,20 +45,21 @@ le_result_t taf_prop_ks_Init
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_GenerateRsaEncKey
+ns_result_t taf_prop_ks_GenerateRsaEncKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
-    taf_ks_RsaKeySize_t keySize,          ///< [IN] Key Size, ignored if impData is provided
+    taf_pa_ks_RsaKeySize_t keySize,       ///< [IN] Key Size, ignored if impData is provided
     taf_pa_ks_EncPurpose_t purpose,       ///< [IN] Encryption purpose
-    taf_ks_RsaEncPadding_t padding,       ///< [IN] RSA encryption padding type
-    le_dls_List_t* tagListPtr,            ///< [IN] List of taf_pa_ks_Tag_t
+    taf_pa_ks_RsaEncPadding_t padding,    ///< [IN] RSA encryption padding type
+    const taf_pa_ks_Tag_t** tagListPtr,   ///< [IN] List of taf_pa_ks_Tag_t
+    size_t tagListSize,                   ///< [IN] number of taf_pa_ks_Tag_t
     const uint8_t* impDataPtr,            ///< [IN] Imported key data
     size_t impDataSize,                   ///< [IN] less than TAF_KS_MAX_PACKET_SIZE
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -69,20 +69,21 @@ le_result_t taf_prop_ks_GenerateRsaEncKey
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_GenerateRsaSigKey
+ns_result_t taf_prop_ks_GenerateRsaSigKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
-    taf_ks_RsaKeySize_t keySize,          ///< [IN] Key Size, ignored if impData is provided
+    taf_pa_ks_RsaKeySize_t keySize,       ///< [IN] Key Size, ignored if impData is provided
     taf_pa_ks_SigPurpose_t purpose,       ///< [IN] Signature purpose
-    taf_ks_RsaSigPadding_t padding,       ///< [IN] RSA signature padding type
-    le_dls_List_t* tagListPtr,            ///< [IN] List of taf_pa_ks_Tag_t
+    taf_pa_ks_RsaSigPadding_t padding,    ///< [IN] RSA signature padding type
+    const taf_pa_ks_Tag_t** tagListPtr,   ///< [IN] List of taf_pa_ks_Tag_t
+    size_t tagListSize,                   ///< [IN] number of taf_pa_ks_Tag_t
     const uint8_t* impDataPtr,            ///< [IN] Imported key data
     size_t impDataSize,                   ///< [IN] less than TAF_KS_MAX_PACKET_SIZE
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -92,20 +93,21 @@ le_result_t taf_prop_ks_GenerateRsaSigKey
  * The impData must be PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_GenerateEcdsaKey
+ns_result_t taf_prop_ks_GenerateEcdsaKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
-    taf_ks_EccKeySize_t keySize,          ///< [IN] ECC curve, ignored if impData is provided
+    taf_pa_ks_EccKeySize_t keySize,       ///< [IN] ECC curve, ignored if impData is provided
     taf_pa_ks_SigPurpose_t purpose,       ///< [IN] Signature purpose
-    taf_ks_Digest_t digest,               ///< [IN] Digest
-    le_dls_List_t* tagListPtr,            ///< [IN] List of taf_pa_ks_Tag_t
+    taf_pa_ks_Digest_t digest,            ///< [IN] Digest
+    const taf_pa_ks_Tag_t** tagListPtr,   ///< [IN] List of taf_pa_ks_Tag_t
+    size_t tagListSize,                   ///< [IN] number of taf_pa_ks_Tag_t
     const uint8_t* impDataPtr,            ///< [IN] Imported key data
     size_t impDataSize,                   ///< [IN] less than TAF_KS_MAX_PACKET_SIZE
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -115,20 +117,21 @@ le_result_t taf_prop_ks_GenerateEcdsaKey
  * The impData must be raw key bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_GenerateAesKey
+ns_result_t taf_prop_ks_GenerateAesKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
-    taf_ks_AesKeySize_t keySize,          ///< [IN] AES key size, ignored if impData is provided
+    taf_pa_ks_AesKeySize_t keySize,       ///< [IN] AES key size, ignored if impData is provided
     taf_pa_ks_EncPurpose_t purpose,       ///< [IN] Encryption purpose
-    taf_ks_AesBlockMode_t mode,           ///< [IN] AES block mode
-    le_dls_List_t* tagListPtr,            ///< [IN] List of taf_pa_ks_Tag_t
+    taf_pa_ks_AesBlockMode_t mode,        ///< [IN] AES block mode
+    const taf_pa_ks_Tag_t** tagListPtr,   ///< [IN] List of taf_pa_ks_Tag_t
+    size_t tagListSize,                   ///< [IN] number of taf_pa_ks_Tag_t
     const uint8_t* impDataPtr,            ///< [IN] Imported key data
     size_t impDataSize,                   ///< [IN] less than TAF_KS_MAX_PACKET_SIZE
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -138,20 +141,21 @@ le_result_t taf_prop_ks_GenerateAesKey
  * Currently only digest DIGEST_SHA2_256 is supported. The impData must be raw key bytes if provided
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_GenerateHmacKey
+ns_result_t taf_prop_ks_GenerateHmacKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
     uint32_t keySize,                     ///< [IN] HMAC Key Size, ignored if impData is provided
     taf_pa_ks_SigPurpose_t purpose,       ///< [IN] Signature purpose
-    taf_ks_Digest_t digest,               ///< [IN] digest
-    le_dls_List_t* tagListPtr,            ///< [IN] List of taf_pa_ks_Tag_t
+    taf_pa_ks_Digest_t digest,            ///< [IN] digest
+    const taf_pa_ks_Tag_t** tagListPtr,   ///< [IN] List of taf_pa_ks_Tag_t
+    size_t tagListSize,                   ///< [IN] number of taf_pa_ks_Tag_t
     const uint8_t* impDataPtr,            ///< [IN] Imported key data
     size_t impDataSize,                   ///< [IN] less than TAF_KS_MAX_PACKET_SIZE
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -159,9 +163,9 @@ le_result_t taf_prop_ks_GenerateHmacKey
  * Export a key into specified key data format.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_prop_ks_ExportKey
+ns_result_t taf_prop_ks_ExportKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
     const uint8_t* appDataPtr,            ///< [IN] Application data
     size_t appDataSize,                   ///< [IN]
@@ -169,7 +173,7 @@ LE_SHARED le_result_t taf_prop_ks_ExportKey
     size_t* expDataSizePtr                ///< [INOUT]
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -177,16 +181,16 @@ LE_SHARED le_result_t taf_prop_ks_ExportKey
  * Share a key.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_prop_ks_ShareKey
+ns_result_t taf_prop_ks_ShareKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
-    taf_ks_KeyUsage_t keyCap,             ///< [IN] Shared capability
-    taf_ks_AppCapMask_t appCap,           ///< [IN] Shared application capability.
+    taf_pa_ks_KeyUsage_t keyCap,          ///< [IN] Shared capability
+    uint32_t appCap,                      ///< [IN] Shared application capability.
     const char* appName                   ///< [IN] Shared application name
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -194,13 +198,13 @@ LE_SHARED le_result_t taf_prop_ks_ShareKey
  * Delete a key file by key name.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_DeleteKey
+ns_result_t taf_prop_ks_DeleteKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef        ///< [IN] Key file reference
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -208,14 +212,14 @@ le_result_t taf_prop_ks_DeleteKey
  * Get a key file reference by key name.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_GetKey
+ns_result_t taf_prop_ks_GetKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference.
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -223,15 +227,15 @@ le_result_t taf_prop_ks_GetKey
  * Get a shared key file reference by key name and app name.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_GetSharedKey
+ns_result_t taf_prop_ks_GetSharedKey
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
     const char* appName,                  ///< [IN] App Name
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference.
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -239,14 +243,14 @@ le_result_t taf_prop_ks_GetSharedKey
  * Cancel key sharing to an application.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_CancelKeySharing
+ns_result_t taf_prop_ks_CancelKeySharing
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
     const char* appName                   ///< [IN] Shared application name
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -254,14 +258,14 @@ le_result_t taf_prop_ks_CancelKeySharing
  * Get a shared app list for a shared key.
  */
 //--------------------------------------------------------------------------------------------------
-LE_SHARED le_result_t taf_prop_ks_GetSharedAppList
+ns_result_t taf_prop_ks_GetSharedAppList
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
     taf_pa_ks_sharedAppList_t* appListPtr ///< [OUT] Shared app list.
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -269,14 +273,14 @@ LE_SHARED le_result_t taf_prop_ks_GetSharedAppList
  * Get key usage
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_GetKeyUsage
+ns_result_t taf_prop_ks_GetKeyUsage
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
-    taf_ks_KeyUsage_t*    keyUsagePtr     ///< [OUT] Key usage
+    taf_pa_ks_KeyUsage_t*    keyUsagePtr  ///< [OUT] Key usage
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -284,16 +288,17 @@ le_result_t taf_prop_ks_GetKeyUsage
  * Start the session for the given crypto operation.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_CryptoSessionStart
+ns_result_t taf_prop_ks_CryptoSessionStart
 (
-    le_msg_SessionRef_t clientSessionRef, ///< [IN] Client session reference
+    int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t     keyFileRef,   ///< [IN] Key file reference
-    taf_ks_CryptoPurpose_t  cryptoPurpose,///< [IN] Crypto purpose
-    le_dls_List_t*           paramListPtr,///< [IN] List of taf_pa_ks_Param_t
+    taf_pa_ks_CryptoPurpose_t  cryptoPurpose,///< [IN] Crypto purpose
+    const taf_pa_ks_Param_t** paramListPtr,  ///< [IN] List of taf_pa_ks_Param_t
+    size_t paramListSize,                    ///< [IN] number of taf_pa_ks_Param_t
     uint64_t*                 opHandlePtr ///< [OUT]Cyrpto operation handle
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -304,7 +309,7 @@ le_result_t taf_prop_ks_CryptoSessionStart
  * This API can be called for multiple times but must before CryptoSessionProcess API.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_CryptoSessionProcessAead
+ns_result_t taf_prop_ks_CryptoSessionProcessAead
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] Data buffer to hold the AEAD data
@@ -312,7 +317,7 @@ le_result_t taf_prop_ks_CryptoSessionProcessAead
 
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -322,7 +327,7 @@ le_result_t taf_prop_ks_CryptoSessionProcessAead
  * CryptoEndSession API is called.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_CryptoSessionProcess
+ns_result_t taf_prop_ks_CryptoSessionProcess
 (
     uint64_t           opHandle,          ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] InputData can be one of below 4 cases:
@@ -338,7 +343,7 @@ le_result_t taf_prop_ks_CryptoSessionProcess
     size_t*        outputDataSizePtr      ///< [INOUT]
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -346,7 +351,7 @@ le_result_t taf_prop_ks_CryptoSessionProcess
  * Finalizes and stop a crypto operation session started with CryptoStartSession API.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_CryptoSessionEnd
+ns_result_t taf_prop_ks_CryptoSessionEnd
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] Signature to verify for verification session
@@ -360,7 +365,7 @@ le_result_t taf_prop_ks_CryptoSessionEnd
     size_t*        outputDataSizePtr      ///< [INOUT]
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -368,12 +373,12 @@ le_result_t taf_prop_ks_CryptoSessionEnd
  * Abort crypto operation session started with CryptoStartSession API.
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_CryptoSessionAbort
+ns_result_t taf_prop_ks_CryptoSessionAbort
 (
     uint64_t                opHandle      ///< [IN] Cyrpto operation handle
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -381,12 +386,12 @@ le_result_t taf_prop_ks_CryptoSessionAbort
  * Register Key creation handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_RegKeyCreationHandler
+ns_result_t taf_prop_ks_RegKeyCreationHandler
 (
     taf_pa_ks_KeyCreationHandler_t handlerFunc
 )
 {
-    return LE_NOT_IMPLEMENTED;
+    return NS_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -394,20 +399,10 @@ le_result_t taf_prop_ks_RegKeyCreationHandler
  * Register Key sharing state change handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-le_result_t taf_prop_ks_RegKeySharingHandler
+ns_result_t taf_prop_ks_RegKeySharingHandler
 (
     taf_pa_ks_KeySharingHandler_t handlerFunc
 )
 {
-    return LE_NOT_IMPLEMENTED;
-}
-
-//--------------------------------------------------------------------------------------------------
-/**
- * The PA initialization function.
- */
-//--------------------------------------------------------------------------------------------------
-COMPONENT_INIT
-{
-    LE_INFO("Telaf keyStore noship stub initialized.");
+    return NS_NOT_IMPLEMENTED;
 }

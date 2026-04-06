@@ -94,6 +94,16 @@ enum PaChannelType{
     RIGHT = (1 << 1),
 };
 
+/**
+ * The PA audio subsystem state.
+ */
+enum class SubsystemState_e
+{
+    AVAILABLE,   ///< Subsystem available.
+    UNAVAILABLE, ///< Subsystem unavailable.
+    FAILED       ///< Subsystem initialization failed.
+};
+
 struct PaStreamConfig {
 
     /** @ref PaStreamType - defines purpose of the stream */
@@ -157,7 +167,7 @@ using taf_pa_audio_cb = std::function<void(
 )>;
 
 /**
- * PaStreamBuffer used for 
+ * PaStreamBuffer used for
  */
 class IPaStreamBuffer {
  public:
@@ -325,6 +335,40 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_audio_registerDtmfListener(
 
 PA_SHARED PA_WEAK pa_result_t taf_pa_audio_deregisterDtmfListener(
     std::weak_ptr<IPaDtmfListener> dtmfListener
+);
+
+/**
+ * The audio subsystem state callback.
+ * @param [in] subsystemState     The subsystem state.
+ * @param [in] context            The app provided context.
+ */
+using taf_pa_audio_SubsystemStateChangeCb =
+    std::function<void
+                    (
+                        SubsystemState_e      subsystemState,
+                        std::shared_ptr<void> context
+                    )>;
+
+/**
+ * Register audio subsystem state events callback
+ */
+PA_SHARED pa_result_t AddSubsystemStateChangeListener
+(
+    taf_pa_audio_SubsystemStateChangeCb callBack,
+    ///< [IN] The callback function.
+    std::shared_ptr<void> context,
+    ///< [IN] The context pointer.
+    uint16_t &id
+    ///< [OUT] The ID of the registered callback.
+);
+
+/**
+ * Deregister a previously registered subsystem state change callback
+ */
+PA_SHARED pa_result_t RemoveSubsystemStateChangeListener
+(
+    uint16_t id
+        ///< [IN] The ID of the registered callback.
 );
 
 }

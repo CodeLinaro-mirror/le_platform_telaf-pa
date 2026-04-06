@@ -800,3 +800,67 @@ pa_result_t taf::pa::data::DeregisterSDKCallbacks()
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     return teluxPaDataConn.PaDeregisterDataConnCallbacks();
 }
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the throughput report interval.
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::SetThroughputReportInterval
+(
+    PhoneId_e phoneId,
+    uint32_t reportInterval
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+    return teluxPaDataConn.PaSetThroughputReportInterval(phoneId, reportInterval);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the last throughput information for all active profiles.
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::GetLastThroughputInfo
+(
+    PhoneId_e phoneId,
+    std::vector<ThroughputInfo_t> &throughputInfoList
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+    return teluxPaDataConn.PaGetLastThroughputInfo(phoneId, throughputInfoList);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Register throughput events callback.
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::AddThroughputEventsCallback
+(
+    taf_pa_data_ThroughputEventsCb callBack,
+    std::shared_ptr<void> context,
+    uint16_t &id
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+    return teluxPaDataConn.PaAddThroughputEventsCallback(callBack, context, id);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Remove a previously registered throughput events callback.
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf::pa::data::RemoveThroughputEventsCallback
+(
+    uint16_t id
+)
+{
+    PA_DEBUG("PA implementation.");
+    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
+    return teluxPaDataConn.PaRemoveThroughputEventsCallback(id);
+}
