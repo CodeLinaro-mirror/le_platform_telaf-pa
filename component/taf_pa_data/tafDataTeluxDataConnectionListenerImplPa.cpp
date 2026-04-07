@@ -95,7 +95,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
     // Create shared promise to ensure it outlives this function scope
     auto promisePtr = std::make_shared<std::promise<bool>>();
     std::future<bool> fut = promisePtr->get_future();
-    std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
 
     // requestDataCallBitRate callback lambda - captures promisePtr by value
     auto respCb = [&bitRate, promisePtr](telux::data::BitRateInfo &cbkBitRate,

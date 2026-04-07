@@ -221,40 +221,40 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetDefaultProfile
 
     // Define a lambda function to handle the callback and set the promise
     status = dataConnectionManagersMap_[slotId]->getDefaultProfile
-            (
-                telux::data::OperationType::DATA_LOCAL,
-                // Lambda callback - captures promisePtr by value (shared ownership)
-                [promisePtr]
-                (
-                    int profileId, SlotId slotId, telux::common::ErrorCode error
-                )
-                                    {
-                        SET_SDK_THREAD_NAME();
-                        try
-                        {
-                            promisePtr->set_value(std::make_tuple(profileId, slotId, error));
-                        }
-                        catch (const std::future_error& e)
-                        {
-                            PA_ERROR("Future error in callback: %s", e.what());
-                            // Try to set promise to unblock waiting thread
-                            try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
-                                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
-                        }
-                        catch (const std::exception& e)
-                        {
-                                                        PA_ERROR("Exception in callback: %s", e.what());
-                            try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
-                                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
-                        }
-                        catch (...)
-                        {
-                                                        PA_ERROR("Unknown error in getDefaultProfile callback.");
-                            try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
-                                telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
-                        }
-                    }
-            );
+    (
+        telux::data::OperationType::DATA_LOCAL,
+        // Lambda callback - captures promisePtr by value (shared ownership)
+        [promisePtr]
+        (
+            int profileId, SlotId slotId, telux::common::ErrorCode error
+        )
+        {
+            SET_SDK_THREAD_NAME();
+            try
+            {
+                promisePtr->set_value(std::make_tuple(profileId, slotId, error));
+            }
+            catch (const std::future_error& e)
+            {
+                PA_ERROR("Future error in callback: %s", e.what());
+                // Try to set promise to unblock waiting thread
+                try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
+                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+            }
+            catch (const std::exception& e)
+            {
+                PA_ERROR("Exception in callback: %s", e.what());
+                try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
+                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+            }
+            catch (...)
+            {
+                PA_ERROR("Unknown error in getDefaultProfile callback.");
+                try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
+                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+            }
+        }
+    );
     if (telux::common::Status::SUCCESS != status)
     {
         PA_ERROR("getDefaultProfile failed. Status: %d", TO_INT(status));
@@ -264,7 +264,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetDefaultProfile
     // Wait for the callback to complete and capture the results
     PA_DEBUG("Wait for callback..");
 
-    std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = future.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
@@ -372,7 +372,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetDefaultProfile
     // Wait for the callback to complete and capture the results
     PA_DEBUG("Wait for callback..");
 
-    std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
@@ -472,7 +472,7 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
             std::unique_lock<std::mutex> lock(state->mtx);
             bool success = state->cv.wait_for(
                 lock,
-                std::chrono::seconds(taf::pa::SUBSYSTEM_INIT_TIMEOUT),
+                std::chrono::seconds(taf::pa::data::SUBSYSTEM_INIT_TIMEOUT),
                 [&state]() { return state->callbackReceived; }
             );
 
@@ -1289,7 +1289,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
     }
     PA_DEBUG("Wait for callback ...");
 
-    std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
