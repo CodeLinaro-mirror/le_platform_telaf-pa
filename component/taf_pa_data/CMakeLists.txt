@@ -11,15 +11,15 @@ set(OUTPUT_NAME Component_${TARGET_NAME})
 
 # Add sources
 set(TAF_PA_DATA_SOURCES
-    taf_pa_data.cpp
-    taf_pa_data_Utils.cpp
-    taf_pa_data_TeluxDataImpl.cpp
-    taf_pa_data_TeluxDataConnectionImpl.cpp
-    taf_pa_data_TeluxDataConnectionListenerImpl.cpp
-    taf_pa_data_TeluxDataProfileImpl.cpp
-    taf_pa_data_TeluxDataProfileListCallbackImpl.cpp
-    taf_pa_data_TeluxDataProfileListenerImpl.cpp
-    taf_pa_data_TeluxDataServingSysListenerImpl.cpp
+    tafDataPa.cpp
+    tafDataUtilsPa.cpp
+    tafDataTeluxDataImplPa.cpp
+    tafDataTeluxDataConnectionImplPa.cpp
+    tafDataTeluxDataConnectionListenerImplPa.cpp
+    tafDataTeluxDataProfileImplPa.cpp
+    tafDataTeluxDataProfileListCallbackImplPa.cpp
+    tafDataTeluxDataProfileListenerImplPa.cpp
+    tafDataTeluxDataServingSysListenerImplPa.cpp
 )
 
 

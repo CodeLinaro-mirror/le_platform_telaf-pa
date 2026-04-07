@@ -9,8 +9,8 @@
  *
  */
 
-#include "taf_pa_data_Utils.hpp"
-#include "taf_pa_data_TeluxData.hpp"
+#include "tafDataUtilsPa.hpp"
+#include "tafDataTeluxDataPa.hpp"
 
 
 taf::pa::data::TafPaTeluxDataServingSysListener::TafPaTeluxDataServingSysListener(SlotId slotId)

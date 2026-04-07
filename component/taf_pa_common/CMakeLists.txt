@@ -18,7 +18,7 @@ endif()
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 add_subdirectory(stub)
 
-add_library(${TARGET_NAME} SHARED taf_pa_common.cpp)
+add_library(${TARGET_NAME} SHARED tafCommonPa.cpp)
 set_target_properties(${TARGET_NAME} PROPERTIES
   VERSION ${LIBRARY_VERSION}
   SOVERSION ${LIBRARY_SOVERSION}

@@ -9,8 +9,8 @@
  *
  */
 
-#include "taf_pa_data_Utils.hpp"
-#include "taf_pa_data_TeluxDataProfile.hpp"
+#include "tafDataUtilsPa.hpp"
+#include "tafDataTeluxDataProfilePa.hpp"
 
 void taf::pa::data::TafPaTeluxDataProfileListener::onServiceStatusChange
 (

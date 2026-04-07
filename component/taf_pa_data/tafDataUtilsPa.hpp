@@ -9,10 +9,10 @@
  *
  */
 
-#ifndef __TAF_PA_DATA_UTILS_HPP__
-#define __TAF_PA_DATA_UTILS_HPP__
+#ifndef __TAF_DATA_UTILS_PA_HPP__
+#define __TAF_DATA_UTILS_PA_HPP__
 
-#include "taf_pa_common_defines.hpp"
+#include "tafCommonDefinesPa.hpp"
 #include "tafDataPa.hpp"
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
@@ -134,4 +134,4 @@ class Utils
 } // pa
 } // taf
 
-#endif //__TAF_PA_DATA_UTILS_HPP__
+#endif //__TAF_DATA_UTILS_PA_HPP__

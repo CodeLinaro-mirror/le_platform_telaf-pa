@@ -9,9 +9,9 @@
  *
  */
 
-#include "taf_pa_common_defines.hpp"
-#include "taf_pa_data_Utils.hpp"
-#include "taf_pa_data_TeluxData.hpp"
+#include "tafCommonDefinesPa.hpp"
+#include "tafDataUtilsPa.hpp"
+#include "tafDataTeluxDataPa.hpp"
 #include <telux/common/DeviceConfig.hpp>
 #include <chrono>
 #include <future>

@@ -10,8 +10,8 @@
  *
  */
 
-#ifndef __TAF_PA_DATA_TELUXDATA_SERVINGSYS_HPP__
-#define __TAF_PA_DATA_TELUXDATA_SERVINGSYS_HPP__
+#ifndef __TAF_DATA_TELUX_DATA_SERVING_SYS_PA_HPP__
+#define __TAF_DATA_TELUX_DATA_SERVING_SYS_PA_HPP__
 
 #include "telux/common/CommonDefines.hpp"
 #include "telux/data/DataDefines.hpp"
@@ -44,4 +44,4 @@ private:
 } //pa
 } //taf
 
-#endif //__TAF_PA_DATA_TELUXDATA_SERVINGSYS_HPP__
+#endif //__TAF_DATA_TELUX_DATA_SERVING_SYS_PA_HPP__

@@ -8,8 +8,8 @@
  * @brief      The PA data macros and common defines across subsystems.
  */
 
-#ifndef __TAF_PA_COMMON_DEFINES_HPP__
-#define __TAF_PA_COMMON_DEFINES_HPP__
+#ifndef __TAF_COMMON_DEFINES_PA_HPP__
+#define __TAF_COMMON_DEFINES_PA_HPP__
 
 #include <sstream>   // For std::ostringstream
 #include <string>    // For std::string
@@ -145,4 +145,4 @@ static constexpr int NON_NETWORK_COMMAND_TIMEOUT = 5;
 } // taf
 
 
-#endif //__TAF_PA_COMMON_DEFINES_HPP__
+#endif //__TAF_COMMON_DEFINES_PA_HPP__

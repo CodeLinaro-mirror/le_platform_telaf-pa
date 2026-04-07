@@ -9,8 +9,8 @@
  *
  */
 
-#ifndef __TAF_PA_DATA_TELUXDATAPROFILE_HPP__
-#define __TAF_PA_DATA_TELUXDATAPROFILE_HPP__
+#ifndef __TAF_DATA_TELUX_DATA_PROFILE_PA_HPP__
+#define __TAF_DATA_TELUX_DATA_PROFILE_PA_HPP__
 
 #include "tafDataPa.hpp"
 
@@ -18,8 +18,8 @@
 #include "telux/data/DataFactory.hpp"
 #include "telux/common/CommonDefines.hpp"
 #include "telux/common/Utils.hpp"
-#include "taf_pa_data_TeluxData.hpp"
-#include "taf_pa_data_Utils.hpp"
+#include "tafDataTeluxDataPa.hpp"
+#include "tafDataUtilsPa.hpp"
 
 #include <map>
 #include <atomic>
@@ -251,4 +251,4 @@ namespace data
 } //pa
 } //taf
 
-#endif //__TAF_PA_DATA_TELUXDATAPROFILE_HPP__
+#endif //__TAF_DATA_TELUX_DATA_PROFILE_PA_HPP__

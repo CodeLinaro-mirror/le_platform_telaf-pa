@@ -9,8 +9,8 @@
  *
  */
 
-#ifndef __TAF_PA_DATA_TELUX_DATA_CONNECTION_HPP__
-#define __TAF_PA_DATA_TELUX_DATA_CONNECTION_HPP__
+#ifndef __TAF_DATA_TELUX_DATA_CONNECTION_PA_HPP__
+#define __TAF_DATA_TELUX_DATA_CONNECTION_PA_HPP__
 
 #include "tafDataPa.hpp"
 
@@ -352,4 +352,4 @@ namespace data
 } // pa
 } // taf
 
-#endif //__TAF_PA_DATA_TELUX_DATA_CONNECTION_HPP__
+#endif //__TAF_DATA_TELUX_DATA_CONNECTION_PA_HPP__

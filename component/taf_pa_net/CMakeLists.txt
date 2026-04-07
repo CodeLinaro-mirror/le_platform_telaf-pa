@@ -15,11 +15,11 @@ add_subdirectory(stub)
 # Sources
 # -------------------------------------------------------------------------
 set(TAF_PA_NET_SOURCES
-    taf_pa_net.cpp
-    taf_pa_vlan.cpp
-    taf_pa_socks.cpp
-    taf_pa_l2tp.cpp
-    taf_pa_nat.cpp
+    tafNetPa.cpp
+    tafVlanPa.cpp
+    tafSocksPa.cpp
+    tafL2tpPa.cpp
+    tafNatPa.cpp
 )
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)

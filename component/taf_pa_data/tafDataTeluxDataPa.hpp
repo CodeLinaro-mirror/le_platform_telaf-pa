@@ -10,8 +10,8 @@
  *
  */
 
-#ifndef __TAF_PA_DATA_TELUXDATA__
-#define __TAF_PA_DATA_TELUXDATA__
+#ifndef __TAF_DATA_TELUX_DATA_PA_HPP__
+#define __TAF_DATA_TELUX_DATA_PA_HPP__
 
 #include "tafDataPa.hpp"
 
@@ -19,7 +19,7 @@
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
 #include <telux/tel/PhoneFactory.hpp>
-#include "taf_pa_data_TeluxDataServingSys.hpp"
+#include "tafDataTeluxDataServingSysPa.hpp"
 #include "tafInternalCommonPa.h"
 
 #include <map>
@@ -201,4 +201,4 @@ class TafPaTeluxData
 } //pa
 } //taf
 
-#endif //__TAF_PA_DATA_TELUXDATA__
+#endif //__TAF_DATA_TELUX_DATA_PA_HPP__

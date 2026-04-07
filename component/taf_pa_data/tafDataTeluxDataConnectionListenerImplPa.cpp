@@ -9,9 +9,9 @@
  *
  */
 
-#include "taf_pa_data_Utils.hpp"
-#include "taf_pa_data_TeluxData.hpp"
-#include "taf_pa_data_TeluxDataConnection.hpp"
+#include "tafDataUtilsPa.hpp"
+#include "tafDataTeluxDataPa.hpp"
+#include "tafDataTeluxDataConnectionPa.hpp"
 
 void taf::pa::data::TafPaTeluxDataConnectionListener::fillCallEndReason
 (
