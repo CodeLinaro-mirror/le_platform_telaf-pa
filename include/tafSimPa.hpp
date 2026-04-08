@@ -454,6 +454,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetCarrierName
  *  - TAF_PA_SIM_RESULT_OK on success
  *  - TAF_PA_SIM_RESULT_FAULT on failure
  *
+ * @deprecated This function is deprecated. Use taf_pa_sim_GetHomeNetworkMccMncStr instead.
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetHomeNetworkMccMnc
@@ -461,6 +462,22 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetHomeNetworkMccMnc
     taf_pa_sim_Id_t simId,
     int* mcc,
     int* mnc
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get home network MCC/MNC.
+ * @return
+ *  - TAF_PA_SIM_RESULT_OK on success
+ *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetHomeNetworkMccMncStr
+(
+    taf_pa_sim_Id_t simId,
+    std::string& mcc,
+    std::string& mnc
 );
 
 //--------------------------------------------------------------------------------------------------

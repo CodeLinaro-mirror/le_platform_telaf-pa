@@ -53,18 +53,24 @@ static bool multiSimListenerRegistered = {false};
         }                                                                 \
     };
 
-#define SERVICE_READY(name)                                                      \
+#define SERVICE_READY(name,manager)                                              \
     future<common::ServiceStatus> name##Future = name##Promise->get_future();    \
     future_status name##Status = name##Future.wait_for(                          \
         chrono::seconds(SERVICE_TIMEOUT));                                       \
         common::ServiceStatus name##ServiceStatus;                               \
         if (future_status::timeout == name##Status)                              \
+        {                                                                        \
             PA_CRIT("Timeout for %s.", #name);                                   \
+            manager = nullptr;                                                   \
+        }                                                                        \
         else                                                                     \
         {                                                                        \
             name##ServiceStatus = name##Future.get();                            \
             if (name##ServiceStatus != common::ServiceStatus::SERVICE_AVAILABLE) \
+            {                                                                    \
                 PA_CRIT("%s is not available.", #name);                          \
+                manager = nullptr;                                               \
+            }                                                                    \
             else                                                                 \
                 PA_INFO("%s is available.", #name);                              \
         }
@@ -1002,6 +1008,7 @@ pa_result_t taf_pa_sim_Init()
             if (std::future_status::timeout == waitStatus)
             {
                 PA_CRIT("Timeout waiting for subscription susbsytem");
+                pa.subMgr = nullptr;
             }
             else
             {
@@ -1015,6 +1022,7 @@ pa_result_t taf_pa_sim_Init()
         else
         {
             PA_ERROR("Fail to init subscription subsystem");
+            pa.subMgr = nullptr;
             return TAF_PA_SIM_RESULT_FAULT;
         }
     }
@@ -1056,6 +1064,7 @@ pa_result_t taf_pa_sim_Init()
             if (std::future_status::timeout == waitStatus)
             {
                 PA_CRIT ("Timeout waiting for card susbsytem");
+                pa.cardManager = nullptr;
             }
             else
             {
@@ -1069,6 +1078,7 @@ pa_result_t taf_pa_sim_Init()
         else
         {
             PA_INFO("Fail to init card subsystem");
+            pa.cardManager = nullptr;
             return TAF_PA_SIM_RESULT_FAULT;
         }
     }
@@ -1111,6 +1121,7 @@ pa_result_t taf_pa_sim_Init()
             if (std::future_status::timeout == waitStatus)
             {
                 PA_CRIT ("Timeout waiting for multi sim susbsytem");
+                pa.multiSimMgr = nullptr;
             }
             else
             {
@@ -1161,6 +1172,7 @@ pa_result_t taf_pa_sim_Init()
         else
         {
             PA_INFO("Fail to init multi sim subsystem");
+            pa.multiSimMgr = nullptr;
             return TAF_PA_SIM_RESULT_FAULT;
         }
 
@@ -1182,7 +1194,7 @@ pa_result_t taf_pa_sim_Init()
 
     SERVICE_PROMISE_AND_CALLBACK(phone)
     pa.managers.phone = phoneFactory.getPhoneManager(phoneCallback);
-    SERVICE_READY(phone)
+    SERVICE_READY(phone,pa.managers.phone)
     PA_INFO("SIM platform adaptor initialization is done.");
 
     taf_prop_sim_Result_t result = taf_prop_sim_Init();
@@ -2038,6 +2050,50 @@ pa_result_t taf_pa_sim_GetHomeNetworkMccMnc(taf_pa_sim_Id_t simId,
     return TAF_PA_SIM_RESULT_OK;
 }
 
+pa_result_t taf_pa_sim_GetHomeNetworkMccMncStr(taf_pa_sim_Id_t simId,
+                                            std::string& mcc,std::string& mnc)
+{
+    auto& pa = PlatformAdaptor::GetInstance();
+    telux::common::Status status;
+    taf_pa_sim_info_t* simPtr = NULL;
+    std::shared_ptr<telux::tel::ISubscription> subscription;
+    PA_INFO("taf_pa_sim_GetHomeNetworkMccMnc");
+    simPtr = pa.GetSimContext((taf_pa_sim_Id_t)simId);
+    if(simPtr == nullptr)
+    {
+        PA_INFO("simPtr is nullptr");
+        return TAF_PA_SIM_RESULT_FAULT;
+    }
+    if (!pa.subMgr)
+    {
+        PA_ERROR("Subscription manager is not initialized.");
+        return TAF_PA_SIM_RESULT_FAULT;
+    }
+    if(simId == TAF_PA_DEFAULT_SLOT_ID)
+    {
+        subscription = pa.subMgr->getSubscription(TAF_PA_DEFAULT_SLOT_ID, &status);
+    }
+    else
+    {
+        subscription = pa.subMgr->getSubscription(simId, &status);
+    }
+
+    if (!subscription)
+    {
+        PA_ERROR("subscription is null for slot1");
+    }
+    else
+    {
+        mcc = subscription->getMobileCountryCode();
+        mnc = subscription->getMobileNetworkCode();
+        PA_INFO("*mcc string : %s",mcc.c_str());
+        PA_INFO("*mnc string : %s",mnc.c_str());
+    }
+
+    PA_INFO("Get MCC/MNC successfully.");
+    return TAF_PA_SIM_RESULT_OK;
+}
+
 pa_result_t taf_pa_sim_getSlotCount(int* count)
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -2245,8 +2301,10 @@ pa_result_t taf_pa_sim_IsSubsystemReady
     {
         return TAF_PA_SIM_RESULT_FAULT;
     }
-    PA_INFO("taf_pa_sim_IsSubsystemReady pa.multiSimMgr: %p",pa.multiSimMgr);
-    *isReady= pa.multiSimMgr->isSubsystemReady();
+
+    telux::common::ServiceStatus serviceStatus = pa.multiSimMgr->getServiceStatus();
+    *isReady = (serviceStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE);
+
     PA_INFO("taf_pa_sim_IsSubsystemReady: %d",*isReady);
     return TAF_PA_SIM_RESULT_OK;
 }
