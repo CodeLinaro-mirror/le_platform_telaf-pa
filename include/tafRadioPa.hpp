@@ -493,7 +493,7 @@ typedef struct
 {
     uint8_t plmnIdValid;
     taf_pa_radio_PlmnId_t plmnId;
-    uint16_t cid;
+    uint32_t cid;
     uint16_t lac;
     uint16_t uarfcn;
     uint16_t psc;
@@ -518,10 +518,10 @@ typedef struct
 {
     uint8_t plmnIdValid;
     taf_pa_radio_PlmnId_t plmnId;
-    uint16_t cid;
+    uint32_t cid;
     uint16_t pcid;
     uint16_t tac;
-    uint16_t earfcn;
+    uint32_t earfcn;
     int32_t ta;
     int32_t rssi;
 } taf_pa_radio_LteCellLocationInfo_t;
