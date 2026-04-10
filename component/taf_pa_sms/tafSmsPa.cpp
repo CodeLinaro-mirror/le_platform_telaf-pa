@@ -486,7 +486,11 @@ void SmsPAController::tafSmsListener::onIncomingSms
         return;
     }
 
-    std::string pdu = smsMsg->getPdu();
+    // getRawPdu() returns the ASCII bytes of the hex PDU string (rawPdu_ is constructed as
+    // vector<uint8_t>(hexString.begin(), hexString.end()) in SmsHelper::createSmsMessage).
+    // Reconstructing the hex string via string(begin, end) is equivalent to getPdu().
+    telux::tel::PduBuffer rawPduBytes = smsMsg->getRawPdu();
+    std::string pdu(rawPduBytes.begin(), rawPduBytes.end());
     std::string sender = smsMsg->getSender();
 
     PA_INFO("Received SMS from phone ID %d from: %s", phoneId, sender.c_str());
@@ -1413,11 +1417,16 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
                 return;
             }
             std::shared_ptr<telux::tel::MessagePartInfo> partInfo = smsMsg.getMessagePartInfo();
+
+            // getRawPdu() holds ASCII bytes of the hex string; reconstruct for logging.
+            telux::tel::PduBuffer rawPdu = smsMsg.getRawPdu();
+            std::string pduStr(rawPdu.begin(), rawPdu.end());
+
             if (partInfo)
             {
                 PA_INFO("Multi Part Message ");
                 PA_INFO("Message: %s", smsMsg.getText().c_str());
-                PA_DEBUG("PDU: %s", smsMsg.getPdu().c_str());
+                PA_DEBUG("PDU: %s", pduStr.c_str());
                 PA_DEBUG("RefNumber: %d", static_cast<int>(partInfo->refNumber));
                 PA_DEBUG("NumberOfSegments: %d", static_cast<int>(partInfo->numberOfSegments));
                 PA_DEBUG("SegmentNumber: %d", static_cast<int>(partInfo->segmentNumber));
@@ -1425,7 +1434,7 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
             else
             {
                 PA_INFO("Message: %s", smsMsg.getText().c_str());
-                PA_DEBUG("PDU: %s", smsMsg.getPdu().c_str());
+                PA_DEBUG("PDU: %s", pduStr.c_str());
             }
             promisePtr->set_value(smsMsg);
         }
@@ -1475,7 +1484,10 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
     {
         telux::tel::SmsMessage smsMsg = futResult.get();
 
-        std::string pduStr = smsMsg.getPdu();
+        // getRawPdu() holds ASCII bytes of the hex PDU string. Decode hex pairs to binary bytes.
+        telux::tel::PduBuffer rawPdu = smsMsg.getRawPdu();
+        std::string pduStr(rawPdu.begin(), rawPdu.end());
+
         for (unsigned int i = 0; i + 1 < pduStr.length(); i += 2)
         {
             unsigned int num = 0;
@@ -1664,7 +1676,7 @@ void tafpa::sms::taf_pa_sms_SendPDUMessageAsync
 
     std::ostringstream oss;
     oss << std::hex << std::setfill('0');
-    for (uint32_t i = 0; i < pduLength; ++i)
+    for (size_t i = 0; i < pduLength; ++i)
     {
         oss << std::setw(2) << static_cast<int>(pduData[i]);
     }
