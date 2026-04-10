@@ -9,6 +9,7 @@
 #include <sstream>
 #include <algorithm>
 #include <any>
+#include <glib.h>
 
 #include "telux/tel/PhoneFactory.hpp"
 #include "telux/tel/PhoneManager.hpp"
@@ -505,6 +506,7 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::INVALID_NUMBER_FORMAT:
         case telux::tel::CallEndCause::INCOMPATIBLE_DESTINATION:
         case telux::tel::CallEndCause::SIP_BAD_ADDRESS:
+        case telux::tel::CallEndCause::NOT_REACHABLE:
             termination = TAF_PA_VOICECALL_TERM_UNOBTAINABLE_NUMBER;
         break;
 
@@ -534,6 +536,7 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
 
         case telux::tel::CallEndCause::NORMAL:
         case telux::tel::CallEndCause::NORMAL_UNSPECIFIED:
+        case telux::tel::CallEndCause::CLIENT_END:
             termination = TAF_PA_VOICECALL_TERM_NORMAL;
         break;
 
@@ -549,6 +552,7 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         break;
 
         case telux::tel::CallEndCause::CALL_REJECTED:
+        case telux::tel::CallEndCause::SIP_REQUEST_CANCELLED:
             termination = TAF_PA_VOICECALL_TERM_REJECTED;
         break;
 
@@ -614,8 +618,19 @@ std::shared_ptr<taf_pa_voicecall_CallInfo_t> VoiceCallPAController::createCallIn
     auto callInfoPtr = std::make_shared<taf_pa_voicecall_CallInfo_t>();
     callInfoPtr->phoneId = static_cast<int8_t>(iCall->getPhoneId());
 
-    strlcpy(callInfoPtr->destId, iCall->getRemotePartyNumber().c_str(), PA_MAX_DESTINATION_LEN_BYTE - 1);
-    callInfoPtr->destId[PA_MAX_DESTINATION_LEN_BYTE - 1] = '\0';
+    const std::string& remote = iCall->getRemotePartyNumber();
+    gsize src_len = g_strlcpy(
+        callInfoPtr->destId,
+        remote.c_str(),
+        PA_MAX_DESTINATION_LEN_BYTE
+    );
+    if (src_len >= PA_MAX_DESTINATION_LEN_BYTE)
+    {
+        PA_ERROR("destId truncated: src_len=%zu, buf_size=%u, value='%s'",
+                 static_cast<size_t>(src_len),
+                 static_cast<unsigned>(PA_MAX_DESTINATION_LEN_BYTE),
+                 remote.c_str());
+    }
 
     callInfoPtr->direction = static_cast<taf_pa_voicecall_dir_t>(iCall->getCallDirection());
     callInfoPtr->termination = taf_pa_voicecall_termination_t::TAF_PA_VOICECALL_TERM_NORMAL;
@@ -719,8 +734,19 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
     {
         taf_pa_voicecall_CallInfo_t callInfo;
         callInfo.phoneId = iCall->getPhoneId();
-        strlcpy(callInfo.destId, iCall->getRemotePartyNumber().c_str(), sizeof(callInfo.destId) - 1);
-        callInfo.destId[sizeof(callInfo.destId) - 1] = '\0';
+
+        const std::string& remote = iCall->getRemotePartyNumber();
+        gsize src_len = g_strlcpy(callInfo.destId,
+                              remote.c_str(),
+                              sizeof(callInfo.destId));
+        if (src_len >= sizeof(callInfo.destId))
+        {
+            PA_ERROR("destId truncated: src_len=%zu, buf_size=%zu, value='%s'",
+            static_cast<size_t>(src_len),
+            sizeof(callInfo.destId),
+            remote.c_str());
+        }
+
         callInfo.direction = pACtrl->directionToPaDirection(iCall->getCallDirection());
         if (state == telux::tel::CallState::CALL_ENDED)
         {
@@ -771,8 +797,18 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
     {
         taf_pa_voicecall_CallInfo_t callInfo;
         callInfo.phoneId = static_cast<int8_t>(iCall->getPhoneId());
-        strlcpy(callInfo.destId, iCall->getRemotePartyNumber().c_str(), sizeof(callInfo.destId) - 1);
-        callInfo.destId[sizeof(callInfo.destId) - 1] = '\0';
+
+        const std::string& remote = iCall->getRemotePartyNumber();
+        gsize src_len = g_strlcpy(callInfo.destId,
+                              remote.c_str(),
+                              sizeof(callInfo.destId));
+        if (src_len >= sizeof(callInfo.destId))
+        {
+            PA_ERROR("destId truncated: src_len=%zu, buf_size=%zu, value='%s'",
+                static_cast<size_t>(src_len),
+                sizeof(callInfo.destId),
+                remote.c_str());
+        }
         callInfo.direction = static_cast<taf_pa_voicecall_dir_t>(iCall->getCallDirection());
         callInfo.termination = taf_pa_voicecall_termination_t::TAF_PA_VOICECALL_TERM_NORMAL;
         controller_->eventListener_(callInfo, pACtrl->stateToEvent(state), controller_->eventListenerContext_);
@@ -1203,4 +1239,3 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Init()
 
     return result;
 }
-

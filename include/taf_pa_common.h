@@ -10,11 +10,13 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <inttypes.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,16 +60,102 @@ typedef enum {
     PA_SUSPENDED = -24
 } pa_result_enum_t;
 
-//PA_SHARED void tafpa_common_log_init(void);
+typedef enum
+{
+    TAF_PA_COMMON_LOG_LEVEL_DEBUG = 0,
+    TAF_PA_COMMON_LOG_LEVEL_INFO = 1,
+    TAF_PA_COMMON_LOG_LEVEL_NOTICE = 2,
+    TAF_PA_COMMON_LOG_LEVEL_WARN = 3,
+    TAF_PA_COMMON_LOG_LEVEL_ERROR = 4,
+    TAF_PA_COMMON_LOG_LEVEL_CRIT = 5,
+    TAF_PA_COMMON_LOG_LEVEL_ALERT = 6,
+    TAF_PA_COMMON_LOG_LEVEL_EMERG = 7
+} taf_pa_common_LogLevel_t;
 
-PA_SHARED void taf_pa_common_log_message(int level, const char *file,
-                                        const char *func, int line,
-                                        const char *fmt, ...);
+typedef enum
+{
+    TAF_PA_COMMON_LOG_BACKEND_SYSLOG = 0,
+    TAF_PA_COMMON_LOG_BACKEND_DLT,
+    TAF_PA_COMMON_LOG_BACKEND_AUTO
+} taf_pa_common_LogBackend_t;
 
-#define PA_INFO(fmt, ...)  taf_pa_common_log_message(LOG_INFO,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PA_DEBUG(fmt, ...) taf_pa_common_log_message(LOG_DEBUG, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PA_ERROR(fmt, ...) taf_pa_common_log_message(LOG_ERR,   __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PA_CRIT(fmt, ...)  taf_pa_common_log_message(LOG_CRIT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+PA_SHARED PA_WEAK pa_result_t taf_pa_common_LogInit
+(
+    taf_pa_common_LogBackend_t backend
+);
+
+PA_SHARED PA_WEAK pa_result_t taf_pa_common_LogSetBackend
+(
+    taf_pa_common_LogBackend_t backend
+);
+
+PA_SHARED void taf_pa_common_LogSetlevel
+(
+    taf_pa_common_LogLevel_t level
+);
+
+PA_SHARED void taf_pa_common_LogMessage
+(
+    taf_pa_common_LogLevel_t level,
+    const char* file,
+    const char* func,
+    int line,
+    const char* fmt,
+    ...
+);
+
+#define PA_DEBUG(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_DEBUG, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PA_INFO(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_INFO,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PA_NOTICE(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_NOTICE,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PA_WARN(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_WARN,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PA_ERROR(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_ERROR,   __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PA_CRIT(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_CRIT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PA_ALERT(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_ALERT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PA_EMERG(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_EMERG,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define PA_FATAL(fmt, ...) { PA_EMERG(fmt, ##__VA_ARGS__); exit(EXIT_FAILURE); }
+#define PA_FATAL_IF(condition, fmt, ...) if (condition) { PA_FATAL(fmt, ##__VA_ARGS__) }
+#define PA_ASSERT(condition) PA_FATAL_IF(!(condition), "Assert Failed: '%s'", #condition)
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a variable as unused.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+#define PA_UNUSED(v) ((void)(v))
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Return from function if condition is true.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+#define TAF_PA_ERROR_IF_RET_NIL(condition, formatString, ...) \
+    do                                                        \
+    {                                                         \
+        if (condition)                                        \
+        {                                                     \
+            PA_ERROR(formatString, ##__VA_ARGS__);            \
+            return;                                           \
+        }                                                     \
+    } while (0);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Return specified value from function if condition is true.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+#define TAF_PA_ERROR_IF_RET_VAL(condition, val, formatString, ...) \
+    do                                                             \
+    {                                                              \
+        if (condition)                                             \
+        {                                                          \
+            PA_ERROR(formatString, ##__VA_ARGS__);                 \
+            return (val);                                          \
+        }                                                          \
+    } while (0);
 
 #ifdef __cplusplus
 }
