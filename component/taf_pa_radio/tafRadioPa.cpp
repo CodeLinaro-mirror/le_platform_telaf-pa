@@ -2573,7 +2573,7 @@ void Utility::Convert::CellInfoList
         return;
     }
 
-    uint32_t i = 0;
+    uint32_t infoCount = 0;
     for (auto infoPtr : infoPtrList)
     {
         if (infoPtr != nullptr)
@@ -2585,55 +2585,55 @@ void Utility::Convert::CellInfoList
                     auto cellInfoPtr = static_pointer_cast<tel::GsmCellInfo>(infoPtr);
                     if (cellInfoPtr != nullptr)
                     {
-                        listInfoPtr->cellLocInfo[i].rat = TAF_PA_RADIO_RAT_GSM;
-                        listInfoPtr->cellLocInfo[i].gsmInfo.bsic =
+                        listInfoPtr->cellLocInfo[infoCount].rat = TAF_PA_RADIO_RAT_GSM;
+                        listInfoPtr->cellLocInfo[infoCount].gsmInfo.bsic =
                             cellInfoPtr->getCellIdentity().getBaseStationIdentityCode();
-                        listInfoPtr->cellLocInfo[i].gsmInfo.cid =
+                        listInfoPtr->cellLocInfo[infoCount].gsmInfo.cid =
                             cellInfoPtr->getCellIdentity().getIdentity();
-                        listInfoPtr->cellLocInfo[i].gsmInfo.lac =
+                        listInfoPtr->cellLocInfo[infoCount].gsmInfo.lac =
                             cellInfoPtr->getCellIdentity().getLac();
-                        listInfoPtr->cellLocInfo[i].gsmInfo.arfcn =
+                        listInfoPtr->cellLocInfo[infoCount].gsmInfo.arfcn =
                             cellInfoPtr->getCellIdentity().getArfcn();
-                        listInfoPtr->cellLocInfo[i].gsmInfo.ta =
+                        listInfoPtr->cellLocInfo[infoCount].gsmInfo.ta =
                             cellInfoPtr->getSignalStrengthInfo().getTimingAdvance();
-                        listInfoPtr->cellLocInfo[i].gsmInfo.rssi =
+                        listInfoPtr->cellLocInfo[infoCount].gsmInfo.rssi =
                             cellInfoPtr->getSignalStrengthInfo().getDbm();
 
-                        listInfoPtr->cellLocInfo[i].gsmInfo.plmnIdValid = 0;
+                        listInfoPtr->cellLocInfo[infoCount].gsmInfo.plmnIdValid = 0;
                         if (!cellInfoPtr->getCellIdentity().getMobileCountryCode().empty() &&
                             !cellInfoPtr->getCellIdentity().getMobileNetworkCode().empty())
                         {
                             pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
-                                &listInfoPtr->cellLocInfo[i].gsmInfo.plmnId.mcc);
+                                &listInfoPtr->cellLocInfo[infoCount].gsmInfo.plmnId.mcc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
-                                listInfoPtr->cellLocInfo[i].gsmInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].gsmInfo.plmnIdValid = 0;
                             }
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
-                                &listInfoPtr->cellLocInfo[i].gsmInfo.plmnId.mnc);
+                                &listInfoPtr->cellLocInfo[infoCount].gsmInfo.plmnId.mnc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
-                                listInfoPtr->cellLocInfo[i].gsmInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].gsmInfo.plmnIdValid = 0;
                             }
-                            listInfoPtr->cellLocInfo[i].gsmInfo.plmnIdValid = 1;
+                            listInfoPtr->cellLocInfo[infoCount].gsmInfo.plmnIdValid = 1;
                         }
 
                         if (cellInfoPtr->isRegistered())
                         {
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_SERVING;
                         }
                         else
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_NEIGHBOR;
 
-                        i++;
+                        infoCount++;
                     }
                     break;
                 }
@@ -2642,28 +2642,28 @@ void Utility::Convert::CellInfoList
                     auto cellInfoPtr = static_pointer_cast<tel::CdmaCellInfo>(infoPtr);
                     if (cellInfoPtr != nullptr)
                     {
-                        listInfoPtr->cellLocInfo[i].rat = TAF_PA_RADIO_RAT_CDMA;
-                        listInfoPtr->cellLocInfo[i].cdmaInfo.sid =
+                        listInfoPtr->cellLocInfo[infoCount].rat = TAF_PA_RADIO_RAT_CDMA;
+                        listInfoPtr->cellLocInfo[infoCount].cdmaInfo.sid =
                             cellInfoPtr->getCellIdentity().getSid();
-                        listInfoPtr->cellLocInfo[i].cdmaInfo.nid =
+                        listInfoPtr->cellLocInfo[infoCount].cdmaInfo.nid =
                             cellInfoPtr->getCellIdentity().getNid();
-                        listInfoPtr->cellLocInfo[i].cdmaInfo.bsid =
+                        listInfoPtr->cellLocInfo[infoCount].cdmaInfo.bsid =
                             cellInfoPtr->getCellIdentity().getBaseStationId();
-                        listInfoPtr->cellLocInfo[i].cdmaInfo.bslat =
+                        listInfoPtr->cellLocInfo[infoCount].cdmaInfo.bslat =
                             cellInfoPtr->getCellIdentity().getLatitude();
-                        listInfoPtr->cellLocInfo[i].cdmaInfo.bslong =
+                        listInfoPtr->cellLocInfo[infoCount].cdmaInfo.bslong =
                             cellInfoPtr->getCellIdentity().getLongitude();
-                        listInfoPtr->cellLocInfo[i].cdmaInfo.ss =
+                        listInfoPtr->cellLocInfo[infoCount].cdmaInfo.ss =
                             cellInfoPtr->getSignalStrengthInfo().getDbm();
 
                         if (cellInfoPtr->isRegistered())
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_SERVING;
                         else
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_NEIGHBOR;
 
-                        i++;
+                        infoCount++;
                     }
                     break;
                 }
@@ -2672,54 +2672,57 @@ void Utility::Convert::CellInfoList
                     auto cellInfoPtr = static_pointer_cast<tel::WcdmaCellInfo>(infoPtr);
                     if (cellInfoPtr != nullptr)
                     {
-                        listInfoPtr->cellLocInfo[i].rat = TAF_PA_RADIO_RAT_UMTS;
-                        listInfoPtr->cellLocInfo[i].umtsInfo.cid =
+                        listInfoPtr->cellLocInfo[infoCount].rat = TAF_PA_RADIO_RAT_UMTS;
+                        listInfoPtr->cellLocInfo[infoCount].umtsInfo.cid =
                             cellInfoPtr->getCellIdentity().getIdentity();
-                        listInfoPtr->cellLocInfo[i].umtsInfo.lac = cellInfoPtr->getCellIdentity().getLac();
-                        listInfoPtr->cellLocInfo[i].umtsInfo.uarfcn =
+                        listInfoPtr->cellLocInfo[infoCount].umtsInfo.lac =
+                            cellInfoPtr->getCellIdentity().getLac();
+                        listInfoPtr->cellLocInfo[infoCount].umtsInfo.uarfcn =
                             cellInfoPtr->getCellIdentity().getUarfcn();
-                        listInfoPtr->cellLocInfo[i].umtsInfo.psc =
+                        listInfoPtr->cellLocInfo[infoCount].umtsInfo.psc =
                             cellInfoPtr->getCellIdentity().getPrimaryScramblingCode();
-                        listInfoPtr->cellLocInfo[i].umtsInfo.rscp =
+                        listInfoPtr->cellLocInfo[infoCount].umtsInfo.rscp =
                             cellInfoPtr->getSignalStrengthInfo().getRscp();
-                        listInfoPtr->cellLocInfo[i].umtsInfo.ecio =
+                        listInfoPtr->cellLocInfo[infoCount].umtsInfo.ecio =
                             cellInfoPtr->getSignalStrengthInfo().getEcio();
-                        listInfoPtr->cellLocInfo[i].umtsInfo.ss =
+                        listInfoPtr->cellLocInfo[infoCount].umtsInfo.ss =
                             cellInfoPtr->getSignalStrengthInfo().getDbm();
 
-                        listInfoPtr->cellLocInfo[i].umtsInfo.plmnIdValid = 0;
+                        listInfoPtr->cellLocInfo[infoCount].umtsInfo.plmnIdValid = 0;
                         if (!cellInfoPtr->getCellIdentity().getMobileCountryCode().empty() &&
                             !cellInfoPtr->getCellIdentity().getMobileNetworkCode().empty())
                         {
                             pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
-                                &listInfoPtr->cellLocInfo[i].umtsInfo.plmnId.mcc);
+                                &listInfoPtr->cellLocInfo[infoCount].umtsInfo.plmnId.mcc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
-                                listInfoPtr->cellLocInfo[i].umtsInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].umtsInfo.plmnIdValid = 0;
                             }
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
-                                &listInfoPtr->cellLocInfo[i].umtsInfo.plmnId.mnc);
+                                &listInfoPtr->cellLocInfo[infoCount].umtsInfo.plmnId.mnc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
-                                listInfoPtr->cellLocInfo[i].umtsInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].umtsInfo.plmnIdValid = 0;
                             }
-                            listInfoPtr->cellLocInfo[i].umtsInfo.plmnIdValid = 1;
+                            listInfoPtr->cellLocInfo[infoCount].umtsInfo.plmnIdValid = 1;
                         }
 
                         if (cellInfoPtr->isRegistered())
                         {
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_SERVING;
                         }
                         else
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_NEIGHBOR;
+
+                        infoCount++;
                     }
                     break;
                 }
@@ -2728,51 +2731,51 @@ void Utility::Convert::CellInfoList
                     auto cellInfoPtr = static_pointer_cast<tel::TdscdmaCellInfo>(infoPtr);
                     if (cellInfoPtr != nullptr)
                     {
-                        listInfoPtr->cellLocInfo[i].rat = TAF_PA_RADIO_RAT_TDSCDMA;
-                        listInfoPtr->cellLocInfo[i].tdscdmaInfo.lac =
+                        listInfoPtr->cellLocInfo[infoCount].rat = TAF_PA_RADIO_RAT_TDSCDMA;
+                        listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.lac =
                             cellInfoPtr->getCellIdentity().getLac();
-                        listInfoPtr->cellLocInfo[i].tdscdmaInfo.cid =
+                        listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.cid =
                             cellInfoPtr->getCellIdentity().getIdentity();
-                        listInfoPtr->cellLocInfo[i].tdscdmaInfo.cpid =
+                        listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.cpid =
                             cellInfoPtr->getCellIdentity().getParametersId();
-                        listInfoPtr->cellLocInfo[i].tdscdmaInfo.rscp =
+                        listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.rscp =
                             cellInfoPtr->getSignalStrengthInfo().getRscp();
 
-                        listInfoPtr->cellLocInfo[i].tdscdmaInfo.plmnIdValid = 0;
+                        listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.plmnIdValid = 0;
                         if (!cellInfoPtr->getCellIdentity().getMobileCountryCode().empty() &&
                             !cellInfoPtr->getCellIdentity().getMobileNetworkCode().empty())
                         {
                             pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
-                                &listInfoPtr->cellLocInfo[i].tdscdmaInfo.plmnId.mcc);
+                                &listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.plmnId.mcc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
-                                listInfoPtr->cellLocInfo[i].tdscdmaInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.plmnIdValid = 0;
                             }
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
-                                &listInfoPtr->cellLocInfo[i].tdscdmaInfo.plmnId.mnc);
+                                &listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.plmnId.mnc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
-                                listInfoPtr->cellLocInfo[i].tdscdmaInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.plmnIdValid = 0;
                             }
-                            listInfoPtr->cellLocInfo[i].tdscdmaInfo.plmnIdValid = 1;
+                            listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.plmnIdValid = 1;
                         }
 
                         if (cellInfoPtr->isRegistered())
                         {
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_SERVING;
                         }
                         else
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_NEIGHBOR;
 
-                        i++;
+                        infoCount++;
                     }
                     break;
                 }
@@ -2781,55 +2784,55 @@ void Utility::Convert::CellInfoList
                     auto cellInfoPtr = static_pointer_cast<tel::LteCellInfo>(infoPtr);
                     if (cellInfoPtr != nullptr)
                     {
-                        listInfoPtr->cellLocInfo[i].rat = TAF_PA_RADIO_RAT_LTE;
-                        listInfoPtr->cellLocInfo[i].lteInfo.cid =
+                        listInfoPtr->cellLocInfo[infoCount].rat = TAF_PA_RADIO_RAT_LTE;
+                        listInfoPtr->cellLocInfo[infoCount].lteInfo.cid =
                             cellInfoPtr->getCellIdentity().getIdentity();
-                        listInfoPtr->cellLocInfo[i].lteInfo.pcid =
+                        listInfoPtr->cellLocInfo[infoCount].lteInfo.pcid =
                             cellInfoPtr->getCellIdentity().getPhysicalCellId();
-                        listInfoPtr->cellLocInfo[i].lteInfo.tac =
+                        listInfoPtr->cellLocInfo[infoCount].lteInfo.tac =
                             cellInfoPtr->getCellIdentity().getTrackingAreaCode();
-                        listInfoPtr->cellLocInfo[i].lteInfo.earfcn =
+                        listInfoPtr->cellLocInfo[infoCount].lteInfo.earfcn =
                             cellInfoPtr->getCellIdentity().getEarfcn();
-                        listInfoPtr->cellLocInfo[i].lteInfo.ta =
+                        listInfoPtr->cellLocInfo[infoCount].lteInfo.ta =
                             cellInfoPtr->getSignalStrengthInfo().getTimingAdvance();
-                        listInfoPtr->cellLocInfo[i].lteInfo.rssi =
+                        listInfoPtr->cellLocInfo[infoCount].lteInfo.rssi =
                             cellInfoPtr->getSignalStrengthInfo().getDbm();
 
-                        listInfoPtr->cellLocInfo[i].lteInfo.plmnIdValid = 0;
+                        listInfoPtr->cellLocInfo[infoCount].lteInfo.plmnIdValid = 0;
                         if (!cellInfoPtr->getCellIdentity().getMobileCountryCode().empty() &&
                             !cellInfoPtr->getCellIdentity().getMobileNetworkCode().empty())
                         {
                             pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
-                                &listInfoPtr->cellLocInfo[i].lteInfo.plmnId.mcc);
+                                &listInfoPtr->cellLocInfo[infoCount].lteInfo.plmnId.mcc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
-                                listInfoPtr->cellLocInfo[i].lteInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].lteInfo.plmnIdValid = 0;
                             }
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
-                                &listInfoPtr->cellLocInfo[i].lteInfo.plmnId.mnc);
+                                &listInfoPtr->cellLocInfo[infoCount].lteInfo.plmnId.mnc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
-                                listInfoPtr->cellLocInfo[i].lteInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].lteInfo.plmnIdValid = 0;
                             }
-                            listInfoPtr->cellLocInfo[i].lteInfo.plmnIdValid = 1;
+                            listInfoPtr->cellLocInfo[infoCount].lteInfo.plmnIdValid = 1;
                         }
 
                         if (cellInfoPtr->isRegistered())
                         {
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_SERVING;
                         }
                         else
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_NEIGHBOR;
 
-                        i++;
+                        infoCount++;
                     }
                     break;
                 }
@@ -2838,51 +2841,51 @@ void Utility::Convert::CellInfoList
                     auto cellInfoPtr = static_pointer_cast<tel::Nr5gCellInfo>(infoPtr);
                     if (cellInfoPtr != nullptr)
                     {
-                        listInfoPtr->cellLocInfo[i].rat = TAF_PA_RADIO_RAT_NR5G;
-                        listInfoPtr->cellLocInfo[i].nr5gInfo.cid =
+                        listInfoPtr->cellLocInfo[infoCount].rat = TAF_PA_RADIO_RAT_NR5G;
+                        listInfoPtr->cellLocInfo[infoCount].nr5gInfo.cid =
                             cellInfoPtr->getCellIdentity().getIdentity();
-                        listInfoPtr->cellLocInfo[i].nr5gInfo.pcid =
+                        listInfoPtr->cellLocInfo[infoCount].nr5gInfo.pcid =
                             cellInfoPtr->getCellIdentity().getPhysicalCellId();
-                        listInfoPtr->cellLocInfo[i].nr5gInfo.tac =
+                        listInfoPtr->cellLocInfo[infoCount].nr5gInfo.tac =
                             cellInfoPtr->getCellIdentity().getTrackingAreaCode();
-                        listInfoPtr->cellLocInfo[i].nr5gInfo.arfcn =
+                        listInfoPtr->cellLocInfo[infoCount].nr5gInfo.arfcn =
                             cellInfoPtr->getCellIdentity().getArfcn();
 
-                        listInfoPtr->cellLocInfo[i].nr5gInfo.plmnIdValid = 0;
+                        listInfoPtr->cellLocInfo[infoCount].nr5gInfo.plmnIdValid = 0;
                         if (!cellInfoPtr->getCellIdentity().getMobileCountryCode().empty() &&
                             !cellInfoPtr->getCellIdentity().getMobileNetworkCode().empty())
                         {
                             pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
-                                &listInfoPtr->cellLocInfo[i].nr5gInfo.plmnId.mcc);
+                                &listInfoPtr->cellLocInfo[infoCount].nr5gInfo.plmnId.mcc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
-                                listInfoPtr->cellLocInfo[i].nr5gInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].nr5gInfo.plmnIdValid = 0;
                             }
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
-                                &listInfoPtr->cellLocInfo[i].nr5gInfo.plmnId.mnc);
+                                &listInfoPtr->cellLocInfo[infoCount].nr5gInfo.plmnId.mnc);
                             if (result != 0)
                             {
                                 PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
-                                listInfoPtr->cellLocInfo[i].nr5gInfo.plmnIdValid = 0;
+                                listInfoPtr->cellLocInfo[infoCount].nr5gInfo.plmnIdValid = 0;
                             }
-                            listInfoPtr->cellLocInfo[i].nr5gInfo.plmnIdValid = 1;
+                            listInfoPtr->cellLocInfo[infoCount].nr5gInfo.plmnIdValid = 1;
                         }
 
                         if (cellInfoPtr->isRegistered())
                         {
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_SERVING;
                         }
                         else
-                            listInfoPtr->cellLocInfo[i].location =
+                            listInfoPtr->cellLocInfo[infoCount].location =
                                 TAF_PA_RADIO_CELL_LOCATION_NEIGHBOR;
 
-                        i++;
+                        infoCount++;
                     }
                     break;
                 }
@@ -2892,7 +2895,7 @@ void Utility::Convert::CellInfoList
         }
     }
 
-    listInfoPtr->cellLocInfoCount = i;
+    listInfoPtr->cellLocInfoCount = infoCount;
 }
 
 taf_pa_radio_NrIcon_t Utility::Convert::NrIcon
