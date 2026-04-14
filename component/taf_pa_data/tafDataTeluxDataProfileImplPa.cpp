@@ -361,7 +361,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::PaCreateProfile
     // Wait for the callback
     std::tuple<telux::common::ErrorCode, int> resultTuple;
 
-    std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
@@ -461,7 +461,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::PaUpdateProfile
     // Wait for the callback
     telux::common::ErrorCode errorCode;
 
-    std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
@@ -545,7 +545,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::PaDeleteProfile
     // Wait for the callback
     telux::common::ErrorCode errorCode;
 
-    std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
@@ -704,7 +704,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::getProfileDetails
     PA_DEBUG("Callback will be triggered...");
 
     // This will block until the callback is invoked or timeout occurs.
-    auto waitStatus = fut.wait_for(std::chrono::seconds(taf::pa::NON_NETWORK_COMMAND_TIMEOUT));//5s
+    auto waitStatus = fut.wait_for(std::chrono::seconds(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT));//15s
     //  Exit the application, if SDK is unable to initialize sensor subsystems
 
     TAF_PA_ERROR_IF_RET_VAL(std::future_status::timeout == waitStatus, PA_TIMEOUT,
@@ -954,7 +954,7 @@ void taf::pa::data::TafPaTeluxDataProfile::initDataProfileManagers()
             std::unique_lock<std::mutex> lock(state->mtx);
             bool success = state->cv.wait_for(
                 lock,
-                std::chrono::seconds(taf::pa::SUBSYSTEM_INIT_TIMEOUT),
+                std::chrono::seconds(taf::pa::data::SUBSYSTEM_INIT_TIMEOUT),
                 [&state]() { return state->callbackReceived; }
             );
 

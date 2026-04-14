@@ -119,13 +119,15 @@ namespace taf
 {
 namespace pa
 {
+namespace data
+{
 
 //--------------------------------------------------------------------------------------------------
 /**
  * The timeout for subsystem initialization.
  */
 //--------------------------------------------------------------------------------------------------
-static constexpr int SUBSYSTEM_INIT_TIMEOUT = 30;
+static constexpr int SUBSYSTEM_INIT_TIMEOUT = 90;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -139,8 +141,9 @@ static constexpr int NETWORK_COMMAND_TIMEOUT = 60;
  * The timeout for non network related commands.
  */
 //--------------------------------------------------------------------------------------------------
-static constexpr int NON_NETWORK_COMMAND_TIMEOUT = 5;
+static constexpr int NON_NETWORK_COMMAND_TIMEOUT = 15;
 
+} // data
 } // pa
 } // taf
 

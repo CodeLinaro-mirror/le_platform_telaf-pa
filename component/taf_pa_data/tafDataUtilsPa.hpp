@@ -120,6 +120,13 @@ class Utils
             DownlinkThroughputInfo_t &paInfo
         );
 
+        // MTU helper function
+        static pa_result_t GetMtuFromInterface
+        (
+            const std::string& interfaceName,
+            int32_t& mtu
+        );
+
         // String conversions
         static const char *CallStatusToString(telux::data::DataCallStatus status);
         static const char *IpFamilyTypeToString(telux::data::IpFamilyType ipType);

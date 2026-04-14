@@ -110,7 +110,7 @@ void taf::pa::data::TafPaTeluxData::initPhoneManager()
         std::future<telux::common::ServiceStatus> initFuture =
             phoneMgrPromPtr->get_future();
         std::future_status waitStatus =
-            initFuture.wait_for(std::chrono::seconds(taf::pa::SUBSYSTEM_INIT_TIMEOUT));
+            initFuture.wait_for(std::chrono::seconds(taf::pa::data::SUBSYSTEM_INIT_TIMEOUT));
 
         if (std::future_status::timeout == waitStatus)
         {
@@ -387,7 +387,7 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
             std::unique_lock<std::mutex> lock(state->mtx);
             bool success = state->cv.wait_for(
                 lock,
-                std::chrono::seconds(taf::pa::SUBSYSTEM_INIT_TIMEOUT),
+                std::chrono::seconds(taf::pa::data::SUBSYSTEM_INIT_TIMEOUT),
                 [&state]() { return state->callbackReceived; }
             );
 
@@ -876,7 +876,7 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
 
     PA_DEBUG("Waiting for callback...");
 
-    std::chrono::seconds span(taf::pa::NON_NETWORK_COMMAND_TIMEOUT); // 5 seconds
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
