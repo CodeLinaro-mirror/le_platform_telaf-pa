@@ -131,18 +131,6 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_RemoveVlanInterface
      const taf_pa_vlan_iface_type_t iftype
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_BindWithProfile
-(
-     const taf_pa_Vlan_t vlan,
-     const taf_pa_VlanBindConfig_t vlanBindConfig
-);
-
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_UnbindWithProfile
-(
-     const taf_pa_Vlan_t vlan,
-     const taf_pa_VlanBindConfig_t vlanBindConfig
-);
-
 PA_SHARED PA_WEAK pa_result_t taf_pa_net_BindWithBackhaul
 (
      const taf_pa_Vlan_t vlan,
@@ -158,12 +146,6 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_UnbindWithBackhaul
 PA_SHARED PA_WEAK pa_result_t taf_pa_net_QueryVlanInfo
 (
     std::vector<taf_pa_Vlan_t> &vlanEntryInfo    // OUT
-);
-
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_QueryVlanMappingList
-(
-    const uint8_t slotID,                       // IN
-    std::list<std::pair<int, int>> &mapping     // OUT
 );
 
 PA_SHARED PA_WEAK pa_result_t taf_pa_net_QueryVlanToBackhaulMappingList
