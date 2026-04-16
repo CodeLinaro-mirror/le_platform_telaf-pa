@@ -78,12 +78,14 @@ typedef enum
     TAF_PA_COMMON_LOG_BACKEND_AUTO
 } taf_pa_common_LogBackend_t;
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_common_LogInit
+PA_SHARED pa_result_t taf_pa_common_LogInit
 (
-    taf_pa_common_LogBackend_t backend
+    taf_pa_common_LogBackend_t backend,
+    taf_pa_common_LogLevel_t initLogLevel,
+    void* ctxPtr
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_common_LogSetBackend
+PA_SHARED pa_result_t taf_pa_common_LogSetBackend
 (
     taf_pa_common_LogBackend_t backend
 );
@@ -101,6 +103,10 @@ PA_SHARED void taf_pa_common_LogMessage
     int line,
     const char* fmt,
     ...
+);
+
+PA_SHARED pa_result_t taf_pa_common_LogDeinit
+(
 );
 
 #define PA_DEBUG(fmt, ...) taf_pa_common_LogMessage(TAF_PA_COMMON_LOG_LEVEL_DEBUG, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
