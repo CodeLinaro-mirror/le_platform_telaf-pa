@@ -514,47 +514,84 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
 {
     std::shared_ptr<telux::loc::ILocationManager> sdkLocationManager = nullptr;
 
-    auto prom = std::make_shared<std::promise<ServiceStatus>>();
-    std::chrono::time_point<std::chrono::system_clock> startTime, endTime;
-
     auto &locationFactory = LocationFactory::getInstance();
-    sdkLocationManager = locationFactory.getLocationManager([&prom](ServiceStatus status) {
-        try {
-            if (status == ServiceStatus::SERVICE_AVAILABLE) {
-                prom->set_value(ServiceStatus::SERVICE_AVAILABLE);
-            } else {
-                prom->set_value(ServiceStatus::SERVICE_UNAVAILABLE);
-            }
-        }
-        catch (const std::future_error& e) {
-            PA_ERROR("Future error in callback: %s", e.what());
-        }
-        catch (const std::exception& e) {
-            PA_ERROR("Exception in callback: %s", e.what());
-        }
-        catch (...) {
-            PA_ERROR("Unknown error in callback.");
-        }
-    });
 
-    startTime = std::chrono::system_clock::now();
-    std::future<telux::common::ServiceStatus> initFuture = prom->get_future();
-    std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(5));
-    telux::common::ServiceStatus serviceStatus;
-    if (std::future_status::timeout == waitStatus)
+    sdkLocationManager = locationFactory.getLocationManager();
+
+    if(!sdkLocationManager)
     {
-        PA_ERROR("Timeout waiting for location manager");
+        PA_ERROR("Failed to get location manager instance");
         return ReusableIdGenerator::INVALID_LOCATION_ID;
-    } else {
-        serviceStatus = initFuture.get();
-        if (serviceStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-            endTime = std::chrono::system_clock::now();
-            std::chrono::duration<double> elapsedTime = endTime - startTime;
-            PA_INFO("Elapsed Time for Subsystems to ready : %lf",elapsedTime.count());
-        }else{
-            PA_ERROR("Unable to get location manager");
+    }
+
+    // Check service status using getServiceStatus()
+    std::chrono::time_point<std::chrono::system_clock> startTime, endTime;
+    telux::common::ServiceStatus serviceStatus = sdkLocationManager->getServiceStatus();
+
+    if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_INFO("Location manager subsystem is not ready (status: %d), waiting...",
+               static_cast<int>(serviceStatus));
+
+        // Get with callback to wait for availability
+        auto prom = std::make_shared<std::promise<ServiceStatus>>();
+
+        sdkLocationManager = locationFactory.getLocationManager(
+             [&prom](ServiceStatus status) {
+                try {
+                    if (status == ServiceStatus::SERVICE_AVAILABLE) {
+                        prom->set_value(ServiceStatus::SERVICE_AVAILABLE);
+                    } else {
+                        prom->set_value(ServiceStatus::SERVICE_UNAVAILABLE);
+                    }
+                }
+                catch (const std::future_error& e) {
+                    PA_ERROR("Future error in callback: %s", e.what());
+                }
+                catch (const std::exception& e) {
+                    PA_ERROR("Exception in callback: %s", e.what());
+                }
+                catch (...) {
+                    PA_ERROR("Unknown error in callback.");
+                }
+            });
+
+        if (!sdkLocationManager)
+        {
+            PA_ERROR("Failed to get location manager with callback");
             return ReusableIdGenerator::INVALID_LOCATION_ID;
         }
+
+        startTime = std::chrono::system_clock::now();
+        std::future<telux::common::ServiceStatus> initFuture = prom->get_future();
+        std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(5));
+
+        if (std::future_status::timeout == waitStatus)
+        {
+            PA_ERROR("Timeout waiting for location manager");
+            sdkLocationManager = nullptr;
+            return ReusableIdGenerator::INVALID_LOCATION_ID;
+        }
+        else
+        {
+            serviceStatus = initFuture.get();
+            if (serviceStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+            {
+                endTime = std::chrono::system_clock::now();
+                std::chrono::duration<double> elapsedTime = endTime - startTime;
+                PA_INFO("Elapsed Time for Subsystems to ready: %lf", elapsedTime.count());
+            }
+            else
+            {
+                PA_ERROR("Unable to get location manager - service unavailable");
+                sdkLocationManager = nullptr;
+                return ReusableIdGenerator::INVALID_LOCATION_ID;
+            }
+        }
+    }
+    else
+    {
+        PA_INFO("Location manager subsystem is already ready");
     }
 
     taf_pa_location_LocationId newId = id_generator_.acquireId();
@@ -684,51 +721,78 @@ pa_result_t LocationPAController::initialize()
     status = telux::common::Status::SUCCESS;
     if(mLocationConfigurator == nullptr)
     {
-        auto prom = std::make_shared<std::promise<ServiceStatus>>();
-        std::chrono::time_point<std::chrono::system_clock> startTime, endTime;
         auto &locationFactory = telux::loc::LocationFactory::getInstance();
-        mLocationConfigurator = locationFactory.getLocationConfigurator([&prom](telux::common::ServiceStatus status) {
-                try {
-                    if (status == ServiceStatus::SERVICE_AVAILABLE) {
-                        prom->set_value(ServiceStatus::SERVICE_AVAILABLE);
-                    } else {
-                        prom->set_value(ServiceStatus::SERVICE_UNAVAILABLE);
-                    }
-                }
-                catch (const std::future_error& e) {
-                    PA_ERROR("Future error in callback: %s", e.what());
-                }
-                catch (const std::exception& e) {
-                    PA_ERROR("Exception in callback: %s", e.what());
-                }
-                catch (...) {
-                    PA_ERROR("Unknown error in callback.");
-                }
-        });
+
+        //First, try to get the configurator without callback
+        mLocationConfigurator = locationFactory.getLocationConfigurator();
+
         if (!mLocationConfigurator)
         {
             PA_CRIT("*** ERROR - mLocationConfigurator is NULL");
             return PA_FAULT;
         }
 
-        startTime = std::chrono::system_clock::now();
-        std::future<telux::common::ServiceStatus> initFuture = prom->get_future();
-        std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(5));
-        telux::common::ServiceStatus serviceStatus;
-        if (std::future_status::timeout == waitStatus)
+        // Check service status using getServiceStatus()
+        telux::common::ServiceStatus serviceStatus = mLocationConfigurator->getServiceStatus();
+
+        if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
         {
-            PA_ERROR("Timeout waiting for location configurator");
-            return PA_FAULT;
-        } else {
-            serviceStatus = initFuture.get();
-            if (serviceStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-                endTime = std::chrono::system_clock::now();
-                std::chrono::duration<double> elapsedTime = endTime - startTime;
-                PA_INFO("Elapsed Time for configuration subsystems to ready : %lf",elapsedTime.count());
-            }else{
-                PA_ERROR("ERROR - Unable to initialize Location configuration subsystem");
-                status = telux::common::Status::FAILED;
+            PA_INFO("Location configurator subsystem is not ready, waiting for it to be ready...");
+
+            // If not ready, get with callback to wait for availability
+            auto prom = std::make_shared<std::promise<ServiceStatus>>();
+            std::chrono::time_point<std::chrono::system_clock> startTime, endTime;
+
+            mLocationConfigurator = locationFactory.getLocationConfigurator(
+                [&prom](telux::common::ServiceStatus status) {
+                    try {
+                        if (status == ServiceStatus::SERVICE_AVAILABLE) {
+                            prom->set_value(ServiceStatus::SERVICE_AVAILABLE);
+                        } else {
+                            prom->set_value(ServiceStatus::SERVICE_UNAVAILABLE);
+                        }
+                    }
+                    catch (const std::future_error& e) {
+                        PA_ERROR("Future error in callback: %s", e.what());
+                    }
+                    catch (const std::exception& e) {
+                        PA_ERROR("Exception in callback: %s", e.what());
+                    }
+                    catch (...) {
+                        PA_ERROR("Unknown error in callback.");
+                    }
+                });
+
+            startTime = std::chrono::system_clock::now();
+            std::future<telux::common::ServiceStatus> initFuture = prom->get_future();
+            std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(5));
+
+            if (std::future_status::timeout == waitStatus)
+            {
+                PA_ERROR("Timeout waiting for location configurator");
+                mLocationConfigurator = nullptr;
+                return PA_FAULT;
             }
+            else
+            {
+                serviceStatus = initFuture.get();
+                if (serviceStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
+                    endTime = std::chrono::system_clock::now();
+                    std::chrono::duration<double> elapsedTime = endTime - startTime;
+                    PA_INFO("Elapsed Time for configuration subsystems to ready : %lf",
+                            elapsedTime.count());
+                }
+                else
+                {
+                    PA_ERROR("ERROR - Unable to initialize Location configuration subsystem");
+                    mLocationConfigurator = nullptr;
+                    status = telux::common::Status::FAILED;
+                }
+            }
+        }
+        else
+        {
+            PA_INFO("Location configurator subsystem is already ready.");
         }
     }
     else
@@ -2321,6 +2385,7 @@ taf_pa_location_GeneralCb callback,std::any context)
         if (std::future_status::timeout == waitStatusDgnss)
         {
             PA_ERROR("Timeout waiting for dgnss manager");
+            mDgnssManager = nullptr;
             return telux::common::Status::FAILED;
         } else {
             serviceStatusDgnss = initFutureDgnss.get();
@@ -2330,6 +2395,7 @@ taf_pa_location_GeneralCb callback,std::any context)
                 PA_INFO("Elapsed Time for dgnss subsystems to ready : %lf",elapsedTimeDgnss.count());
             }else{
                 PA_ERROR("ERROR - Unable to initialize dgnss manager subsystem");
+                mDgnssManager = nullptr;
                 statusDgnss = telux::common::Status::FAILED;
             }
         }
@@ -2782,14 +2848,27 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
             PA_ERROR("Received invalid navigation solution from locationInfo, setting to 0");
             LocationEngineInfodata->naviSolution = (taf_pa_location_NavigationSolutionType_t)0;
         }
+        PA_DEBUG("LocationEngineInfodata->naviSolution :%lu",LocationEngineInfodata->naviSolution);
         LocationEngineInfodata->dgnssStationIds = locationInfo->getDgnssStationIds();
+        PA_DEBUG("LocationEngineInfodata->dgnssStationIds : %u",
+                 LocationEngineInfodata->dgnssStationIds);
         LocationEngineInfodata->integrityRiskUsed = locationInfo->getIntegrityRiskUsed();
-        PA_DEBUG("LocationEngineInfodata->integrityRiskUsed -> %d",LocationEngineInfodata->integrityRiskUsed);
+        PA_DEBUG("LocationEngineInfodata->integrityRiskUsed -> %d",
+                 LocationEngineInfodata->integrityRiskUsed);
         LocationEngineInfodata->protectionlevelAlongTrack = locationInfo->getProtectionLevelAlongTrack();
+        PA_DEBUG("LocationEngineInfodata->protectionlevelAlongTrackd -> %lf",
+                 LocationEngineInfodata->protectionlevelAlongTrack);
         LocationEngineInfodata->protectionlevelCrossTrack = locationInfo->getProtectionLevelCrossTrack();
+        PA_DEBUG(" LocationEngineInfodata->protectionlevelCrossTrack -> %lf", LocationEngineInfodata->protectionlevelCrossTrack);
         LocationEngineInfodata->protectionlevelVertical = locationInfo->getProtectionLevelVertical();
+        PA_DEBUG("LocationEngineInfodata->protectionlevelVertical -> %lf",
+                 LocationEngineInfodata->protectionlevelVertical);
         LocationEngineInfodata->ageOfCorrections = locationInfo->getAgeOfCorrections();
+        PA_DEBUG(" LocationEngineInfodata->ageOfCorrections -> %lu",
+                 LocationEngineInfodata->ageOfCorrections);
         LocationEngineInfodata->baselineLength = locationInfo->getBaselineLength();
+        PA_DEBUG("LocationEngineInfodata->baselineLength -> %lf",
+                 LocationEngineInfodata->baselineLength);
         std::vector<telux::loc::GnssMeasurementInfo> measInfo = locationInfo->getmeasUsageInfo();
         for (const auto &info : measInfo) {
             taf_pa_location_GnssMeasurementInfo_t converted;
