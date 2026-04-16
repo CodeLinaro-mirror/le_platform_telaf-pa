@@ -421,8 +421,7 @@ class RequestCallback :
         data::DataServiceState dataServiceState;
         shared_ptr<tel::SignalStrength> signalStrengthPtr;
         vector<shared_ptr<tel::CellInfo>> cellInfoPtrList;
-        string operatorLongName;
-        string operatorShortName;
+        tel::PlmnInfo operatorInfo;
         shared_ptr<tel::IRFBandList> rfBandCapabilityPtr;
         shared_ptr<tel::IRFBandList> rfBandPreferencePtr;
         tel::ImsRegistrationInfo imsRegistrationInfo;
@@ -495,10 +494,9 @@ class RequestCallback :
             common::ErrorCode error
         );
 
-        void OperatorNameResponse
+        void OperatorInfoResponse
         (
-            string longName,
-            string shortName,
+            tel::PlmnInfo info,
             common::ErrorCode error
         );
 
@@ -3182,26 +3180,22 @@ void RequestCallback::CellInfoListResponse
     sem_post(&semaphore);
 }
 
-void RequestCallback::OperatorNameResponse
+void RequestCallback::OperatorInfoResponse
 (
-    string longName,
-    string shortName,
+    tel::PlmnInfo info,
     common::ErrorCode error
 )
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s", common::Utils::getErrorCodeAsString(error));
         result = -EFAULT;
     }
     else
     {
-        operatorLongName = longName;
-        operatorShortName = shortName;
-
+        operatorInfo = info;
         result = 0;
     }
-
     sem_post(&semaphore);
 }
 
@@ -4821,9 +4815,9 @@ pa_result_t taf_pa_radio_GetCurrNetworkName
     }
 
     auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::OperatorNameResponse, request, placeholders::_1,
-        placeholders::_2, placeholders::_3);
-    auto result = pa.managers.phone->getPhone(phone)->requestOperatorName(callback);
+    auto callback = bind(&RequestCallback::OperatorInfoResponse, request, placeholders::_1,
+        placeholders::_2);
+    auto result = pa.managers.phone->getPhone(phone)->requestOperatorInfo(callback);
     if (result != common::Status::SUCCESS)
     {
         PA_ERROR("Failed to get operator name with phone %d.", phone);
@@ -4834,9 +4828,9 @@ pa_result_t taf_pa_radio_GetCurrNetworkName
     if (request->result != 0)
         return request->result;
 
-    Utility::Convert::String(request->operatorLongName, &namePtr->fullNameValid,
+    Utility::Convert::String(request->operatorInfo.longName, &namePtr->fullNameValid,
         namePtr->fullNamePtr, namePtr->fullNameSize);
-    Utility::Convert::String(request->operatorShortName, &namePtr->shortNameValid,
+    Utility::Convert::String(request->operatorInfo.shortName, &namePtr->shortNameValid,
         namePtr->shortNamePtr, namePtr->shortNameSize);
 
     return 0;
