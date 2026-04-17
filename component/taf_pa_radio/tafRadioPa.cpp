@@ -1393,10 +1393,11 @@ taf_pa_radio_SignalStrengthLevel_t Utility::Convert::SignalStrengthLevel
                     strengthPtr->getGsmSignalStrength()->getLevel());
             break;
         case TAF_PA_RADIO_RAT_CDMA:
-            if (strengthPtr->getCdmaSignalStrength() != nullptr)
-                return Utility::Convert::SignalStrengthLevel(
-                    strengthPtr->getCdmaSignalStrength()->getLevel());
-            break;
+            // deprecated TelSDK API usage
+            // if (strengthPtr->getCdmaSignalStrength() != nullptr)
+            //     return Utility::Convert::SignalStrengthLevel(
+            //         strengthPtr->getCdmaSignalStrength()->getLevel());
+            return TAF_PA_RADIO_SIGNAL_STRENGTH_LEVEL_UNKNOWN;
         case TAF_PA_RADIO_RAT_UMTS:
             if (strengthPtr->getWcdmaSignalStrength() != nullptr)
                 return Utility::Convert::SignalStrengthLevel(
@@ -1445,9 +1446,12 @@ void Utility::Convert::SignalStrengthInfo
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_GSM;
         infoPtr->gsmInfo.rssi = strengthPtr->getGsmSignalStrength()->getDbm();
-        infoPtr->gsmInfo.ber = strengthPtr->getGsmSignalStrength()->getGsmBitErrorRate();
+        // infoPtr->gsmInfo.ber = strengthPtr->getGsmSignalStrength()->getGsmBitErrorRate();
+        infoPtr->gsmInfo.ber = INVALID_SIGNAL_STRENGTH_VALUE;
     }
 
+    /*
+    // deprecated TelSDK API usage
     if (strengthPtr->getCdmaSignalStrength() != nullptr &&
         strengthPtr->getCdmaSignalStrength()->getDbm() != INVALID_SIGNAL_STRENGTH_VALUE)
     {
@@ -1457,6 +1461,7 @@ void Utility::Convert::SignalStrengthInfo
         infoPtr->cdmaInfo.io = strengthPtr->getCdmaSignalStrength()->getEvdoEcio();
         infoPtr->cdmaInfo.sinr = strengthPtr->getCdmaSignalStrength()->getEvdoSignalNoiseRatio();
     }
+    */
 
     if (strengthPtr->getWcdmaSignalStrength() != nullptr &&
         strengthPtr->getWcdmaSignalStrength()->getSignalStrength() !=
@@ -1464,16 +1469,20 @@ void Utility::Convert::SignalStrengthInfo
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_UMTS;
         infoPtr->umtsInfo.ss = strengthPtr->getWcdmaSignalStrength()->getDbm();
-        infoPtr->umtsInfo.ber = strengthPtr->getWcdmaSignalStrength()->getBitErrorRate();
+        // infoPtr->umtsInfo.ber = strengthPtr->getWcdmaSignalStrength()->getBitErrorRate();
+        infoPtr->umtsInfo.ber = INVALID_SIGNAL_STRENGTH_VALUE;
         infoPtr->umtsInfo.rscp = strengthPtr->getWcdmaSignalStrength()->getRscp();
     }
 
+    /*
+    // deprecated TelSDK API usage
     if (strengthPtr->getTdscdmaSignalStrength() != nullptr &&
         strengthPtr->getTdscdmaSignalStrength()->getRscp() != INVALID_SIGNAL_STRENGTH_VALUE)
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_TDSCDMA;
         infoPtr->tdscdmaInfo.rscp = strengthPtr->getTdscdmaSignalStrength()->getRscp();
     }
+    */
 
     if (strengthPtr->getLteSignalStrength() != nullptr &&
         strengthPtr->getLteSignalStrength()->getLteSignalStrength() !=
