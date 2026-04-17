@@ -50,18 +50,24 @@ using namespace telux;
         }                                                                 \
     };
 
-#define SERVICE_READY(name)                                                      \
+#define SERVICE_READY(name,manager)                                                      \
     future<common::ServiceStatus> name##Future = name##Promise->get_future();    \
     future_status name##Status = name##Future.wait_for(                          \
         chrono::seconds(SERVICE_TIMEOUT));                                       \
         common::ServiceStatus name##ServiceStatus;                               \
         if (future_status::timeout == name##Status)                              \
+        {                                                                        \
             PA_CRIT("Timeout for %s.", #name);                                   \
+            manager = nullptr;			                                         \
+        }                                                                        \
         else                                                                     \
         {                                                                        \
             name##ServiceStatus = name##Future.get();                            \
             if (name##ServiceStatus != common::ServiceStatus::SERVICE_AVAILABLE) \
+            {                                                                    \
                 PA_CRIT("%s is not available.", #name);                          \
+                manager = nullptr;                                               \
+            }                                                                    \
             else                                                                 \
                 PA_INFO("%s is available.", #name);                              \
         }
@@ -893,7 +899,10 @@ int Utility::Convert::InstanceToSlot
         return -1;
 
     auto& pa = PlatformAdaptor::GetInstance();
-    return pa.managers.phone->getSlotIdFromPhoneId(instance + 1);
+    if(pa.managers.phone != nullptr)
+        return pa.managers.phone->getSlotIdFromPhoneId(instance + 1);
+    else
+        return -1;
 }
 
 int Utility::Convert::InstanceToPhone
@@ -3889,12 +3898,12 @@ pa_result_t taf_pa_radio_Init()
 
     SERVICE_PROMISE_AND_CALLBACK(phone)
     pa.managers.phone = phoneFactory.getPhoneManager(phoneCallback);
-    SERVICE_READY(phone)
+    SERVICE_READY(phone,pa.managers.phone)
     pa.listeners.phone = make_shared<Listener::PhoneListener>();
 
     SERVICE_PROMISE_AND_CALLBACK(imsSetting)
     pa.managers.imsSetting = phoneFactory.getImsSettingsManager(imsSettingCallback);
-    SERVICE_READY(imsSetting)
+    SERVICE_READY(imsSetting,pa.managers.imsSetting)
 
     for (uint32_t i = 0; i < instances; i++)
     {
@@ -3904,26 +3913,26 @@ pa_result_t taf_pa_radio_Init()
         SERVICE_PROMISE_AND_CALLBACK(networkSelection)
         pa.managers.networkSelections[i] = phoneFactory.getNetworkSelectionManager(slot,
             networkSelectionCallback);
-        SERVICE_READY(networkSelection)
+        SERVICE_READY(networkSelection,pa.managers.networkSelections[i])
         pa.listeners.networkSelections[i] = make_shared<Listener::NetworkSelectionListener>(i);
 
         SERVICE_PROMISE_AND_CALLBACK(telephonyServingSystem)
         pa.managers.telephonyServingSystems[i] = phoneFactory.getServingSystemManager(slot,
             telephonyServingSystemCallback);
-        SERVICE_READY(telephonyServingSystem)
+        SERVICE_READY(telephonyServingSystem, pa.managers.imsServingSystems[i])
         pa.listeners.telephonyServingSystems[i] =
             make_shared<Listener::TelephonyServingSystemListener>(i);
 
         SERVICE_PROMISE_AND_CALLBACK(imsServingSystem)
         pa.managers.imsServingSystems[i] = phoneFactory.getImsServingSystemManager(slotId,
             imsServingSystemCallback);
-        SERVICE_READY(imsServingSystem)
+        SERVICE_READY(imsServingSystem,pa.managers.imsServingSystems[i])
         pa.listeners.imsServingSystems[i] = make_shared<Listener::ImsServingSystemListener>(i);
 
         SERVICE_PROMISE_AND_CALLBACK(dataServingSystem)
          pa.managers.dataServingSystems[i] = dataFactory.getServingSystemManager(slotId,
             dataServingSystemCallback);
-        SERVICE_READY(dataServingSystem)
+        SERVICE_READY(dataServingSystem,pa.managers.dataServingSystems[i])
         pa.listeners.dataServingSystems[i] = make_shared<Listener::DataServingSystemListener>(i);
     }
 
@@ -6223,33 +6232,39 @@ pa_result_t taf_pa_radio_RegisterIndication
     {
         case ENABLE_INDICATION:
         {
-            if (instance == 0)
+               if (instance == 0 && pa.managers.phone != nullptr)
                 pa.managers.phone->registerListener(pa.listeners.phone);
 
-            pa.managers.telephonyServingSystems[instance]->registerListener(
-                pa.listeners.telephonyServingSystems[instance]);
+               if (pa.managers.telephonyServingSystems[instance] != nullptr)
+                    pa.managers.telephonyServingSystems[instance]->registerListener(
+                        pa.listeners.telephonyServingSystems[instance]);
 
-            pa.managers.imsServingSystems[instance]->registerListener(
-                pa.listeners.imsServingSystems[instance]);
+               if (pa.managers.imsServingSystems[instance] != nullptr)
+                   pa.managers.imsServingSystems[instance]->registerListener(
+                       pa.listeners.imsServingSystems[instance]);
 
-            pa.managers.dataServingSystems[instance]->registerListener(
-                pa.listeners.dataServingSystems[instance]);
+                if (pa.managers.dataServingSystems[instance] != nullptr)
+                    pa.managers.dataServingSystems[instance]->registerListener(
+                        pa.listeners.dataServingSystems[instance]);
 
             break;
         }
         case DISABLE_INDICATION:
         {
-            if (instance == 0)
+            if (instance == 0 && pa.managers.phone != nullptr)
                 pa.managers.phone->removeListener(pa.listeners.phone);
 
-            pa.managers.telephonyServingSystems[instance]->deregisterListener(
-                pa.listeners.telephonyServingSystems[instance]);
+            if (pa.managers.telephonyServingSystems[instance] != nullptr)
+                pa.managers.telephonyServingSystems[instance]->deregisterListener(
+                    pa.listeners.telephonyServingSystems[instance]);
 
-            pa.managers.imsServingSystems[instance]->deregisterListener(
-                pa.listeners.imsServingSystems[instance]);
+            if (pa.managers.imsServingSystems[instance] != nullptr)
+                pa.managers.imsServingSystems[instance]->deregisterListener(
+                    pa.listeners.imsServingSystems[instance]);
 
-            pa.managers.dataServingSystems[instance]->deregisterListener(
-                pa.listeners.dataServingSystems[instance]);
+            if (pa.managers.dataServingSystems[instance] != nullptr)
+                pa.managers.dataServingSystems[instance]->deregisterListener(
+                    pa.listeners.dataServingSystems[instance]);
 
             break;
         }
