@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <semaphore.h>
 #include <shared_mutex>
-#include <bsd/string.h>
 
 #include <telux/common/DeviceConfig.hpp>
 #include <telux/common/Utils.hpp>
@@ -1646,11 +1645,25 @@ pa_result_t taf_pa_sim_GetIccid(taf_pa_sim_Id_t simId,
     else
     {
         iccIdStr = subscription->getIccId();
-        size_t iccidLen = strlcpy(simPtr->ICCID, iccIdStr.c_str(),
-                                           TAF_PA_SIM_ICCID_BYTES);
+
+        // Validate ICCID
+        if (iccIdStr.empty())
+        {
+            PA_ERROR("ICCID is empty");
+            return TAF_PA_SIM_RESULT_FAULT;
+        }
+
+        // Copy ICCID to cache using std::std::snprintf
+        int iccidLen = std::snprintf(simPtr->ICCID, TAF_PA_SIM_ICCID_BYTES,"%s",
+                       iccIdStr.c_str());
+        if (iccidLen < 0)
+        {
+            PA_ERROR("std::std::snprintf failed for ICCID");
+            return TAF_PA_SIM_RESULT_FAULT;
+        }
         if (iccidLen >= TAF_PA_SIM_ICCID_BYTES)
         {
-            PA_WARN("ICCID truncated: original length %zu, buffer size %d",
+            PA_WARN("ICCID truncated: original length %d, buffer size %d",
                     iccidLen, TAF_PA_SIM_ICCID_BYTES);
         }
         PA_INFO("iccIdStr: %s",iccIdStr.c_str());
@@ -1701,8 +1714,25 @@ pa_result_t taf_pa_sim_GetSubscriberPhoneNumber(taf_pa_sim_Id_t simId,
     else
     {
         phoneNumber = subscription->getPhoneNumber();
-        size_t phoneLen = strlcpy(simPtr->phoneNumber, phoneNumber.c_str(),
-                                           TAF_PA_SIM_PHONE_NUM_MAX_BYTES);
+
+        // Validate phone number
+        if (phoneNumber.empty())
+        {
+            PA_WARN("Phone number is empty for slot %d", simId);
+            // Empty phone number might be valid (not provisioned), so continue
+            simPtr->phoneNumber[0] = '\0';
+            return TAF_PA_SIM_RESULT_FAULT;
+        }
+
+        // Copy phone number to cache using std::snprintf
+        int phoneLen = std::snprintf(simPtr->phoneNumber, TAF_PA_SIM_PHONE_NUM_MAX_BYTES,
+                           "%s", phoneNumber.c_str());
+
+        if (phoneLen < 0)
+        {
+            PA_ERROR("std::snprintf failed for phone number");
+            return TAF_PA_SIM_RESULT_FAULT;
+        }
         if (phoneLen >= TAF_PA_SIM_PHONE_NUM_MAX_BYTES)
         {
             PA_WARN("Phone number truncated: original length %zu, buffer size %d",
@@ -1757,7 +1787,22 @@ pa_result_t taf_pa_sim_GetImsi(taf_pa_sim_Id_t simId,
     else
     {
         imsi = subscription->getImsi();
-        size_t imsiLen = strlcpy(simPtr->IMSI, imsi.c_str(),  TAF_PA_SIM_IMSI_BYTES);
+        int imsiLen = std::snprintf(simPtr->IMSI, TAF_PA_SIM_IMSI_BYTES, "%s", imsi.c_str());
+
+        // Validate IMSI
+        if (imsi.empty())
+        {
+            PA_WARN("imsir is empty for slot %d", simId);
+            // Empty phone number might be valid (not provisioned), so continue
+            simPtr->IMSI[0] = '\0';
+            return TAF_PA_SIM_RESULT_FAULT;
+        }
+
+        if (imsiLen < 0)
+        {
+            PA_ERROR("std::snprintf failed for IMSI");
+            return TAF_PA_SIM_RESULT_FAULT;
+        }
         if (imsiLen >= TAF_PA_SIM_IMSI_BYTES)
         {
             PA_WARN("IMSI truncated: original length %zu, buffer size %d",
@@ -1831,26 +1876,61 @@ void PlatformAdaptor::InitializeSimInfo
     if (subscription)
     {
         simPtr->simId = simId;
-        size_t iccidLen = strlcpy(simPtr->ICCID, subscription->getIccId().c_str(),
-                                  TAF_PA_SIM_ICCID_BYTES);
-        if (iccidLen >= TAF_PA_SIM_ICCID_BYTES)
+        int iccidLen = std::snprintf(simPtr->ICCID, TAF_PA_SIM_ICCID_BYTES, "%s",
+                       subscription->getIccId().c_str());
+
+        if (iccidLen < 0)
         {
-            PA_WARN("ICCID org length %zu, buf size %d", iccidLen,
-                                  TAF_PA_SIM_ICCID_BYTES);
+            PA_ERROR("std::snprintf failed for ICCID");
+            memset(simPtr->ICCID, 0, TAF_PA_SIM_ICCID_BYTES);
         }
-        size_t imsiLen = strlcpy(simPtr->IMSI, subscription->getImsi().c_str(),
-                                  TAF_PA_SIM_IMSI_BYTES);
-        if (imsiLen >= TAF_PA_SIM_IMSI_BYTES)
+        else if (iccidLen >= TAF_PA_SIM_ICCID_BYTES)
         {
-            PA_WARN("IMSI org length %zu, buf size %d", imsiLen,
-                                  TAF_PA_SIM_IMSI_BYTES);
+            PA_WARN("ICCID truncated: original length %d, buffer size %d",
+                    iccidLen, TAF_PA_SIM_ICCID_BYTES);
         }
-        size_t phoneLen = strlcpy(simPtr->phoneNumber, subscription->getPhoneNumber().c_str(),
-                                  TAF_PA_SIM_PHONE_NUM_MAX_BYTES);
-        if (phoneLen >= TAF_PA_SIM_PHONE_NUM_MAX_BYTES)
+        else
         {
-            PA_WARN("Phone number org length %zu, buf size %d", phoneLen,
-                                  TAF_PA_SIM_PHONE_NUM_MAX_BYTES);
+            PA_INFO("ICCID: %s (length: %d)", simPtr->ICCID, iccidLen);
+        }
+
+        int imsiLen = std::snprintf(simPtr->IMSI, TAF_PA_SIM_IMSI_BYTES, "%s",
+                      subscription->getImsi().c_str());
+
+        if (imsiLen < 0)
+        {
+            PA_ERROR("std::snprintf failed for IMSI");
+            memset(simPtr->IMSI, 0, TAF_PA_SIM_IMSI_BYTES);
+        }
+        else if (imsiLen >= TAF_PA_SIM_IMSI_BYTES)
+        {
+            PA_WARN("IMSI truncated: original length %d, buffer size %d",
+                    imsiLen, TAF_PA_SIM_IMSI_BYTES);
+        }
+        else
+        {
+            PA_INFO("IMSI: %s (length: %d)", simPtr->IMSI, imsiLen);
+        }
+
+        int phoneLen = std::snprintf(simPtr->phoneNumber, TAF_PA_SIM_PHONE_NUM_MAX_BYTES,
+                                "%s", subscription->getPhoneNumber().c_str());
+        if (phoneLen < 0)
+        {
+            PA_ERROR("std::snprintf failed for phone number");
+            memset(simPtr->phoneNumber, 0, TAF_PA_SIM_PHONE_NUM_MAX_BYTES);
+        }
+        else if (phoneLen >= TAF_PA_SIM_PHONE_NUM_MAX_BYTES)
+        {
+            PA_WARN("Phone number truncated: original length %d, buffer size %d", 
+                    phoneLen, TAF_PA_SIM_PHONE_NUM_MAX_BYTES);
+        }
+        else if (phoneLen == 0)
+        {
+            PA_INFO("Phone number is empty (not provisioned)");
+        }
+        else
+        {
+            PA_INFO("Phone number: %s (length: %d)", simPtr->phoneNumber, phoneLen);
         }
     }
     else
@@ -2014,6 +2094,12 @@ pa_result_t taf_pa_sim_GetHomeNetworkMccMnc(taf_pa_sim_Id_t simId,
     taf_pa_sim_info_t* simPtr = NULL;
     std::shared_ptr<telux::tel::ISubscription> subscription;
     PA_INFO("taf_pa_sim_GetHomeNetworkMccMnc");
+    // Validate input parameters
+    if (mcc == nullptr || mnc == nullptr)
+    {
+        PA_ERROR("Invalid parameters: mcc or mnc pointer is null");
+        return PA_BAD_PARAMETER;
+    }
     simPtr = pa.GetSimContext((taf_pa_sim_Id_t)simId);
     if(simPtr == nullptr)
     {
@@ -2142,6 +2228,11 @@ pa_result_t taf_pa_sim_GetState
 {
     PA_INFO("Input sim Id: %d", (int)simId);
     auto& pa = PlatformAdaptor::GetInstance();
+    if (state == nullptr)
+    {
+        PA_ERROR("Invalid parameter: state pointer is null");
+        return PA_BAD_PARAMETER;
+    }
     if (simId >= TAF_PA_SIM_ID_MAX || simId <= 0)
     {
         PA_INFO("Invalid sim Id");
