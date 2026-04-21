@@ -39,8 +39,6 @@ target_link_libraries(${TARGET_NAME} PRIVATE telux_common telux_data telux_tel)
 
 target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
 
-target_link_libraries(${TARGET_NAME} PRIVATE bsd)
-
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib
 )
