@@ -5,6 +5,7 @@
 
 #include <errno.h>
 
+#include <cstring>
 #include <future>
 #include <condition_variable>
 
@@ -496,6 +497,65 @@ pa_result_t taf_pa_mrc_GetEfsBlockStatus
     statusPtr->maxEraseCount = status.maxEraseCount;
     statusPtr->totalBadBlocks = status.totalBadBlocks;
 
+    return result;
+}
+
+pa_result_t taf_pa_mrc_GetEfsUsageStats
+(
+    taf_pa_mrc_EfsUsageStats_t* statsPtr
+)
+{
+    if (statsPtr == nullptr)
+    {
+        PA_ERROR("statsPtr is nullptr.");
+        return -EINVAL;
+    }
+
+    memset(statsPtr, 0, sizeof(*statsPtr));
+    PA_INFO("taf_pa_mrc_GetEfsUsageStats: statsPtr = %p", (void *)statsPtr);
+
+    taf_ns_mrc_EfsUsageStats_t stats;
+    memset(&stats, 0, sizeof(stats));
+
+    int32_t result = taf_ns_mrc_GetEfsUsageStats(&stats);
+    PA_INFO("taf_pa_mrc_GetEfsUsageStats: result from taf_ns_mrc_GetEfsUsageStats = %d", result);
+    if (result != 0)
+        return result;
+
+    uint32_t i;
+    for (i = 0; i < TAF_PA_MRC_EFS_PARTITION_BLOCKS && i < TAF_NS_MRC_EFS_PARTITION_BLOCKS
+        && i < stats.blockStatsLen; i++)
+    {
+        statsPtr->blockStats[i].blockReadStats = stats.blockStats[i].blockReadStats;
+        statsPtr->blockStats[i].blockEraseStats = stats.blockStats[i].blockEraseStats;
+        statsPtr->blockStats[i].blockEccBitflipStats = stats.blockStats[i].blockEccBitflipStats;
+        PA_INFO("EFS blockStats[%u]: read=%u erase=%u ecc=%u", i,
+            (unsigned int)statsPtr->blockStats[i].blockReadStats,
+            (unsigned int)statsPtr->blockStats[i].blockEraseStats,
+            (unsigned int)statsPtr->blockStats[i].blockEccBitflipStats);
+    }
+    statsPtr->blockStatsLen = i;
+    PA_INFO("EFS blockStatsLen = %u", statsPtr->blockStatsLen);
+
+    for (i = 0; i < TAF_PA_MRC_EFS_WRITE_TASKS && i < TAF_NS_MRC_EFS_WRITE_TASKS
+        && i < stats.clientListLen; i++)
+    {
+        statsPtr->clientList[i].writeCallCounters = stats.clientList[i].writeCallCounters;
+        statsPtr->clientList[i].maxNbyte = stats.clientList[i].maxNbyte;
+        statsPtr->clientList[i].taskNameLen = stats.clientList[i].taskNameLen;
+        memcpy(statsPtr->clientList[i].taskName, stats.clientList[i].taskName,
+            TAF_PA_MRC_EFS_TASK_NAME_LEN);
+        PA_INFO("EFS clientList[%u]: writeCalls=%u maxNbyte=%u taskNameLen=%u taskName=%.*s", i,
+            (unsigned int)statsPtr->clientList[i].writeCallCounters,
+            (unsigned int)statsPtr->clientList[i].maxNbyte,
+            (unsigned int)statsPtr->clientList[i].taskNameLen,
+            (int)statsPtr->clientList[i].taskNameLen,
+            statsPtr->clientList[i].taskName);
+    }
+    statsPtr->clientListLen = i;
+    PA_INFO("EFS clientListLen = %u", statsPtr->clientListLen);
+
+    PA_INFO("taf_pa_mrc_GetEfsUsageStats: returning result = %d", result);
     return result;
 }
 
