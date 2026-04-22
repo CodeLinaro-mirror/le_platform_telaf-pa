@@ -13,6 +13,8 @@ extern "C" {
 #endif
 
 #define TAF_PA_MRC_EFS_PARTITION_BLOCKS 90
+#define TAF_PA_MRC_EFS_WRITE_TASKS      100
+#define TAF_PA_MRC_EFS_TASK_NAME_LEN    20
 
 typedef enum
 {
@@ -58,15 +60,57 @@ typedef struct
 
 typedef struct
 {
+    uint32_t peCountLen;
+    uint32_t peCount[TAF_PA_MRC_EFS_PARTITION_BLOCKS];
+} taf_pa_mrc_EfsPeStatus_t;
+
+typedef struct
+{
     uint32_t maxEraseCount;
     uint32_t totalBadBlocks;
 } taf_pa_mrc_EfsBlockStatus_t;
 
 typedef struct
 {
-    uint32_t peCountLen;
-    uint32_t peCount[TAF_PA_MRC_EFS_PARTITION_BLOCKS];
-} taf_pa_mrc_EfsPeStatus_t;
+    uint32_t blockReadStats;
+    ///< Read counters for each block in EFS.
+
+    uint32_t blockEraseStats;
+    ///< Program and erase counters for each block in EFS.
+
+    uint32_t blockEccBitflipStats;
+    ///< ECC bit-flip correction count for each block in EFS.
+} taf_pa_mrc_EfsBlockCounters_t;
+
+typedef struct
+{
+    uint64_t writeCallCounters;
+    ///< Number of write calls issued by the EFS client task.
+
+    uint64_t maxNbyte;
+    ///< Maximum number of bytes written in a single write call by the EFS client task.
+
+    uint32_t taskNameLen;
+    ///< Length of the EFS client task name string.
+
+    char taskName[TAF_PA_MRC_EFS_TASK_NAME_LEN];
+    ///< Name of the EFS client task.
+} taf_pa_mrc_EfsWriteClient_t;
+
+typedef struct
+{
+    uint32_t blockStatsLen;
+    ///< Number of valid per-block EFS usage statistics entries.
+
+    taf_pa_mrc_EfsBlockCounters_t blockStats[TAF_PA_MRC_EFS_PARTITION_BLOCKS];
+    ///< Per-block EFS usage statistics.
+
+    uint32_t clientListLen;
+    ///< Number of valid EFS write client statistics entries.
+
+    taf_pa_mrc_EfsWriteClient_t clientList[TAF_PA_MRC_EFS_WRITE_TASKS];
+    ///< EFS write statistics for client tasks.
+} taf_pa_mrc_EfsUsageStats_t;
 
 typedef struct taf_pa_mrc_ProcessStatusHandler* taf_pa_mrc_ProcessStatusHandlerRef_t;
 
@@ -76,16 +120,6 @@ typedef void (*taf_pa_mrc_ProcessStatusHdlrFunc_t)
     void* contextPtr
 );
 
-typedef void (*taf_pa_mrc_ProcessStatusHdlrFunc_t)
-(
-    taf_pa_mrc_ProcessStatusIndication_t indication,
-    void* contextPtr
-);
-
-/* Scrub / GPIO-toggle indication from MRCD to client via TelAF.
- * Currently QMI-MRC does not provide slot info, so this is simply a
- * "toggle requested" flag.
- */
 typedef struct
 {
     uint8_t slotToggleRequested;
@@ -134,6 +168,11 @@ PA_SHARED pa_result_t taf_pa_mrc_GetEfsPeStatus
 PA_SHARED pa_result_t taf_pa_mrc_GetEfsBlockStatus
 (
     taf_pa_mrc_EfsBlockStatus_t* statusPtr
+);
+
+PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_GetEfsUsageStats
+(
+    taf_pa_mrc_EfsUsageStats_t* statsPtr
 );
 
 PA_SHARED pa_result_t taf_pa_mrc_SetTimerPeriod

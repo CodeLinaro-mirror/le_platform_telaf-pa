@@ -88,6 +88,16 @@ int32_t taf_ns_mrc_GetEfsBlockStatus
     return -ENOSYS;
 }
 
+int32_t taf_ns_mrc_GetEfsUsageStats
+(
+    taf_ns_mrc_EfsUsageStats_t* statsPtr
+)
+{
+    NS_INFO("Function is not implemented in stub PA.");
+
+    return -ENOSYS;
+}
+
 int32_t taf_ns_mrc_SetTimerPeriod
 (
     taf_ns_mrc_Timer_t timer,
