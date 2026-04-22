@@ -13,7 +13,6 @@
 #include <net/if.h>
 #include <unistd.h>
 #include <cstring>
-#include <bsd/string.h>
 
 using namespace taf::pa::data;
 
@@ -799,12 +798,15 @@ pa_result_t Utils::GetMtuFromInterface
     std::memset(&ifr, 0, sizeof(ifr));
 
     // Copy interface name, ensuring null termination
-    if (strlcpy(ifr.ifr_name, interfaceName.c_str(), IFNAMSIZ) >= IFNAMSIZ)
+    int iRet = std::snprintf(ifr.ifr_name, IFNAMSIZ, "%s", interfaceName.c_str());
+    if (iRet < 0 || iRet >= IFNAMSIZ)
     {
-        PA_ERROR("Interface name too long: %s", interfaceName.c_str());
+        PA_ERROR("Interface name too long or encoding error: %s", interfaceName.c_str());
         close(sockfd);
         return PA_BAD_PARAMETER;
     }
+    // Ensure null termination even if truncated
+      ifr.ifr_name[IFNAMSIZ - 1] = '\0';
 
     if (ioctl(sockfd, SIOCGIFMTU, &ifr) < 0)
     {
