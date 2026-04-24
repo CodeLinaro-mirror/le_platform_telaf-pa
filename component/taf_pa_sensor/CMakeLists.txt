@@ -11,7 +11,7 @@ set(OUTPUT_NAME Component_${TARGET_NAME})
 
 # common headers
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
-add_library(${TARGET_NAME} SHARED taf_pa_sensor.cpp)
+add_library(${TARGET_NAME} SHARED tafSensorPa.cpp)
 
 # link glib-2.0
 find_package(PkgConfig REQUIRED)

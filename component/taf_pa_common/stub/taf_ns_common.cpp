@@ -23,3 +23,8 @@ void taf_ns_common_LogMessage
 )
 {
 }
+
+void taf_ns_common_LogBind(const taf_ns_common_LogVtable_t* vt)
+{
+
+}
