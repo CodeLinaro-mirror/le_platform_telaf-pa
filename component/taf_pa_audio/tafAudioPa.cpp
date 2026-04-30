@@ -43,7 +43,7 @@
                 callback(PA_OK, context);                                                    \
             }                                                                                \
             else{                                                                            \
-                PA_ERROR("Request failed, err %s", Utils::getErrorCodeAsString(error));      \
+                PA_ERROR("Request failed, err %s", Utils::getErrorCodeAsString(error).c_str());      \
                 callback(PA_FAULT, context);                                                 \
             }                                                                                \
     };                                                                                       \

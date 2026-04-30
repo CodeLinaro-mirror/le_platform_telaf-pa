@@ -2996,7 +2996,7 @@ void RequestCallback::CommonResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3015,7 +3015,7 @@ void RequestCallback::operatingModeResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3035,7 +3035,7 @@ void RequestCallback::NetworkModeInfoResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3056,7 +3056,7 @@ void RequestCallback::PreferredNetworksResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3077,7 +3077,7 @@ void RequestCallback::RatPreferenceResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3097,7 +3097,7 @@ void RequestCallback::ServiceDomainPreferenceResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3122,7 +3122,7 @@ void RequestCallback::voiceServiceStateResponse
     }
     else if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3147,7 +3147,7 @@ void RequestCallback::signalStrengthResponse
     }
     else if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3167,7 +3167,7 @@ void RequestCallback::DataServiceStatusResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3187,7 +3187,7 @@ void RequestCallback::CellInfoListResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3209,7 +3209,7 @@ void RequestCallback::OperatorInfoResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3233,7 +3233,7 @@ void RequestCallback::RfBandCapabilityResponse
     }
     else if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3258,7 +3258,7 @@ void RequestCallback::RfBandPreferenceResponse
     }
     else if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3278,7 +3278,7 @@ void RequestCallback::ImsRegistrationInfoResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3298,7 +3298,7 @@ void RequestCallback::ImsServiceInfoResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3318,7 +3318,7 @@ void RequestCallback::ImsPdpStatusResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3339,7 +3339,7 @@ void RequestCallback::ImsVonrStatusResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3360,7 +3360,7 @@ void RequestCallback::ImsServiceConfigResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3381,7 +3381,7 @@ void RequestCallback::ImsSigUserAgentResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3401,7 +3401,7 @@ void RequestCallback::cellularCapabilityResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3421,7 +3421,7 @@ void RequestCallback::RFBandInfoResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
@@ -3441,7 +3441,7 @@ void RequestCallback::NrIconTypeResponse
 {
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error));
+        PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
         result = -EFAULT;
     }
     else
