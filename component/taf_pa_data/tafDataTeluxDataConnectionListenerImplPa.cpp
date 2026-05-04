@@ -215,19 +215,15 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         eventInfo.ipv4DataCallInfo.dnsAddrPrimary = IPv4Info.addr.primaryDnsAddress;
         eventInfo.ipv4DataCallInfo.dnsAddrSecondary = IPv4Info.addr.secondaryDnsAddress;
 
-        // Get MTU from the host interface
-        if (!eventInfo.hostIfName.empty())
+        // Get MTU directly from IpFamilyInfo provided by the SDK
+        if (IPv4Info.addr.mtu > 0)
         {
-            int32_t mtu = taf::pa::data::MTU_NOT_SET;
-            if (PA_OK == Utils::GetMtuFromInterface(eventInfo.hostIfName, mtu))
-            {
-                eventInfo.ipv4DataCallInfo.mtu = mtu;
-                PA_DEBUG("IPv4 MTU: %d", mtu);
-            }
-            else
-            {
-                PA_WARN("Failed to get MTU for interface %s", eventInfo.hostIfName.c_str());
-            }
+            eventInfo.ipv4DataCallInfo.mtu = static_cast<int32_t>(IPv4Info.addr.mtu);
+            PA_DEBUG("IPv4 MTU: %d", eventInfo.ipv4DataCallInfo.mtu);
+        }
+        else
+        {
+            PA_WARN("MTU not available in IPv4 IpAddrInfo");
         }
     }
     // Checks status and fill IPv4 call end reason
@@ -253,19 +249,15 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         eventInfo.ipv6DataCallInfo.dnsAddrPrimary = IPv6Info.addr.primaryDnsAddress;
         eventInfo.ipv6DataCallInfo.dnsAddrSecondary = IPv6Info.addr.secondaryDnsAddress;
 
-        // Get MTU from the host interface
-        if (!eventInfo.hostIfName.empty())
+        // Get MTU directly from IpFamilyInfo provided by the SDK
+        if (IPv6Info.addr.mtu > 0)
         {
-            int32_t mtu = taf::pa::data::MTU_NOT_SET;
-            if (PA_OK == Utils::GetMtuFromInterface(eventInfo.hostIfName, mtu))
-            {
-                eventInfo.ipv6DataCallInfo.mtu = mtu;
-                PA_DEBUG("IPv6 MTU: %d", mtu);
-            }
-            else
-            {
-                PA_WARN("Failed to get MTU for interface %s", eventInfo.hostIfName.c_str());
-            }
+            eventInfo.ipv6DataCallInfo.mtu = static_cast<int32_t>(IPv6Info.addr.mtu);
+            PA_DEBUG("IPv6 MTU: %d", eventInfo.ipv6DataCallInfo.mtu);
+        }
+        else
+        {
+            PA_WARN("MTU not available in IPv6 IpAddrInfo");
         }
     }
     // Checks status and fill IPv6 call end reason
@@ -320,6 +312,43 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         PA_DEBUG("iDataCall(%p) removed from callStatusMap_. Size: %zu", rawPtr,
                                                                             callStatusMap_.size());
     }
+}
+
+pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::GetMtuByInterfaceName
+(
+    const std::string& interfaceName,
+    int32_t& mtu
+)
+{
+    std::lock_guard<std::mutex> lock(listenerMtx_);
+    for (const auto& entry : callStatusMap_)
+    {
+        const auto& iDataCall = entry.first;
+        if (iDataCall->getInterfaceName() == interfaceName)
+        {
+            // Prefer IPv4 MTU, fall back to IPv6 MTU
+            telux::data::IpFamilyInfo ipv4Info = iDataCall->getIpv4Info();
+            if (ipv4Info.addr.mtu > 0)
+            {
+                mtu = static_cast<int32_t>(ipv4Info.addr.mtu);
+                PA_DEBUG("MTU from IPv4 IpAddrInfo for interface %s: %d",
+                         interfaceName.c_str(), mtu);
+                return PA_OK;
+            }
+            telux::data::IpFamilyInfo ipv6Info = iDataCall->getIpv6Info();
+            if (ipv6Info.addr.mtu > 0)
+            {
+                mtu = static_cast<int32_t>(ipv6Info.addr.mtu);
+                PA_DEBUG("MTU from IPv6 IpAddrInfo for interface %s: %d",
+                         interfaceName.c_str(), mtu);
+                return PA_OK;
+            }
+            PA_WARN("MTU not available in IpAddrInfo for interface %s", interfaceName.c_str());
+            return PA_FAULT;
+        }
+    }
+    PA_WARN("Interface %s not found in active data calls", interfaceName.c_str());
+    return PA_NOT_FOUND;
 }
 
 void taf::pa::data::TafPaTeluxDataConnectionListener::onDataCallInfoChanged
