@@ -273,3 +273,13 @@ pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
     PA_INFO("Supported slots count: %zu", slotIds.size());
     return PA_OK;
 }
+
+pa_result_t taf_pa_net_Deinit()
+{
+    PA_INFO("Starting Net platform adaptor deinitialization...");
+    auto &pNetAdaptor = taf_NetAdaptor::getInstance();
+    PA_INFO("Resetting phoneManager");
+    pNetAdaptor.phoneManager.reset();
+    PA_INFO("Net platform adaptor deinitialization complete.");
+    return PA_OK;
+}

@@ -60,6 +60,7 @@ typedef std::function<void(int phoneId, taf_pa_sms_StorageFullType fullType)>
     MemoryFullCallback;
 
 PA_SHARED pa_result_t taf_pa_sms_Init(void);
+PA_SHARED pa_result_t taf_pa_sms_Deinit(void);
 
 PA_SHARED pa_result_t taf_pa_sms_ReadMessage
 (

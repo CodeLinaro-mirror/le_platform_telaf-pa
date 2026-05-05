@@ -11,6 +11,8 @@
 
 PA_SHARED pa_result_t taf_pa_net_Init();
 
+PA_SHARED pa_result_t taf_pa_net_Deinit();
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Get phone ID from slot ID

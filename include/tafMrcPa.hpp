@@ -104,6 +104,11 @@ PA_SHARED pa_result_t taf_pa_mrc_Init
     void
 );
 
+PA_SHARED pa_result_t taf_pa_mrc_Deinit
+(
+    void
+);
+
 PA_SHARED pa_result_t taf_pa_mrc_RegisterIndication
 (
     uint8_t registration

@@ -113,6 +113,8 @@ PA_SHARED pa_result_t taf_pa_vlan_RegHwAccelarationUpdateHandler
 
 PA_SHARED pa_result_t taf_pa_vlan_Init();
 
+PA_SHARED pa_result_t taf_pa_vlan_Deinit();
+
 PA_SHARED pa_result_t taf_pa_net_AddVlanInterface
 (
      const taf_pa_Vlan_t vlanConfig,

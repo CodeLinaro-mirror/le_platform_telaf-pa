@@ -623,6 +623,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManager
     dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
     dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
 
+    // Reset request call list state: release the stored context shared_ptr and
+    // clear the in-progress flag so a subsequent Init()/Deinit() cycle starts clean.
+    PA_INFO("Reset requestCallListClientEntry_ and bRequestCallListInProgress_");
+    requestCallListClientEntry_ = {nullptr, nullptr};
+    bRequestCallListInProgress_.store(false);
+
     PA_INFO("Data connection managers deinitialization complete");
     return PA_OK;
 }

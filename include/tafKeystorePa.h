@@ -457,6 +457,18 @@ PA_SHARED pa_result_t taf_pa_ks_Init
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * PA deinitialization.
+ *
+ * @return
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED void taf_pa_ks_Deinit
+(
+    void
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
  * Create or import a RSA encryption key and return a key file reference
  *
  * The impData must be a PKCS#8 der bytes if provided.

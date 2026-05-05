@@ -43,6 +43,7 @@ public:
     taf_pa_ecall_termination_t convertToPaTermination(telux::tel::CallEndCause endCause);
     taf_pa_ecall_call_status_t stateToEvent(telux::tel::CallState state);
     pa_result_t initialize();
+    pa_result_t deinitialize();
     pa_result_t InitializeSDKSubsystem();
 
     uint8_t getPhoneListSize(){
@@ -785,7 +786,7 @@ pa_result_t EcallPaController::InitializeSDKSubsystem()
     auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
     auto prom = std::make_shared<std::promise<telux::common::ServiceStatus>>();
 
-    CallManager_ = phoneFactory.getCallManager([prom](telux::common::ServiceStatus status) 
+    CallManager_ = phoneFactory.getCallManager([prom](telux::common::ServiceStatus status)
     {
 	    try{
             PA_INFO("Getting status: %d from call manager", (int)status);
@@ -1899,6 +1900,75 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
     return PA_NOT_FOUND;
 }
 
+pa_result_t EcallPaController::deinitialize()
+{
+    PA_INFO("Starting ECall PA deinitialization...");
+
+    // Step 1: Deregister ecall call listener from CallManager
+    if (CallManager_ && ecallListener_)
+    {
+        PA_INFO("Deregistering ecallListener_ from CallManager_");
+        telux::common::Status status = CallManager_->removeListener(ecallListener_);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to deregister ecall call listener. Status: %d",
+                     static_cast<int>(status));
+        }
+        ecallListener_.reset();
+    }
+
+    // Step 2: Deregister ecall phone listener from PhoneManager
+    if (PhoneManager_ && ecallPhoneListener_)
+    {
+        PA_INFO("Deregistering ecallPhoneListener_ from PhoneManager_");
+        telux::common::Status status = PhoneManager_->removeListener(ecallPhoneListener_);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to deregister ecall phone listener. Status: %d",
+                     static_cast<int>(status));
+        }
+        ecallPhoneListener_.reset();
+    }
+
+    // Step 3: Deregister modem event listener from subsystem manager
+    // Reconstruct the same subsystem info list used during registration.
+    if (subsystemMgr_ && ecallModemListener_)
+    {
+        PA_INFO("Deregistering ecallModemListener_ from subsystemMgr_");
+        telux::common::SubsystemInfo subsysInfo{};
+        std::vector<telux::common::SubsystemInfo> listOfSubsystems;
+        subsysInfo.location = telux::common::ProcType::LOCAL_PROC;
+        subsysInfo.subsystems = telux::common::Subsystem::MPSS;
+        listOfSubsystems.push_back(subsysInfo);
+        telux::common::ErrorCode ec =
+            subsystemMgr_->deRegisterListener(ecallModemListener_);
+        if (ec != telux::common::ErrorCode::SUCCESS)
+        {
+            PA_ERROR("Failed to deregister ecall modem listener. ErrorCode: %d",
+                     static_cast<int>(ec));
+        }
+        ecallModemListener_.reset();
+    }
+
+    // Step 4: Reset manager shared pointers
+    PA_INFO("Resetting CallManager_, PhoneManager_, subsystemMgr_");
+    CallManager_.reset();
+    PhoneManager_.reset();
+    subsystemMgr_.reset();
+
+    // Step 5: Clear phone list
+    PA_INFO("Clearing Phones vector");
+    Phones.clear();
+
+    // Step 6: Clear event listener pointer and context
+    PA_INFO("Clearing eventListener_ and contextPtr_");
+    eventListener_ = nullptr;
+    contextPtr_.reset();
+
+    PA_INFO("ECall PA deinitialization complete");
+    return PA_OK;
+}
+
 pa_result_t tafpa::ecall::taf_pa_ecall_Init(){
     auto paCtrl =  EcallPaController::getInstance();
     pa_result_t result = paCtrl->initialize();
@@ -1907,6 +1977,21 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Init(){
     }
     else{
         PA_INFO("Ecall pa controller initialization done");
+    }
+    return result;
+}
+
+pa_result_t tafpa::ecall::taf_pa_ecall_Deinit()
+{
+    auto paCtrl = EcallPaController::getInstance();
+    pa_result_t result = paCtrl->deinitialize();
+    if (result != PA_OK)
+    {
+        PA_ERROR("Ecall pa controller deinitialization failed");
+    }
+    else
+    {
+        PA_INFO("Ecall pa controller deinitialization done");
     }
     return result;
 }

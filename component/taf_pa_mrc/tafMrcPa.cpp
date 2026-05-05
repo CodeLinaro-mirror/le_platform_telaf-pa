@@ -528,3 +528,29 @@ pa_result_t taf_pa_mrc_AckSlotToggle
 {
     return taf_ns_mrc_AckSlotToggle(success);
 }
+
+pa_result_t taf_pa_mrc_Deinit()
+{
+    PA_INFO("Starting MRC platform adaptor deinitialization...");
+
+    auto& pa = PlatformAdaptor::GetInstance();
+
+    // Step 1: Clear the PA-level process status handler so no further callbacks
+    // are dispatched. The ns layer has no remove-handler API, so nulling the
+    // PA-level pointer is the only way to suppress further delivery.
+    PA_INFO("Clearing processStatus handler and context");
+    pa.indicators.processStatus.handlerFuncPtr = nullptr;
+    pa.indicators.processStatus.contextPtr = nullptr;
+
+    // Step 2: Clear the PA-level scrub status handler for the same reason.
+    PA_INFO("Clearing scrubStatus handler and context");
+    pa.indicators.scrubStatus.handlerFuncPtr = nullptr;
+    pa.indicators.scrubStatus.contextPtr = nullptr;
+
+    // Step 3: Reset the IFsManager shared pointer.
+    PA_INFO("Resetting managers.fs");
+    pa.managers.fs.reset();
+
+    PA_INFO("MRC platform adaptor deinitialization complete.");
+    return 0;
+}

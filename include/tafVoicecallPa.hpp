@@ -78,6 +78,8 @@ typedef void (*taf_pa_voicecall_EventListener)(
 
 PA_SHARED pa_result_t taf_pa_voicecall_Init();
 
+PA_SHARED pa_result_t taf_pa_voicecall_Deinit();
+
 PA_SHARED pa_result_t taf_pa_voicecall_Make(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,

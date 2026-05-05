@@ -652,6 +652,8 @@ struct taf_pa_ecall_event_listener_t
 // Initializes the eCall subsystem.
 PA_SHARED pa_result_t taf_pa_ecall_Init();
 
+PA_SHARED pa_result_t taf_pa_ecall_Deinit();
+
 // Sets eCall configuration parameters.
 PA_SHARED pa_result_t taf_pa_ecall_SetConfig(
     const taf_pa_ecall_config_t& config

@@ -99,6 +99,8 @@ struct taf_pa_sensor_EventListener {
 // Initializes the Sensor subsystem.
 PA_SHARED pa_result_t taf_pa_sensor_Init(int8_t& listSize);
 
+PA_SHARED pa_result_t taf_pa_sensor_Deinit();
+
 // Retrieves information about a specific sensor.
 PA_SHARED pa_result_t taf_pa_sensor_GetSensorInfo(
     int8_t index,

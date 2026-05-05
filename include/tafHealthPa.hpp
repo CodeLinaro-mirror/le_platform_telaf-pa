@@ -78,6 +78,8 @@ PA_SHARED  pa_result_t taf_pa_health_ModemNotificationInit(void);
 PA_SHARED  pa_result_t taf_pa_health_RegModemListener(void);
 PA_SHARED  pa_result_t taf_pa_health_DeregModemListener(void);
 PA_SHARED  pa_result_t taf_pa_health_PhoneInit(void);
+
+PA_SHARED pa_result_t taf_pa_health_Deinit(void);
 PA_SHARED  pa_result_t taf_pa_health_ReqPhoneOperatingMode(void);
 
 //--------------------------------------------------------------------------------------------------

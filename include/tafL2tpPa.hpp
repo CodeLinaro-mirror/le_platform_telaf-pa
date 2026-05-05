@@ -113,6 +113,7 @@ typedef struct
 typedef void (*taf_pa_l2tp_CallCb)(pa_result_t result, void *contextPtr);
 
 PA_SHARED bool taf_pa_l2tp_Init();
+PA_SHARED bool taf_pa_l2tp_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**

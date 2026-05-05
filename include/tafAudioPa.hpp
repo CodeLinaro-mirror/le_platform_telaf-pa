@@ -236,6 +236,8 @@ class IPaDtmfListener {
 
 PA_SHARED pa_result_t taf_pa_audio_Init();
 
+PA_SHARED pa_result_t taf_pa_audio_Deinit();
+
 PA_SHARED pa_result_t taf_pa_audio_CreateStream(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,

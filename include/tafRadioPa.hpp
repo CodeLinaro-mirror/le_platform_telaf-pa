@@ -946,6 +946,11 @@ PA_SHARED pa_result_t taf_pa_radio_Init
     void
 );
 
+PA_SHARED pa_result_t taf_pa_radio_Deinit
+(
+    void
+);
+
 PA_SHARED pa_result_t taf_pa_radio_GetOperatingMode
 (
     uint32_t instance,

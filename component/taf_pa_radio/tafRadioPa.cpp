@@ -3971,6 +3971,154 @@ pa_result_t taf_pa_radio_Init()
     return 0;
 }
 
+pa_result_t taf_pa_radio_Deinit()
+{
+    PA_INFO("Starting radio platform adaptor deinitialization...");
+
+    auto& pa = PlatformAdaptor::GetInstance();
+
+    // Step 1: Clear all indicator handler function pointers and context pointers
+    // so no further indication callbacks are dispatched after this point.
+    PA_INFO("Clearing all indicator handlers and contexts");
+    pa.indicators.networkReject.handlerFuncPtr      = nullptr;
+    pa.indicators.networkReject.contextPtr          = nullptr;
+    pa.indicators.ratChange.handlerFuncPtr          = nullptr;
+    pa.indicators.ratChange.contextPtr              = nullptr;
+    pa.indicators.voiceServiceInfo.handlerFuncPtr   = nullptr;
+    pa.indicators.voiceServiceInfo.contextPtr       = nullptr;
+    pa.indicators.dataServiceStatus.handlerFuncPtr  = nullptr;
+    pa.indicators.dataServiceStatus.contextPtr      = nullptr;
+    pa.indicators.dataRoamingStatus.handlerFuncPtr  = nullptr;
+    pa.indicators.dataRoamingStatus.contextPtr      = nullptr;
+    pa.indicators.signalStrengthInfoChange.handlerFuncPtr = nullptr;
+    pa.indicators.signalStrengthInfoChange.contextPtr     = nullptr;
+    pa.indicators.ratSvcStatus.handlerFuncPtr       = nullptr;
+    pa.indicators.ratSvcStatus.contextPtr           = nullptr;
+    pa.indicators.lteCphyCa.handlerFuncPtr          = nullptr;
+    pa.indicators.lteCphyCa.contextPtr              = nullptr;
+    pa.indicators.dataAvailSysStatus.handlerFuncPtr = nullptr;
+    pa.indicators.dataAvailSysStatus.contextPtr     = nullptr;
+    pa.indicators.imsRegStatusChange.handlerFuncPtr = nullptr;
+    pa.indicators.imsRegStatusChange.contextPtr     = nullptr;
+    pa.indicators.operatingModeChange.handlerFuncPtr = nullptr;
+    pa.indicators.operatingModeChange.contextPtr    = nullptr;
+    pa.indicators.serviceDomain.handlerFuncPtr      = nullptr;
+    pa.indicators.serviceDomain.contextPtr          = nullptr;
+    pa.indicators.lteCsCapability.handlerFuncPtr    = nullptr;
+    pa.indicators.lteCsCapability.contextPtr        = nullptr;
+    pa.indicators.imsServiceInfo.handlerFuncPtr     = nullptr;
+    pa.indicators.imsServiceInfo.contextPtr         = nullptr;
+    pa.indicators.imsPdpError.handlerFuncPtr        = nullptr;
+    pa.indicators.imsPdpError.contextPtr            = nullptr;
+    pa.indicators.cellInfoChange.handlerFuncPtr     = nullptr;
+    pa.indicators.cellInfoChange.contextPtr         = nullptr;
+    pa.indicators.nrIconChange.handlerFuncPtr       = nullptr;
+    pa.indicators.nrIconChange.contextPtr           = nullptr;
+
+    // Step 2: Deregister per-instance listeners from their SDK managers so the
+    // SDK stops delivering events to them.
+    PA_INFO("Deregistering per-instance listeners");
+    for (uint32_t i = 0; i < MAX_INSTANCE; i++)
+    {
+        if (pa.managers.telephonyServingSystems[i] != nullptr &&
+            pa.listeners.telephonyServingSystems[i] != nullptr &&
+            pa.managers.telephonyServingSystems[i]->getServiceStatus() ==
+            common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            pa.managers.telephonyServingSystems[i]->deregisterListener(
+                pa.listeners.telephonyServingSystems[i]);
+        }
+        else
+        {
+            PA_WARN("Skipping telephonyServingSystem[%d] deregister - manager not available", i);
+        }
+
+        if (pa.managers.imsServingSystems[i] != nullptr &&
+            pa.listeners.imsServingSystems[i] != nullptr &&
+            pa.managers.imsServingSystems[i]->getServiceStatus() ==
+            common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            pa.managers.imsServingSystems[i]->deregisterListener(
+                pa.listeners.imsServingSystems[i]);
+        }
+        else
+        {
+            PA_WARN("Skipping imsServingSystem[%d] deregister - manager not available", i);
+        }
+
+        if (pa.managers.dataServingSystems[i] != nullptr &&
+            pa.listeners.dataServingSystems[i] != nullptr &&
+            pa.managers.dataServingSystems[i]->getServiceStatus() ==
+            common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            pa.managers.dataServingSystems[i]->deregisterListener(
+                pa.listeners.dataServingSystems[i]);
+        }
+        else
+        {
+            PA_WARN("Skipping dataServingSystem[%d] deregister - manager not available", i);
+        }
+
+        if (pa.managers.networkSelections[i] != nullptr &&
+            pa.listeners.networkSelections[i] != nullptr &&
+            pa.managers.networkSelections[i]->getServiceStatus() ==
+            common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            pa.managers.networkSelections[i]->deregisterListener(
+                pa.listeners.networkSelections[i]);
+        }
+        else
+        {
+            PA_WARN("Skipping networkSelection[%d] deregister - manager not available", i);
+        }
+    }
+
+    // Deregister the phone listener (shared across all instances).
+    if (pa.managers.phone != nullptr &&
+        pa.listeners.phone != nullptr &&
+        pa.managers.phone->getServiceStatus() ==
+        common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        pa.managers.phone->removeListener(pa.listeners.phone);
+    }
+    else
+    {
+        PA_WARN("Skipping phone listener deregister - manager not available");
+    }
+
+    // Step 3: Reset all listener shared pointers so the listener objects are
+    // released once no other owners remain.
+    PA_INFO("Resetting listener shared pointers");
+    pa.listeners.phone.reset();
+    for (uint32_t i = 0; i < MAX_INSTANCE; i++)
+    {
+        pa.listeners.telephonyServingSystems[i].reset();
+        pa.listeners.networkSelections[i].reset();
+        pa.listeners.imsServingSystems[i].reset();
+        pa.listeners.dataServingSystems[i].reset();
+    }
+
+    // Step 4: Reset all manager shared pointers so the underlying SDK objects
+    // are released once no other owners remain.
+    PA_INFO("Resetting manager shared pointers");
+    pa.managers.phone.reset();
+    pa.managers.imsSetting.reset();
+    for (uint32_t i = 0; i < MAX_INSTANCE; i++)
+    {
+        pa.managers.networkSelections[i].reset();
+        pa.managers.telephonyServingSystems[i].reset();
+        pa.managers.imsServingSystems[i].reset();
+        pa.managers.dataServingSystems[i].reset();
+    }
+
+    // Step 5: Reset the request callback object.
+    PA_INFO("Resetting request callback");
+    pa.callbacks.request.reset();
+
+    PA_INFO("Radio platform adaptor deinitialization complete.");
+    return 0;
+}
+
 pa_result_t taf_pa_radio_GetOperatingMode
 (
     uint32_t instance,

@@ -46,6 +46,8 @@ typedef void (*taf_pa_socks_CallCb)(pa_result_t result,void *contextPtr);
 
 PA_SHARED pa_result_t taf_pa_socks_Init();
 
+PA_SHARED pa_result_t taf_pa_socks_Deinit();
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Set device mode

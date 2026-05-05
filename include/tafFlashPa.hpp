@@ -41,6 +41,11 @@ PA_SHARED pa_result_t taf_pa_flash_Init
     void
 );
 
+PA_SHARED pa_result_t taf_pa_flash_Deinit
+(
+    void
+);
+
 PA_SHARED pa_result_t taf_pa_flash_OpenMtd
 (
     const char* namePtr,

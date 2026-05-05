@@ -87,6 +87,7 @@ PA_SHARED pa_result_t taf_pa_time_RegGnssUtcTimeUpdateHandler
 
 
 PA_SHARED pa_result_t taf_pa_gnss_Init(void);
+PA_SHARED pa_result_t taf_pa_time_Deinit(void);
 PA_SHARED pa_result_t taf_pa_RegGnssTimeListener(void);
 PA_SHARED pa_result_t taf_pa_DeregGnssTimeListener(void);
 

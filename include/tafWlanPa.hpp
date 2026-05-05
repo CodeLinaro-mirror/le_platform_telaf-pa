@@ -68,6 +68,8 @@ using DeviceListener = std::function<void(bool enabled, ServiceState_e serviceSt
 
 PA_SHARED pa_result_t Init();
 
+PA_SHARED pa_result_t Deinit();
+
 PA_SHARED pa_result_t RegisterDeviceListener
 (
     DeviceListener listener,

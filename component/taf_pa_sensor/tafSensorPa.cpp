@@ -124,6 +124,7 @@ public:
     }
 
     pa_result_t initialize();
+    pa_result_t deinitialize();
     pa_result_t MapStatus(telux::common::Status status);
     pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
 
@@ -186,6 +187,38 @@ pa_result_t SensorPAController::initialize() {
             return MapStatus(status);
         }
     }
+    return PA_OK;
+}
+
+pa_result_t SensorPAController::deinitialize() {
+    PA_INFO("Starting sensor platform adaptor deinitialization...");
+
+    // Step 1: Release all active sensor clients. Each ReleaseSensorClient() call
+    // deactivates the sensor (if active) and deregisters the SDK event listener.
+    PA_INFO("Releasing all active sensor clients...");
+    {
+        // Collect IDs first to avoid iterator invalidation during erasure.
+        std::vector<taf_pa_sensor_SensorId> clientIds;
+        clientIds.reserve(sensorClients_.size());
+        for (auto& entry : sensorClients_) {
+            clientIds.push_back(entry.first);
+        }
+        for (auto id : clientIds) {
+            ReleaseSensorClient(id);
+        }
+    }
+
+    // Step 2: Clear the cached sensor info list so stale entries are not
+    // visible after a subsequent re-initialization.
+    PA_INFO("Clearing sensor info list");
+    sList.clear();
+
+    // Step 3: Reset the sensor manager shared pointer so the underlying SDK
+    // object is released once no other owners remain.
+    PA_INFO("Resetting sensorManager_");
+    sensorManager_.reset();
+
+    PA_INFO("Sensor platform adaptor deinitialization complete.");
     return PA_OK;
 }
 
@@ -577,6 +610,17 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Init(int8_t& listSize
         listSize = static_cast<int8_t>(paCtrl->getSensorListSize());
     } else {
         PA_CRIT("Sensor Platform adapter initialization failed.");
+    }
+    return res;
+}
+
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Deinit() {
+    auto paCtrl = SensorPAController::getInstance();
+    pa_result_t res = paCtrl->deinitialize();
+    if (res == PA_OK) {
+        PA_INFO("Sensor Platform adapter deinitialization done.");
+    } else {
+        PA_ERROR("Sensor Platform adapter deinitialization failed.");
     }
     return res;
 }

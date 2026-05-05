@@ -68,6 +68,12 @@ class taf_VlanAdaptor
             std::shared_mutex regVlanListenerMutex_;
             std::shared_mutex deregVlanListenerMutex_;
 
+            void resetManagers()
+            {
+                vlanManager.reset();
+                dataSettingsManager.reset();
+            }
+
         private:
             std::shared_ptr<telux::data::net::IVlanManager> vlanManager = nullptr;
             std::shared_ptr<telux::data::IDataSettingsManager> dataSettingsManager = nullptr;
@@ -81,7 +87,7 @@ pa_result_t  taf_VlanAdaptor::ConvertVlanInfo(const telux::data::VlanConfig &tel
     vlanConfig.isAccelerated = telVlanConfig.isAccelerated;
     vlanConfig.priority = telVlanConfig.priority;
     //vlanConfig.iface = (taf_pa_Vlan_t)telVlanConfig.iface;
-    
+
     switch (telVlanConfig.iface)
     {
         case telux::data::InterfaceType::UNKNOWN:
@@ -353,7 +359,7 @@ pa_result_t taf_VlanAdaptor::initialize()
 pa_result_t taf_pa_vlan_Init()
 {
     PA_INFO("Actual platform adatper implementation");
-    
+
     auto &pVlanAdaptor = taf_VlanAdaptor::getInstance();
 
     pa_result_t result = pVlanAdaptor.initialize();
@@ -1100,7 +1106,7 @@ pa_result_t taf_pa_net_GetBackhaulPreference
    };
 
     telux::common::Status status = dataSettingsManager->requestBackhaulPreference(getPrefRespCb);
-    
+
     if (status == telux::common::Status::SUCCESS)
     {
         std::future<pa_result_t> futureResult = promisePtr->get_future();
@@ -1160,12 +1166,12 @@ pa_result_t taf_pa_net_SetBackhaulPreference
 )
 {
     PA_INFO("Actual platform adatper implementation");
-    
+
     pa_result_t result;
 
     auto &pVlanAdaptor = taf_VlanAdaptor::getInstance();
     auto dataSettingsManager = pVlanAdaptor.getDataSettingsManager();
-    
+
     std::vector<telux::data::BackhaulType> backhaulPref;
 
     //TAF_ERROR_IF_RET_VAL(backhaulPrefIN.size() == 0, PA_BAD_PARAMETER, "pref list is null");
@@ -1322,7 +1328,7 @@ pa_result_t taf_pa_net_SetIPPassThroughConfig
         PA_ERROR("ipptConfigIn is null");
         return PA_BAD_PARAMETER;
     }
-    
+
     //TAF_ERROR_IF_RET_VAL(ipptConfigOut == NULL, PA_BAD_PARAMETER, "ipptConfigOut is null");
     if(ipptConfigOut == NULL)
     {
@@ -1751,5 +1757,41 @@ pa_result_t taf_pa_net_GetIPConfig
         PA_ERROR("IP config is DYNAMIC or UNKNOWN; dont copy address information");
     }
 
+    return PA_OK;
+}
+
+pa_result_t taf_pa_vlan_Deinit()
+{
+    PA_INFO("Starting VLAN platform adaptor deinitialization...");
+
+    auto &tafVlan = taf_VlanAdaptor::getInstance();
+    auto vlanManager = tafVlan.getVlanManager();
+
+    // Step 1: Deregister the VLAN listener if it is currently registered.
+    if (bVlanListenerRegistered && vlanManager && tafVlan.vlanListener)
+    {
+        PA_INFO("Deregistering VLAN listener");
+        if (vlanManager->deregisterListener(tafVlan.vlanListener) ==
+            telux::common::Status::SUCCESS)
+        {
+            PA_INFO("VLAN listener deregistered successfully");
+        }
+        else
+        {
+            PA_ERROR("Failed to deregister VLAN listener");
+        }
+        bVlanListenerRegistered = false;
+    }
+
+    // Step 2: Reset listener shared pointers.
+    PA_INFO("Resetting vlanListener and tafVlanListener");
+    tafVlan.vlanListener.reset();
+    tafVlan.tafVlanListener.reset();
+
+    // Step 3: Reset manager shared pointers via the public helper.
+    PA_INFO("Resetting vlanManager and dataSettingsManager");
+    tafVlan.resetManagers();
+
+    PA_INFO("VLAN platform adaptor deinitialization complete.");
     return PA_OK;
 }

@@ -16,6 +16,8 @@ namespace tafpa::deviceinfo{
 
 PA_SHARED pa_result_t taf_pa_deviceinfo_Init();
 
+PA_SHARED pa_result_t taf_pa_deviceinfo_Deinit();
+
 PA_SHARED pa_result_t taf_pa_deviceinfo_GetIMEI(char* imeiPtr, size_t numElements);
 
 }

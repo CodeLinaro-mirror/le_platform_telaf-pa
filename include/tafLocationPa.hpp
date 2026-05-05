@@ -826,6 +826,8 @@ using taf_pa_location_RequestXtraStatusCb = std::function<void(pa_result_t resul
 
 PA_SHARED  pa_result_t taf_pa_location_Init();
 
+PA_SHARED pa_result_t taf_pa_location_Deinit();
+
 PA_SHARED  taf_pa_location_LocationId taf_pa_location_CreateClient();
 PA_SHARED  pa_result_t taf_pa_location_DeleteClient(taf_pa_location_LocationId clientId);
 

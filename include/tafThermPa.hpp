@@ -147,6 +147,7 @@ typedef std::function<void(const taf_pa_therm_CoolingLevelChangeInfo&)> taf_pa_t
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED pa_result_t taf_pa_therm_Init(void);
+PA_SHARED pa_result_t taf_pa_therm_Deinit(void);
 
 //--------------------------------------------------------------------------------------------------
 /**

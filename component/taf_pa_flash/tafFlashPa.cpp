@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <unordered_map>
+#include <vector>
 
 #include "tafFlashPa.hpp"
 
@@ -63,6 +64,61 @@ pa_result_t taf_pa_flash_Init()
         PA_INFO("Flash proprietary platform adaptor is not implemented.");
 
     return result;
+}
+
+pa_result_t taf_pa_flash_Deinit()
+{
+    PA_INFO("Flash platform adaptor deinitialization starting.");
+
+    auto& pa = PlatformAdaptor::GetInstance();
+
+    // Close all open MTD references and free their malloc'd keys.
+    // Collect keys and close handles first, then clear the map, then free the
+    // keys. Freeing a key inside the iteration loop is undefined behaviour
+    // because the unordered_map still holds the freed pointer in its internal
+    // structure until clear() is called.
+    {
+        std::vector<taf_pa_flash_MtdRef_t> keysToFree;
+        keysToFree.reserve(pa.mtdRefMap.size());
+        for (auto& entry : pa.mtdRefMap)
+        {
+            int32_t result = taf_ns_flash_CloseMtd(entry.second);
+            if (result != 0)
+            {
+                PA_ERROR("Failed to close MTD during deinit. Error: %d", result);
+            }
+            keysToFree.push_back(entry.first);
+        }
+        pa.mtdRefMap.clear();
+        for (taf_pa_flash_MtdRef_t key : keysToFree)
+        {
+            free(key);
+        }
+    }
+
+    // Close all open UBI volume references and free their malloc'd keys.
+    // Same pattern: collect, clear map, then free.
+    {
+        std::vector<taf_pa_flash_UbiVolumeRef_t> keysToFree;
+        keysToFree.reserve(pa.ubiVolumeRefMap.size());
+        for (auto& entry : pa.ubiVolumeRefMap)
+        {
+            int32_t result = taf_ns_flash_CloseUbiVolume(entry.second);
+            if (result != 0)
+            {
+                PA_ERROR("Failed to close UBI volume during deinit. Error: %d", result);
+            }
+            keysToFree.push_back(entry.first);
+        }
+        pa.ubiVolumeRefMap.clear();
+        for (taf_pa_flash_UbiVolumeRef_t key : keysToFree)
+        {
+            free(key);
+        }
+    }
+
+    PA_INFO("Flash platform adaptor deinitialization complete.");
+    return 0;
 }
 
 pa_result_t taf_pa_flash_OpenMtd
