@@ -700,7 +700,8 @@ typedef enum {
     TAF_PA_LOCATION_UNKNOWN_STATE   = 0,
     TAF_PA_LOCATION_VALID_BIT       = (1<<0),
     TAF_PA_LOCATION_RESET_BIT       = (1<<1),
-    TAF_PA_LOCATION_CYCLE_SLIP_BIT  = (1<<2)
+    TAF_PA_LOCATION_CYCLE_SLIP_BIT  = (1<<2),
+    TAF_PA_LOCATION_HALF_CYCLE_RESOLVED_BIT = (1<<3)
 }taf_pa_location_GnssMeasurementsAdrStateValidityType_t;
 
 typedef enum{
