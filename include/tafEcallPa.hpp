@@ -650,31 +650,31 @@ struct taf_pa_ecall_event_listener_t
 };
 
 // Initializes the eCall subsystem.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_Init();
+PA_SHARED pa_result_t taf_pa_ecall_Init();
 
 // Sets eCall configuration parameters.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_SetConfig(
+PA_SHARED pa_result_t taf_pa_ecall_SetConfig(
     const taf_pa_ecall_config_t& config
 );
 
 // Gets in Progress Calls
-PA_SHARED PA_WEAK std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>
+PA_SHARED std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>
     taf_pa_ecall_GetInProgressCalls();
 
 // Request Network Deregistration.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_RequestNetworkDeregistration(
+PA_SHARED pa_result_t taf_pa_ecall_RequestNetworkDeregistration(
     uint8_t phoneId,
     taf_pa_ecall_CommandCb callback,
     std::any context
 );
 
 // Gets eCall configuration parameters.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_GetConfig(
+PA_SHARED pa_result_t taf_pa_ecall_GetConfig(
     taf_pa_ecall_config_t& config
 );
 
 // Sets eCall operational mode.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_SetOpMode(
+PA_SHARED pa_result_t taf_pa_ecall_SetOpMode(
     uint8_t phoneId,
     taf_pa_ecall_mode_t mode,
     taf_pa_ecall_CommandCb callback,
@@ -682,14 +682,14 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_SetOpMode(
 );
 
 // Gets eCall operational mode.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_GetOpMode(
+PA_SHARED pa_result_t taf_pa_ecall_GetOpMode(
     uint8_t phoneId,
     taf_pa_ecall_GetModeCb callback,
     std::any context
 );
 
 // Initiates an eCall with MSD data.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_MakeECall(
+PA_SHARED pa_result_t taf_pa_ecall_MakeECall(
     int phoneId,
     const taf_pa_ecall_msd_data_t& msdData,
     taf_pa_ecall_category_t category,
@@ -699,7 +699,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_MakeECall(
 );
 
 // Initiates an eCall with raw MSD PDU.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_MakeECall(
+PA_SHARED pa_result_t taf_pa_ecall_MakeECall(
     int phoneId,
     const std::vector<uint8_t>& msdPdu,
     taf_pa_ecall_category_t category,
@@ -709,7 +709,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_MakeECall(
 );
 
 // Initiates an eCall with custom dial number and SIP headers.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_MakeECall(
+PA_SHARED pa_result_t taf_pa_ecall_MakeECall(
     int phoneId,
     std::string dialNumber,
     const taf_pa_ecall_custom_sip_header_t& header,
@@ -719,7 +719,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_MakeECall(
 );
 
 // Updates MSD data during an active eCall.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_UpdateMsd(
+PA_SHARED pa_result_t taf_pa_ecall_UpdateMsd(
     uint8_t phoneId,
     const taf_pa_ecall_msd_data_t& msdData,
     taf_pa_ecall_CommandCb callback,
@@ -727,7 +727,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_UpdateMsd(
 );
 
 // Updates MSD data with raw PDU during an active eCall.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_UpdateMsd(
+PA_SHARED pa_result_t taf_pa_ecall_UpdateMsd(
     uint8_t phoneId,
     const std::vector<uint8_t>& msdData,
     taf_pa_ecall_CommandCb callback,
@@ -735,20 +735,20 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_UpdateMsd(
 );
 
 // Encodes MSD data to PDU format.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_EncodeMsd(
+PA_SHARED pa_result_t taf_pa_ecall_EncodeMsd(
     const taf_pa_ecall_msd_data_t& msdData,
     std::vector<uint8_t>& msdPdu
 );
 
 // Requests HLAP timer status.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_RequestHlapTimerStatus(
+PA_SHARED pa_result_t taf_pa_ecall_RequestHlapTimerStatus(
     int phoneId,
     taf_pa_ecall_HlapTimerStatusCb callback,
     std::any context
 );
 
 // Requests specific HLAP timer information.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_RequestHlapTimer(
+PA_SHARED pa_result_t taf_pa_ecall_RequestHlapTimer(
     int phoneId,
     taf_pa_ecall_hlap_timer_type_t type,
     taf_pa_ecall_HlapTimerCb callback,
@@ -756,7 +756,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_RequestHlapTimer(
 );
 
 // Updates HLAP timer parameters.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_UpdateHlapTimer(
+PA_SHARED pa_result_t taf_pa_ecall_UpdateHlapTimer(
     int phoneId,
     taf_pa_ecall_hlap_timer_type_t type,
     uint32_t duration,
@@ -765,20 +765,20 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_UpdateHlapTimer(
 );
 
 // Sets eCall redial parameters.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_SetEcallRedial(
+PA_SHARED pa_result_t taf_pa_ecall_SetEcallRedial(
     const std::vector<int>& timeGap,
     taf_pa_ecall_CommandCb callback,
     std::any context
 );
 
 // Gets eCall redial parameters.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_GetEcallRedial(
+PA_SHARED pa_result_t taf_pa_ecall_GetEcallRedial(
     std::vector<int>& callOrigTimeGap,
     std::vector<int>& callDropTimeGap
 );
 
 // Restarts a specific HLAP timer.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_RestartHlapTimer(
+PA_SHARED pa_result_t taf_pa_ecall_RestartHlapTimer(
     int phoneId,
     taf_pa_ecall_hlap_timer_id_t id,
     uint32_t duration,
@@ -787,33 +787,33 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_RestartHlapTimer(
 );
 
 // Converts slot ID to phone ID.
-PA_SHARED PA_WEAK int8_t taf_pa_ecall_GetPhoneIdFromSlotId(
+PA_SHARED int8_t taf_pa_ecall_GetPhoneIdFromSlotId(
     int8_t slotId
 );
 
 // Hangs up an active eCall.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_Hangup(
+PA_SHARED pa_result_t taf_pa_ecall_Hangup(
     const taf_pa_ecall_CallInfo_t& callInfo,
     taf_pa_ecall_CommandCb callback,
     std::any context
 );
 
 // Rejects an incoming eCall.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_Reject(
+PA_SHARED pa_result_t taf_pa_ecall_Reject(
     const taf_pa_ecall_CallInfo_t& callInfo,
     taf_pa_ecall_CommandCb callback,
     std::any context
 );
 
 // Answers an incoming eCall.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_Answer(
+PA_SHARED pa_result_t taf_pa_ecall_Answer(
     const taf_pa_ecall_CallInfo_t& callInfo,
     taf_pa_ecall_CommandCb callback,
     std::any context
 );
 
 // Registers event listener.
-PA_SHARED PA_WEAK pa_result_t taf_pa_ecall_RegisterListener(
+PA_SHARED pa_result_t taf_pa_ecall_RegisterListener(
     const taf_pa_ecall_event_listener_t* eventListener,
     std::any context
 );

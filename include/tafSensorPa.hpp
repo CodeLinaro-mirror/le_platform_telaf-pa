@@ -97,10 +97,10 @@ struct taf_pa_sensor_EventListener {
 };
 
 // Initializes the Sensor subsystem.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_Init(int8_t& listSize);
+PA_SHARED pa_result_t taf_pa_sensor_Init(int8_t& listSize);
 
 // Retrieves information about a specific sensor.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_GetSensorInfo(
+PA_SHARED pa_result_t taf_pa_sensor_GetSensorInfo(
     int8_t index,
     taf_pa_sensor_BasicInfo &basicInfo,
     taf_pa_sensor_ConfigInfo &configInfo,
@@ -108,13 +108,13 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_GetSensorInfo(
 );
 
 // Gets a client ID for a sensor instance by its name.
-PA_SHARED PA_WEAK taf_pa_sensor_SensorId taf_pa_sensor_GetSensorClient(const std::string& sensorName);
+PA_SHARED taf_pa_sensor_SensorId taf_pa_sensor_GetSensorClient(const std::string& sensorName);
 
 // Releases a sensor client associated with the given ID.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_ReleaseSensorClient(taf_pa_sensor_SensorId sensorId);
+PA_SHARED pa_result_t taf_pa_sensor_ReleaseSensorClient(taf_pa_sensor_SensorId sensorId);
 
 // Activates a sensor with specified parameters.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_Activate(
+PA_SHARED pa_result_t taf_pa_sensor_Activate(
     taf_pa_sensor_SensorId sensorId,
     double sampleRate,
     uint32_t batchCount,
@@ -122,7 +122,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_Activate(
 );
 
 // Sets a new reference coordinate system using Euler angles.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_SetEulerAngle(
+PA_SHARED pa_result_t taf_pa_sensor_SetEulerAngle(
     taf_pa_sensor_SensorId sensorId,
     double pitch,
     double roll,
@@ -130,10 +130,10 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_SetEulerAngle(
 );
 
 // Deactivates a sensor.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_Deactivate(taf_pa_sensor_SensorId sensorId);
+PA_SHARED pa_result_t taf_pa_sensor_Deactivate(taf_pa_sensor_SensorId sensorId);
 
 // Performs a self-test on the specified sensor.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_SelfTest(
+PA_SHARED pa_result_t taf_pa_sensor_SelfTest(
     taf_pa_sensor_SensorId sensorId,
     taf_pa_sensor_SelfTestMode mode,
     taf_pa_sensor_SelfTestResultCb callback,
@@ -141,7 +141,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_SelfTest(
 );
 
 // Registers an event listener.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_RegisterListener(
+PA_SHARED pa_result_t taf_pa_sensor_RegisterListener(
     taf_pa_sensor_SensorId sensorId,
     taf_pa_sensor_EventListener* eventListener,
     std::any context

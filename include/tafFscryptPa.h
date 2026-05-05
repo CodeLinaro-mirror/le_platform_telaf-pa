@@ -27,7 +27,7 @@ typedef void* KeyMgt_KeyFileRef_t;
  * PA initialization.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK void taf_pa_fsc_Init
+PA_SHARED void taf_pa_fsc_Init
 (
     void* cryptoFunc
 );
@@ -37,7 +37,7 @@ PA_SHARED PA_WEAK void taf_pa_fsc_Init
  * Get a key file reference by key name.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_fsc_GetKey
+PA_SHARED pa_result_t taf_pa_fsc_GetKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
@@ -51,7 +51,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_fsc_GetKey
  * Create AES key and return a key file reference.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_fsc_GenerateAesKey
+PA_SHARED pa_result_t taf_pa_fsc_GenerateAesKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
@@ -65,7 +65,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_fsc_GenerateAesKey
  * Delete a key file.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_fsc_DeleteKey
+PA_SHARED pa_result_t taf_pa_fsc_DeleteKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     KeyMgt_KeyFileRef_t keyFileRef          ///< [IN] Key file reference

@@ -99,56 +99,56 @@ typedef void (*taf_pa_mrc_ScrubStatusHdlrFunc_t)
     void* contextPtr
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_Init
+PA_SHARED pa_result_t taf_pa_mrc_Init
 (
     void
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_RegisterIndication
+PA_SHARED pa_result_t taf_pa_mrc_RegisterIndication
 (
     uint8_t registration
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_SetProcessStatus
+PA_SHARED pa_result_t taf_pa_mrc_SetProcessStatus
 (
     taf_pa_mrc_Process_t process,
     taf_pa_mrc_Status_t status
 );
 
-PA_SHARED PA_WEAK taf_pa_mrc_ProcessStatusHandlerRef_t taf_pa_mrc_AddProcessStatusHandler
+PA_SHARED taf_pa_mrc_ProcessStatusHandlerRef_t taf_pa_mrc_AddProcessStatusHandler
 (
     taf_pa_mrc_ProcessStatusHdlrFunc_t handlerFuncPtr,
     void* contextPtr
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_GetEfsPeStatus
+PA_SHARED pa_result_t taf_pa_mrc_GetEfsPeStatus
 (
     taf_pa_mrc_EfsPeStatus_t* statusPtr
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_GetEfsBlockStatus
+PA_SHARED pa_result_t taf_pa_mrc_GetEfsBlockStatus
 (
     taf_pa_mrc_EfsBlockStatus_t* statusPtr
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_SetTimerPeriod
+PA_SHARED pa_result_t taf_pa_mrc_SetTimerPeriod
 (
     taf_pa_mrc_Timer_t timer,
     uint32_t period
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_PerformABSync
+PA_SHARED pa_result_t taf_pa_mrc_PerformABSync
 (
     void
 );
 
-PA_SHARED PA_WEAK taf_pa_mrc_ScrubStatusHandlerRef_t taf_pa_mrc_AddScrubStatusHandler
+PA_SHARED taf_pa_mrc_ScrubStatusHandlerRef_t taf_pa_mrc_AddScrubStatusHandler
 (
     taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
     void* contextPtr
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_mrc_AckSlotToggle
+PA_SHARED pa_result_t taf_pa_mrc_AckSlotToggle
 (
     int32_t success
 );
