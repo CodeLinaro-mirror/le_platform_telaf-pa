@@ -2038,14 +2038,14 @@ PA_SHARED pa_result_t RemoveThroughputEventsCallback
 /**
  * Get the MTU (Maximum Transmission Unit) for a network interface.
  *
- * Returns the MTU sourced from IpAddrInfo (provided by the SDK) for the given interface.
+ * This function retrieves the MTU for a network interface identified by its name.
  *
  * @param interfaceName The network interface name (e.g., "rmnet_data0").
- * @param mtu           Output parameter for the MTU value in bytes.
- * @return PA_OK on success.
- *         PA_BAD_PARAMETER if interfaceName is empty.
- *         PA_NOT_FOUND if no active data call matches the interface name.
- *         PA_FAULT if the interface was found but MTU is not available in IpAddrInfo.
+ * @param mtu Output parameter for the MTU value in bytes.
+ * @return PA_OK on success, error code otherwise.
+ *         PA_BAD_PARAMETER if interfaceName is invalid or empty.
+ *         PA_NOT_FOUND if the interface does not exist.
+ *         PA_FAULT if MTU retrieval fails.
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED pa_result_t GetMtu
