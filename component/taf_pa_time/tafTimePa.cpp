@@ -641,3 +641,59 @@ pa_result_t taf_pa_time_RegNetworkTimeChangeHandler
     PA_ERROR("Network time change handler register failed.");
     return PA_FAULT;
 }
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Deinitialize the time PA layer.
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf_pa_time_Deinit(void)
+{
+    PA_INFO("Starting time PA layer deinitialization...");
+
+    // Step 1: Clear all handler function pointers so no further time-related
+    // callbacks are dispatched after this point.
+    PA_INFO("Clearing GnssUtcTimeUpdateHandlerPtr, NetworkChangeHandlerPtr and "
+            "NetworkRespHandlerPtrs");
+    GnssUtcTimeUpdateHandlerPtr = nullptr;
+    NetworkChangeHandlerPtr = nullptr;
+    for (int i = 0; i <= NETWORK_SLOT_NUM_MAX; i++)
+    {
+        NetworkRespHandlerPtrs[i] = nullptr;
+    }
+
+    // Step 2: Deregister the GNSS time listener from the time manager so the SDK
+    // stops delivering GNSS UTC time events.
+    PA_INFO("Deregistering GNSS time listener");
+    taf_pa_DeregGnssTimeListener();
+
+    // Step 3: Deregister all per-slot network time listeners from their serving
+    // system managers. Start from index 0 to match the reset loop in Step 4,
+    // ensuring every entry that is reset has first been deregistered.
+    // taf_pa_time_DeregNetworkTimeListener() safely handles nullptr managers.
+    PA_INFO("Deregistering all network time listeners");
+    for (int i = 0; i <= NETWORK_SLOT_NUM_MAX; i++)
+    {
+        taf_pa_time_DeregNetworkTimeListener(i);
+    }
+
+    // Step 4: Reset all serving system manager shared pointers so the underlying
+    // SDK objects are released once no other owners remain.
+    PA_INFO("Resetting servingSystemManagers");
+    for (int i = 0; i <= NETWORK_SLOT_NUM_MAX; i++)
+    {
+        servingSystemManagers[i].reset();
+    }
+
+    // Step 5: Reset the time manager shared pointer so the underlying SDK object
+    // is released once no other owners remain.
+    PA_INFO("Resetting timeManager");
+    timeManager.reset();
+
+    // Step 6: Reset the phone manager shared pointer.
+    PA_INFO("Resetting phoneManager");
+    phoneManager.reset();
+
+    PA_INFO("Time PA layer deinitialization complete.");
+    return PA_OK;
+}

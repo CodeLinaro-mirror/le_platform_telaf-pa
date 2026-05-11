@@ -43,7 +43,7 @@
                 callback(PA_OK, context);                                                    \
             }                                                                                \
             else{                                                                            \
-                PA_ERROR("Request failed, err %s", Utils::getErrorCodeAsString(error));      \
+                PA_ERROR("Request failed, err %s", Utils::getErrorCodeAsString(error).c_str());      \
                 callback(PA_FAULT, context);                                                 \
             }                                                                                \
     };                                                                                       \
@@ -70,6 +70,7 @@ public:
     }
 
     pa_result_t initialize();
+    pa_result_t deinitialize();
 
     pa_result_t createStream(
         PaStreamConfig config,
@@ -430,6 +431,80 @@ pa_result_t AudioPAController::initialize()
         PA_CRIT("Unable to initialize audio subsystem");
         return PA_UNAVAILABLE;
     }
+}
+
+pa_result_t AudioPAController::deinitialize()
+{
+    PA_INFO("Starting audio PA deinitialization...");
+
+    // Step 1: Deregister the service status change listener from the audio manager
+    // before tearing down any state, so no further SDK callbacks arrive.
+    if (audioManager_ && paServiceStatusChangeListener)
+    {
+        PA_INFO("Deregistering paServiceStatusChangeListener from audioManager_");
+        telux::common::Status status =
+        audioManager_->deRegisterListener(paServiceStatusChangeListener);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to deregister service status listener. Status: %d",
+                     static_cast<int>(status));
+        }
+        paServiceStatusChangeListener.reset();
+    }
+
+    // Step 2: Reset all audio stream shared pointers
+    PA_INFO("Resetting audio stream shared pointers");
+    mAudioVoiceStream.reset();
+    mAudioPlaybackStream.reset();
+    mAudioCaptureStream.reset();
+    mAudioRxCaptureStream.reset();
+    mAudioLoopbackStream.reset();
+
+    // Step 3: Reset audio player shared pointers
+    PA_INFO("Resetting audio player shared pointers");
+    mAudioPlayer.reset();
+    mTxAudioPlayer.reset();
+
+    // Step 4: Reset call manager shared pointer
+    PA_INFO("Resetting callManager");
+    callManager.reset();
+
+    // Step 5: Reset playback listener, capture stream wrapper, and DTMF shared pointers
+    PA_INFO("Resetting listener and callback shared pointers");
+    repeatedPlayerStatusListener.reset();
+    repeatedTxPlayerStatusListener.reset();
+    paCaptureStream.reset();
+    paRxCaptureStream.reset();
+    dtmfListener.reset();
+    dtmfCb.reset();
+
+    // Step 6: Drain the IStreamBuffer queues
+    PA_INFO("Draining mRecFreeBuffers and mRxRecFreeBuffers queues");
+    while (!mRecFreeBuffers.empty())
+    {
+        mRecFreeBuffers.pop();
+    }
+    while (!mRxRecFreeBuffers.empty())
+    {
+        mRxRecFreeBuffers.pop();
+    }
+
+    // Step 7: Clear subsystem event callbacks under mutex
+    PA_INFO("Clearing subsystemEventsCallbacks_");
+    {
+        std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
+        subsystemEventsCallbacks_.clear();
+    }
+
+    // Step 8: Reset audio manager shared pointer (last, after all streams are gone)
+    PA_INFO("Resetting audioManager_");
+    audioManager_.reset();
+
+    // Step 9: Reset init state so post-deinit guard checks correctly see UNAVAILABLE
+    audioMngrInitState_ = SubsystemState_e::UNAVAILABLE;
+
+    PA_INFO("Audio PA deinitialization complete");
+    return PA_OK;
 }
 
 void AudioPAController::SendSubsystemEventToClients
@@ -1342,6 +1417,22 @@ pa_result_t tafpa::audio::taf_pa_audio_Init()
     else
     {
         PA_CRIT("Failed to initialize audio platform adapter, ret: %d", result);
+    }
+    return result;
+}
+
+pa_result_t tafpa::audio::taf_pa_audio_Deinit()
+{
+    auto pACtrl = AudioPAController::getInstance();
+
+    pa_result_t result = pACtrl->deinitialize();
+    if (result == PA_OK)
+    {
+        PA_INFO("Audio platform adapter deinitialization is done");
+    }
+    else
+    {
+        PA_ERROR("Failed to deinitialize audio platform adapter, ret: %d", result);
     }
     return result;
 }

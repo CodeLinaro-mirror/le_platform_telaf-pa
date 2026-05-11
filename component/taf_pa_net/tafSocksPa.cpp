@@ -593,3 +593,16 @@ pa_result_t taf_pa_net_DisableSocksCmdASync(taf_pa_socks_CallCb callback,void *c
 }
 
 
+
+pa_result_t taf_pa_socks_Deinit()
+{
+    PA_INFO("Starting SOCKS platform adaptor deinitialization...");
+    auto &pSocksAdaptor = taf_SocksAdaptor::getInstance();
+    PA_INFO("Clearing SOCKS callbacks");
+    pSocksAdaptor.callCbEnableAsync = nullptr;
+    pSocksAdaptor.callCbDisableAsync = nullptr;
+    PA_INFO("Resetting socksManager");
+    pSocksAdaptor.socksManager.reset();
+    PA_INFO("SOCKS platform adaptor deinitialization complete.");
+    return PA_OK;
+}

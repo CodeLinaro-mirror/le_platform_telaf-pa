@@ -90,6 +90,31 @@ using taf_pa_sensor_SelfTestResultCb = std::function<void(
     std::any context
 )>;
 
+// Callback for configuration update notifications.
+using taf_pa_sensor_ConfigUpdateCb = std::function<void(
+    taf_pa_sensor_SensorId sensorId,
+    double samplingRate,
+    uint32_t batchCount,
+    bool isRotated,
+    std::any context
+)>;
+
+// Sensor capability/service state information.
+struct taf_pa_sensor_CapabilityInfo {
+    // True if the sensor/service is present.
+    bool isAvailable;
+    // True if the sensor/service can be used
+    bool isEnabled;
+    uint32_t capabilityMask;
+};
+
+// Callback for sensor capability/service state change notifications.
+using taf_pa_sensor_CapabilityCb = std::function<void(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_CapabilityInfo capabilityInfo,
+    std::any context
+)>;
+
 // Collection of event callbacks for a sensor.
 struct taf_pa_sensor_EventListener {
     taf_pa_sensor_OnEventCb onEvent;
@@ -97,10 +122,12 @@ struct taf_pa_sensor_EventListener {
 };
 
 // Initializes the Sensor subsystem.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_Init(int8_t& listSize);
+PA_SHARED pa_result_t taf_pa_sensor_Init(int8_t& listSize);
+
+PA_SHARED pa_result_t taf_pa_sensor_Deinit();
 
 // Retrieves information about a specific sensor.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_GetSensorInfo(
+PA_SHARED pa_result_t taf_pa_sensor_GetSensorInfo(
     int8_t index,
     taf_pa_sensor_BasicInfo &basicInfo,
     taf_pa_sensor_ConfigInfo &configInfo,
@@ -108,21 +135,23 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_GetSensorInfo(
 );
 
 // Gets a client ID for a sensor instance by its name.
-PA_SHARED PA_WEAK taf_pa_sensor_SensorId taf_pa_sensor_GetSensorClient(const std::string& sensorName);
+PA_SHARED taf_pa_sensor_SensorId taf_pa_sensor_GetSensorClient(const std::string& sensorName);
 
 // Releases a sensor client associated with the given ID.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_ReleaseSensorClient(taf_pa_sensor_SensorId sensorId);
+PA_SHARED pa_result_t taf_pa_sensor_ReleaseSensorClient(taf_pa_sensor_SensorId sensorId);
 
-// Activates a sensor with specified parameters.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_Activate(
+// Sets the configuration for a sensor.
+PA_SHARED pa_result_t taf_pa_sensor_SetConfig(
     taf_pa_sensor_SensorId sensorId,
-    double sampleRate,
-    uint32_t batchCount,
-    bool isRotated
+    double samplingRate,
+    uint32_t batchCount
 );
 
+// Activates a sensor.
+PA_SHARED pa_result_t taf_pa_sensor_Activate(taf_pa_sensor_SensorId sensorId);
+
 // Sets a new reference coordinate system using Euler angles.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_SetEulerAngle(
+PA_SHARED pa_result_t taf_pa_sensor_SetEulerAngle(
     taf_pa_sensor_SensorId sensorId,
     double pitch,
     double roll,
@@ -130,21 +159,50 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_SetEulerAngle(
 );
 
 // Deactivates a sensor.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_Deactivate(taf_pa_sensor_SensorId sensorId);
+PA_SHARED pa_result_t taf_pa_sensor_Deactivate(taf_pa_sensor_SensorId sensorId);
 
 // Performs a self-test on the specified sensor.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_SelfTest(
+PA_SHARED pa_result_t taf_pa_sensor_SelfTestAsync(
     taf_pa_sensor_SensorId sensorId,
     taf_pa_sensor_SelfTestMode mode,
     taf_pa_sensor_SelfTestResultCb callback,
     std::any context
 );
 
-// Registers an event listener.
-PA_SHARED PA_WEAK pa_result_t taf_pa_sensor_RegisterListener(
+// Adds an event listener.
+PA_SHARED pa_result_t taf_pa_sensor_AddListener(
     taf_pa_sensor_SensorId sensorId,
     taf_pa_sensor_EventListener* eventListener,
     std::any context
+);
+
+// Removes an event listener.
+PA_SHARED pa_result_t taf_pa_sensor_RemoveListener(
+    taf_pa_sensor_SensorId sensorId
+);
+
+// Adds a configuration update handler to receive notifications when sensor configuration changes.
+PA_SHARED pa_result_t taf_pa_sensor_AddConfigUpdateHandler(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_ConfigUpdateCb callback,
+    std::any context
+);
+
+// Removes a configuration update handler.
+PA_SHARED pa_result_t taf_pa_sensor_RemoveConfigUpdateHandler(
+    taf_pa_sensor_SensorId sensorId
+);
+
+// Adds a capability handler to receive notifications when sensor service state changes.
+PA_SHARED pa_result_t taf_pa_sensor_AddCapabilityHandler(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_CapabilityCb callback,
+    std::any context
+);
+
+// Removes a capability handler.
+PA_SHARED pa_result_t taf_pa_sensor_RemoveCapabilityHandler(
+    taf_pa_sensor_SensorId sensorId
 );
 
 } // End namespace tafpa::sensor

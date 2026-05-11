@@ -421,12 +421,19 @@ pa_result_t taf_pa_common_LogDeinit(void)
     if (!gInited)
         return PA_OK;
 
-    // Clear injected vtables to avoid dangling pointers
+    // Clear injected vtables to avoid dangling pointers in PA-prop and PA-noship
     taf_prop_common_LogBind(NULL);
     taf_ns_common_LogBind(NULL);
 
-    // Clear DLT context pointer
+    // Clear DLT context pointer so no further DLT log attempts are made
     DltCtxPtr = NULL;
+
+    // Reset log backend and level to their compile-time defaults so that any
+    // taf_pa_common_LogMessage() call issued between LogDeinit and the next
+    // LogInit falls back to syslog at INFO level rather than using stale state
+    // from the previous init cycle.
+    gLogBackend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
+    gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
 
     gInited = false;
     return PA_OK;

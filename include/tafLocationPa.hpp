@@ -700,7 +700,8 @@ typedef enum {
     TAF_PA_LOCATION_UNKNOWN_STATE   = 0,
     TAF_PA_LOCATION_VALID_BIT       = (1<<0),
     TAF_PA_LOCATION_RESET_BIT       = (1<<1),
-    TAF_PA_LOCATION_CYCLE_SLIP_BIT  = (1<<2)
+    TAF_PA_LOCATION_CYCLE_SLIP_BIT  = (1<<2),
+    TAF_PA_LOCATION_HALF_CYCLE_RESOLVED_BIT = (1<<3)
 }taf_pa_location_GnssMeasurementsAdrStateValidityType_t;
 
 typedef enum{
@@ -824,46 +825,48 @@ using taf_pa_location_RequestRobustLocationCb = std::function<void(pa_result_t r
 using taf_pa_location_RequestSecondaryBandConfigCb = std::function<void(pa_result_t result, const std::set<taf_pa_location_GnssConstellationType_t>& constellationSet, std::any context)>;
 using taf_pa_location_RequestXtraStatusCb = std::function<void(pa_result_t result, const taf_pa_location_XtraStatus_t& xtraStatus, std::any context)>;
 
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_Init();
+PA_SHARED  pa_result_t taf_pa_location_Init();
 
-PA_SHARED PA_WEAK  taf_pa_location_LocationId taf_pa_location_CreateClient();
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_DeleteClient(taf_pa_location_LocationId clientId);
+PA_SHARED pa_result_t taf_pa_location_Deinit();
 
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_RegisterListener(taf_pa_location_LocationId clientId, taf_pa_location_EventListener* eventListener, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_startDetailedEngineReports(taf_pa_location_LocationId clientId, uint32_t optInterval, uint16_t engineType, taf_pa_location_GeneralCb callback, uint32_t reportMask, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_stopReports(taf_pa_location_LocationId clientId, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  uint32_t taf_pa_location_getCapabilities(taf_pa_location_LocationId clientId, std::any context);
+PA_SHARED  taf_pa_location_LocationId taf_pa_location_CreateClient();
+PA_SHARED  pa_result_t taf_pa_location_DeleteClient(taf_pa_location_LocationId clientId);
+
+PA_SHARED  pa_result_t taf_pa_location_RegisterListener(taf_pa_location_LocationId clientId, taf_pa_location_EventListener* eventListener, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_startDetailedEngineReports(taf_pa_location_LocationId clientId, uint32_t optInterval, uint16_t engineType, taf_pa_location_GeneralCb callback, uint32_t reportMask, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_stopReports(taf_pa_location_LocationId clientId, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  uint32_t taf_pa_location_getCapabilities(taf_pa_location_LocationId clientId, std::any context);
 
 
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureConstellations(const std::vector<taf_pa_location_SvBlackListInfo_t>& svBlackListData, taf_pa_location_GeneralCb callback, bool deviceReset, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_deleteAidingData(taf_pa_location_AidingDataType_t aidingData, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_deleteAllAidingData(taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureMinSVElevation(uint8_t minElevation, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestMinSVElevation(taf_pa_location_RequestMinSVElevationCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureNmeaTypes(taf_pa_location_NmeaSentenceType_t nmeaType, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureDR(const taf_pa_location_DREngineConfiguration_t& drConfig, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureEngineState(taf_pa_location_EngineType_t engineType, taf_pa_location_LocationEngineRunState_t engineState, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureRobustLocation(bool enableRobustloc, bool enableE911loc, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestRobustLocation(taf_pa_location_RequestRobustLocationCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureSecondaryBand(const std::unordered_set<taf_pa_location_GnssConstellationType_t>& constSet, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestSecondaryBandConfig(taf_pa_location_RequestSecondaryBandConfigCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureLeverArm(const taf_pa_location_LeverArmParams_t* leverArmConfigInfoPtr, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureMinGpsWeek(uint16_t minGpsWeek, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureNmea(const taf_pa_location_NmeaConfig_t& nmeaConfigData, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestMinGpsWeek(taf_pa_location_RequestMinGpsWeekCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_requestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_injectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_configureEngineIntegrityRisk(taf_pa_location_EngineType_t engineType,uint32_t integrityRisk, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED PA_WEAK pa_result_t taf_pa_location_injectCorrectionData(const uint8_t *injectionData,   uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context);
-PA_SHARED PA_WEAK pa_result_t taf_pa_location_createDgnssSource(taf_pa_location_DgnssDataFormat_t dgnssFormat,taf_pa_location_GeneralCb callback,std::any context);
-PA_SHARED PA_WEAK pa_result_t taf_pa_location_releaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context);
-PA_SHARED PA_WEAK  pa_result_t taf_pa_location_registerDgnssEventListener(
+PA_SHARED  pa_result_t taf_pa_location_configureConstellations(const std::vector<taf_pa_location_SvBlackListInfo_t>& svBlackListData, taf_pa_location_GeneralCb callback, bool deviceReset, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_deleteAidingData(taf_pa_location_AidingDataType_t aidingData, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_deleteAllAidingData(taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureMinSVElevation(uint8_t minElevation, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_requestMinSVElevation(taf_pa_location_RequestMinSVElevationCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureNmeaTypes(taf_pa_location_NmeaSentenceType_t nmeaType, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureDR(const taf_pa_location_DREngineConfiguration_t& drConfig, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureEngineState(taf_pa_location_EngineType_t engineType, taf_pa_location_LocationEngineRunState_t engineState, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureRobustLocation(bool enableRobustloc, bool enableE911loc, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_requestRobustLocation(taf_pa_location_RequestRobustLocationCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureSecondaryBand(const std::unordered_set<taf_pa_location_GnssConstellationType_t>& constSet, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_requestSecondaryBandConfig(taf_pa_location_RequestSecondaryBandConfigCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureLeverArm(const taf_pa_location_LeverArmParams_t* leverArmConfigInfoPtr, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureMinGpsWeek(uint16_t minGpsWeek, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureNmea(const taf_pa_location_NmeaConfig_t& nmeaConfigData, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_requestMinGpsWeek(taf_pa_location_RequestMinGpsWeekCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_requestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_injectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_configureEngineIntegrityRisk(taf_pa_location_EngineType_t engineType,uint32_t integrityRisk, taf_pa_location_GeneralCb callback, std::any context);
+PA_SHARED pa_result_t taf_pa_location_injectCorrectionData(const uint8_t *injectionData,   uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context);
+PA_SHARED pa_result_t taf_pa_location_createDgnssSource(taf_pa_location_DgnssDataFormat_t dgnssFormat,taf_pa_location_GeneralCb callback,std::any context);
+PA_SHARED pa_result_t taf_pa_location_releaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context);
+PA_SHARED  pa_result_t taf_pa_location_registerDgnssEventListener(
 taf_pa_location_DgnssEventListener* eventListener, std::any context);
-PA_SHARED PA_WEAK pa_result_t taf_pa_location_initializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,
+PA_SHARED pa_result_t taf_pa_location_initializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,
 taf_pa_location_GeneralCb callback,std::any context);
-PA_SHARED PA_WEAK pa_result_t taf_pa_location_deregisterDgnssEventListener(std::any context);
-PA_SHARED PA_WEAK pa_result_t taf_pa_location_deInitializeDgnss(taf_pa_location_GeneralCb callback,
+PA_SHARED pa_result_t taf_pa_location_deregisterDgnssEventListener(std::any context);
+PA_SHARED pa_result_t taf_pa_location_deInitializeDgnss(taf_pa_location_GeneralCb callback,
 std::any context);
 } // namespace tafpa::location
 

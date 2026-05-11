@@ -59,9 +59,10 @@ typedef std::function<void(
 typedef std::function<void(int phoneId, taf_pa_sms_StorageFullType fullType)>
     MemoryFullCallback;
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_Init(void);
+PA_SHARED pa_result_t taf_pa_sms_Init(void);
+PA_SHARED pa_result_t taf_pa_sms_Deinit(void);
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_ReadMessage
+PA_SHARED pa_result_t taf_pa_sms_ReadMessage
 (
     uint32_t readAtIdx,
     uint32_t timeout,
@@ -71,17 +72,17 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sms_ReadMessage
     uint32_t* pduMsgIndex
 );
 
-PA_SHARED PA_WEAK void taf_pa_sms_RegisterIncomingSmsCallback
+PA_SHARED void taf_pa_sms_RegisterIncomingSmsCallback
 (
     IncomingSmsCallback cb
 );
 
-PA_SHARED PA_WEAK void taf_pa_sms_RegisterMemoryFullCallback
+PA_SHARED void taf_pa_sms_RegisterMemoryFullCallback
 (
     MemoryFullCallback cb
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_SendRawSms
+PA_SHARED pa_result_t taf_pa_sms_SendRawSms
 (
     uint8_t* pduData,
     uint32_t pduLength,
@@ -89,7 +90,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sms_SendRawSms
     uint8_t phoneId
 );
 
-PA_SHARED PA_WEAK void taf_pa_sms_SendPDUMessageAsync
+PA_SHARED void taf_pa_sms_SendPDUMessageAsync
 (
     uint8_t phoneId,
     const uint8_t* pduData,
@@ -97,28 +98,20 @@ PA_SHARED PA_WEAK void taf_pa_sms_SendPDUMessageAsync
     std::function<void(pa_result_t)> cb
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_SetActivationStatus
+PA_SHARED pa_result_t taf_pa_sms_SetActivationStatus
 (
     uint8_t phoneId,
     bool activate,
     uint32_t timeout
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_RequestMessageFilters
+PA_SHARED pa_result_t taf_pa_sms_RequestMessageFilters
 (
     uint8_t phoneId,
     uint32_t timeout
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_AddCellBroadcastIds
-(
-    uint8_t phoneId,
-    uint16_t fromId,
-    uint16_t toId,
-    uint32_t timeout
-);
-
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_RemoveCellBroadcastIds
+PA_SHARED pa_result_t taf_pa_sms_AddCellBroadcastIds
 (
     uint8_t phoneId,
     uint16_t fromId,
@@ -126,7 +119,15 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sms_RemoveCellBroadcastIds
     uint32_t timeout
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_GetSmsCenterAddress
+PA_SHARED pa_result_t taf_pa_sms_RemoveCellBroadcastIds
+(
+    uint8_t phoneId,
+    uint16_t fromId,
+    uint16_t toId,
+    uint32_t timeout
+);
+
+PA_SHARED pa_result_t taf_pa_sms_GetSmsCenterAddress
 (
     uint8_t phoneId,
     char* addr,
@@ -134,28 +135,28 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sms_GetSmsCenterAddress
     uint32_t timeout
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_SetSmsCenterAddress
+PA_SHARED pa_result_t taf_pa_sms_SetSmsCenterAddress
 (
     uint8_t phoneId,
     const char* addr,
     uint32_t timeout
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_GetPreferredStorage
+PA_SHARED pa_result_t taf_pa_sms_GetPreferredStorage
 (
     taf_pa_sms_Storage* type,
     uint32_t timeout,
     uint8_t phoneId
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_SetPreferredStorage
+PA_SHARED pa_result_t taf_pa_sms_SetPreferredStorage
 (
     taf_pa_sms_Storage type,
     uint32_t timeout,
     uint8_t phoneId
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_SetTag
+PA_SHARED pa_result_t taf_pa_sms_SetTag
 (
     uint32_t msgIndex,
     taf_pa_sms_Tag tagType,
@@ -163,14 +164,14 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_sms_SetTag
     uint8_t phoneId
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_sms_DeleteMessage
+PA_SHARED pa_result_t taf_pa_sms_DeleteMessage
 (
     uint32_t msgIndex,
     uint32_t timeout,
     uint8_t phoneId
 );
 
-PA_SHARED PA_WEAK int32_t taf_pa_sms_RequestSmsMessageList
+PA_SHARED int32_t taf_pa_sms_RequestSmsMessageList
 (
     uint32_t* arr,
     size_t arrSize,

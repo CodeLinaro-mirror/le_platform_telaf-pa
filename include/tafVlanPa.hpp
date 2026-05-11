@@ -6,12 +6,6 @@
 #ifndef TAF_VLAN_PA_HPP
 #define TAF_VLAN_PA_HPP
 
-#ifdef TAF_PA_DEFAULT
-#define PA_WEAK __attribute__((weak))
-#else
-#define PA_WEAK
-#endif
-
 #include <map>
 #include <vector>
 #include <list>
@@ -112,71 +106,73 @@ typedef struct
  * Register hardware acceleration notification handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_vlan_RegHwAccelarationUpdateHandler
+PA_SHARED pa_result_t taf_pa_vlan_RegHwAccelarationUpdateHandler
 (
     taf_pa_vlan_HardwareAccelerationHandler_t handlerFunc
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_vlan_Init();
+PA_SHARED pa_result_t taf_pa_vlan_Init();
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_AddVlanInterface
+PA_SHARED pa_result_t taf_pa_vlan_Deinit();
+
+PA_SHARED pa_result_t taf_pa_net_AddVlanInterface
 (
      const taf_pa_Vlan_t vlanConfig,
      const taf_pa_vlan_iface_type_t iftype
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_RemoveVlanInterface
+PA_SHARED pa_result_t taf_pa_net_RemoveVlanInterface
 (
      const taf_pa_Vlan_t vlanConfig,
      const taf_pa_vlan_iface_type_t iftype
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_BindWithBackhaul
+PA_SHARED pa_result_t taf_pa_net_BindWithBackhaul
 (
      const taf_pa_Vlan_t vlan,
      const taf_pa_VlanBindConfig_t vlanBindConfig
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_UnbindWithBackhaul
+PA_SHARED pa_result_t taf_pa_net_UnbindWithBackhaul
 (
      const taf_pa_Vlan_t vlan,                        // IN
      const taf_pa_VlanBindConfig_t vlanBindConfig     // IN
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_QueryVlanInfo
+PA_SHARED pa_result_t taf_pa_net_QueryVlanInfo
 (
     std::vector<taf_pa_Vlan_t> &vlanEntryInfo    // OUT
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_QueryVlanToBackhaulMappingList
+PA_SHARED pa_result_t taf_pa_net_QueryVlanToBackhaulMappingList
 (
     const uint8_t slotID,                          // IN
     const taf_pa_vlan_backhaul_type_t backhaulType,  // IN
     std::vector<taf_pa_VlanBindConfig_t>& vlanEntryInfo  // OUT
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_RegVlanListener();
+PA_SHARED pa_result_t taf_pa_net_RegVlanListener();
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_DeregVlanListener();
+PA_SHARED pa_result_t taf_pa_net_DeregVlanListener();
 
 //Data Settings API
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetBackhaulPreference
+PA_SHARED pa_result_t taf_pa_net_GetBackhaulPreference
 (
     std::vector<taf_pa_vlan_backhaul_type_t> &vlanEntryInfo    // OUT
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetBackhaulPreference
+PA_SHARED pa_result_t taf_pa_net_SetBackhaulPreference
 (
     std::vector<taf_pa_vlan_backhaul_type_t> vlanEntryInfo    // IN
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetIPPassThroughNatConfig
+PA_SHARED pa_result_t taf_pa_net_GetIPPassThroughNatConfig
 (
     bool &isEnabledPtr                         // OUT
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetIPPassThroughNatConfig
+PA_SHARED pa_result_t taf_pa_net_SetIPPassThroughNatConfig
 (
     bool isEnabledPtr                         // IN
 );
@@ -224,13 +220,13 @@ typedef struct
     char macAddr[TAF_PA_NET_MAC_ADDR_MAX_LEN+1];     ///< MAC address (format: XX:XX:XX:XX:XX:XX)
 } taf_pa_IpptConfigOut_t;
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetIPPassThroughConfig
+PA_SHARED pa_result_t taf_pa_net_SetIPPassThroughConfig
 (
     const taf_pa_IpptConfigIn_t *ipptConfigIn,    // IN
     const taf_pa_IpptConfigOut_t *ipptConfigOut   // IN
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetIPPassThroughConfig
+PA_SHARED pa_result_t taf_pa_net_GetIPPassThroughConfig
 (
     const taf_pa_IpptConfigIn_t *ipptConfigIn,    // IN
     taf_pa_IpptConfigOut_t *ipptConfigOut         // OUT
@@ -317,13 +313,13 @@ typedef struct
     taf_pa_vlan_ip_family_type_t ipFamilyType; ///< IP family type (IPv4/IPv6)
 } taf_pa_IpConfigParams_t;
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetIPConfig
+PA_SHARED pa_result_t taf_pa_net_SetIPConfig
 (
     const taf_pa_IpConfigParams_t *ipConfigParams,  // IN
     const taf_pa_IpConfig_t *ipConfig               // IN
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetIPConfig
+PA_SHARED pa_result_t taf_pa_net_GetIPConfig
 (
     const taf_pa_IpConfigParams_t *ipConfigParams,  // IN
     taf_pa_IpConfig_t *ipConfig                     // OUT

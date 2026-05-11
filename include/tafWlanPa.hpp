@@ -66,75 +66,77 @@ struct BandInterferenceConfig_t
 // Device listener: (enabled, serviceStatus, context)
 using DeviceListener = std::function<void(bool enabled, ServiceState_e serviceStatus, std::any)>;
 
-PA_SHARED PA_WEAK pa_result_t Init();
+PA_SHARED pa_result_t Init();
 
-PA_SHARED PA_WEAK pa_result_t RegisterDeviceListener
+PA_SHARED pa_result_t Deinit();
+
+PA_SHARED pa_result_t RegisterDeviceListener
 (
     DeviceListener listener,
     std::any ctx
 );
 
-PA_SHARED PA_WEAK pa_result_t EnableDevice
+PA_SHARED pa_result_t EnableDevice
 (
     bool enable
 );
 
-PA_SHARED PA_WEAK pa_result_t GetStatus
+PA_SHARED pa_result_t GetStatus
 (
     bool &enabled
 );
 
-PA_SHARED PA_WEAK pa_result_t SetDeviceMode
+PA_SHARED pa_result_t SetDeviceMode
 (
     int numAP,
     int numSTA
 );
 
-PA_SHARED PA_WEAK pa_result_t GetDeviceMode
+PA_SHARED pa_result_t GetDeviceMode
 (
     int &numAP,
     int &numSTA
 );
 
-PA_SHARED PA_WEAK pa_result_t SetStaBridgeMode
+PA_SHARED pa_result_t SetStaBridgeMode
 (
     StaId_e staId,
     taf::pa::wlan::Mode_e tafStaMode
 );
 
-PA_SHARED PA_WEAK pa_result_t GetStaBridgeMode
+PA_SHARED pa_result_t GetStaBridgeMode
 (
     StaId_e staId,
     taf::pa::wlan::Mode_e &tafStaModeOut
 );
 
-PA_SHARED PA_WEAK pa_result_t SetStaIpConfig
+PA_SHARED pa_result_t SetStaIpConfig
 (
     StaId_e staId,
     taf::pa::wlan::IPType_e tafIpType         // taf_wlanSta_IPType_t
 );
 
-PA_SHARED PA_WEAK pa_result_t SetStaIpConfig
+PA_SHARED pa_result_t SetStaIpConfig
 (
     StaId_e staId,
     taf::pa::wlan::IPType_e tafIpType,        // taf_wlanSta_IPType_t
     const StaIpConfig_t &cfg
 );
 
-PA_SHARED PA_WEAK pa_result_t GetStaIpConfig
+PA_SHARED pa_result_t GetStaIpConfig
 (
     StaId_e staId,
     taf::pa::wlan::IPType_e &tafIpTypeOut,    // taf_wlanSta_IPType_t
     StaIpConfig_t &cfgOut
 );
 
-PA_SHARED PA_WEAK pa_result_t GetBandInterferenceConfig
+PA_SHARED pa_result_t GetBandInterferenceConfig
 (
     bool &enabled,
     BandInterferenceConfig_t &cfgOut
 );
 
-PA_SHARED PA_WEAK pa_result_t SetBandInterferenceConfig
+PA_SHARED pa_result_t SetBandInterferenceConfig
 (
     bool enable,
     const BandInterferenceConfig_t &cfg

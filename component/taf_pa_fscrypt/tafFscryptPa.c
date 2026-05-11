@@ -23,6 +23,23 @@ void taf_pa_fsc_Init
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * PA deinitialization.
+ */
+//--------------------------------------------------------------------------------------------------
+void taf_pa_fsc_Deinit
+(
+    void
+)
+{
+    // The fscrypt PA is a stateless pass-through wrapper: it holds no shared pointers,
+    // maps, or open handles of its own. The underlying taf_prop_fscrypt layer does not
+    // expose a Deinit API. This function provides the symmetric counterpart to
+    // taf_pa_fsc_Init() so callers can follow a consistent Init/Deinit lifecycle.
+    PA_INFO("Telaf fscrypt PA deinitialized.");
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
  * Get a key file reference by directory name.
  */
 //--------------------------------------------------------------------------------------------------

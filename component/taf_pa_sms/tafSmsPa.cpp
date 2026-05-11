@@ -312,6 +312,7 @@ public:
     }
 
     pa_result_t initialize();
+    pa_result_t deinitialize();
 
     void setIncomingSmsCallback(IncomingSmsCallback cb)
     {
@@ -2032,6 +2033,84 @@ pa_result_t tafpa::sms::taf_pa_sms_Init
     else
     {
         PA_CRIT("Failed to initialize SMS platform adapter, ret: %d", result);
+    }
+
+    return result;
+}
+
+pa_result_t SmsPAController::deinitialize
+(
+    void
+)
+{
+    PA_INFO("Starting SMS platform adaptor deinitialization...");
+
+    // Step 1: Clear the incoming SMS and memory-full callbacks under the mutex
+    // so no further notifications are dispatched after this point.
+    PA_INFO("Clearing incomingSmsCb and memoryFullCb");
+    {
+        std::lock_guard<std::mutex> lk(cbMutex);
+        incomingSmsCb = nullptr;
+        memoryFullCb  = nullptr;
+    }
+
+    // Step 2: Deregister the SMS listener from every SMS manager so the SDK
+    // stops delivering events to it.
+    PA_INFO("Deregistering SMS listener from all SMS managers");
+    for (auto& smsMgr : smsManagers)
+    {
+        if (smsMgr && mySmsListener)
+        {
+            telux::common::Status status = smsMgr->removeListener(mySmsListener);
+            if (status != telux::common::Status::SUCCESS)
+            {
+                PA_ERROR("Failed to remove SMS listener from a manager");
+                // Continue cleanup even if removal failed
+            }
+        }
+    }
+
+    // Step 3: Reset the SMS listener shared pointer so the listener object is
+    // released once no other owners remain.
+    PA_INFO("Resetting mySmsListener");
+    mySmsListener.reset();
+
+    // Step 4: Clear the SMS manager vector so all ISmsManager shared pointers
+    // are released.
+    PA_INFO("Clearing smsManagers vector");
+    smsManagers.clear();
+
+    // Step 5: Clear the CellBroadcast manager vector so all ICellBroadcastManager
+    // shared pointers are released.
+    PA_INFO("Clearing CbManagers vector");
+    CbManagers.clear();
+
+    // Step 6: Clear the cached cell-broadcast filter list.
+    PA_INFO("Clearing CBFilterList");
+    {
+        std::lock_guard<std::mutex> lk(cbFilterMutex);
+        CBFilterList.clear();
+    }
+
+    PA_INFO("SMS platform adaptor deinitialization complete.");
+    return PA_OK;
+}
+
+pa_result_t tafpa::sms::taf_pa_sms_Deinit
+(
+    void
+)
+{
+    auto pACtrl = SmsPAController::getInstance();
+
+    pa_result_t result = pACtrl->deinitialize();
+    if (result == PA_OK)
+    {
+        PA_INFO("SMS platform adapter deinitialization done.");
+    }
+    else
+    {
+        PA_ERROR("SMS platform adapter deinitialization failed, ret: %d", result);
     }
 
     return result;

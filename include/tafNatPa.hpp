@@ -6,12 +6,6 @@
 #ifndef TAF_NAT_PA_HPP
 #define TAF_NAT_PA_HPP
 
-#ifdef TAF_PA_DEFAULT
-#define PA_WEAK __attribute__((weak))
-#else
-#define PA_WEAK
-#endif
-
 #include "tafCommonPa.h"
 
 #include <vector>
@@ -46,7 +40,18 @@ taf_pa_net_ipproto_t;
  *      - LE_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_nat_Init();
+PA_SHARED pa_result_t taf_pa_nat_Init();
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Deinitialize NAT platform adapter
+ *
+ * @return
+ *      - PA_OK on success
+ *      - PA_FAULT on failure
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t taf_pa_nat_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -57,7 +62,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_nat_Init();
  *      - LE_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_nat_AddDestNatEntry(
+PA_SHARED pa_result_t taf_pa_nat_AddDestNatEntry(
     uint32_t profileId,
     uint8_t slotId,
     const taf_pa_net_NatConfig_t *natConfig
@@ -72,7 +77,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_nat_AddDestNatEntry(
  *      - LE_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_nat_RemoveDestNatEntry(
+PA_SHARED pa_result_t taf_pa_nat_RemoveDestNatEntry(
     uint32_t profileId,
     uint8_t slotId,
     const taf_pa_net_NatConfig_t *natConfig
@@ -88,7 +93,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_nat_RemoveDestNatEntry(
  *      - LE_TIMEOUT on timeout
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_nat_QueryDestNatEntryList(
+PA_SHARED pa_result_t taf_pa_nat_QueryDestNatEntryList(
     uint32_t profileId,
     uint8_t slotId,
     std::vector<taf_pa_net_NatConfig_t> &natEntryInfo

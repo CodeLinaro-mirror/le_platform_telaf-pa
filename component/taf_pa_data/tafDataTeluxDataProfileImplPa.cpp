@@ -1076,6 +1076,13 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::deInitDataProfileManagers()
     dataProfileManagersInitStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
     dataProfileManagersInitStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
 
+    // Clear profile events callbacks
+    PA_INFO("Clear profileEventsCallbacks_");
+    {
+        std::unique_lock lock(dataProfileCallbacksMutex_);
+        profileEventsCallbacks_.clear();
+    }
+
     PA_INFO("Data profile managers deinitialization complete");
     return PA_OK;
 }

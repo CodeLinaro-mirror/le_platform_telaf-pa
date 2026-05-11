@@ -77,6 +77,7 @@ public:
     }
 
     pa_result_t initialize();
+    pa_result_t deinitialize();
     telux::common::Status RegisterDgnssManager();
     telux::common::Status InitializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,taf_pa_location_GeneralCb callback,std::any context);
     telux::common::Status DeInitializeDgnss(taf_pa_location_GeneralCb callback,std::any context);
@@ -2232,7 +2233,7 @@ telux::common::Status LocationPAController::InjectCorrectionData(const uint8_t *
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_injectCorrectionData(const uint8_t *injectionData, 
+pa_result_t tafpa::location::taf_pa_location_injectCorrectionData(const uint8_t *injectionData,
 uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context)
 {
     if (!injectionData || injectionDataSize == 0) {
@@ -2889,6 +2890,66 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
         PA_ERROR("unable to find event Listener for onEvent");
     }
 
+}
+
+pa_result_t LocationPAController::deinitialize()
+{
+    PA_INFO("Starting location PA deinitialization...");
+
+    // Step 1: Release all location clients. Each ReleaseLocationClient() call removes the
+    // client from the map and calls CleanUp() which deregisters SDK listeners.
+    PA_INFO("Releasing all location clients...");
+    {
+        // Collect IDs first to avoid iterator invalidation during erasure.
+        std::vector<taf_pa_location_LocationId> clientIds;
+        clientIds.reserve(locationClients_.size());
+        for (auto& entry : locationClients_)
+        {
+            clientIds.push_back(entry.first);
+        }
+        for (auto id : clientIds)
+        {
+            ReleaseLocationClient(id);
+        }
+    }
+
+    // Step 2: Deinitialize DGNSS manager if it is still active.
+    if (mDgnssManager)
+    {
+        PA_INFO("Deinitializing DGNSS manager during deinit...");
+        DeInitializeDgnss(nullptr, std::any{});
+    }
+
+    // Step 3: Clear DGNSS event listener and context under mutex so no further
+    // callbacks are dispatched after this point.
+    PA_INFO("Clearing dgnssListener_ and dgnssListenerContext_");
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        dgnssListener_ = nullptr;
+        dgnssListenerContext_.reset();
+    }
+
+    // Step 4: Reset location configurator shared pointer.
+    PA_INFO("Resetting mLocationConfigurator");
+    mLocationConfigurator.reset();
+
+    PA_INFO("Location PA deinitialization complete.");
+    return PA_OK;
+}
+
+pa_result_t tafpa::location::taf_pa_location_Deinit()
+{
+    auto paCtrl = LocationPAController::getInstance();
+    pa_result_t res = paCtrl->deinitialize();
+    if (res == PA_OK)
+    {
+        PA_INFO("Location Platform adapter deinitialization done.");
+    }
+    else
+    {
+        PA_ERROR("Location Platform adapter deinitialization failed.");
+    }
+    return res;
 }
 
 void LocationPAController::PALocationClient::onGnssMeasurementsInfo(const telux::loc::GnssMeasurements &measurementInfo)

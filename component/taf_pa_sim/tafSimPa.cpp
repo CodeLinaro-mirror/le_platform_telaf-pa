@@ -1208,6 +1208,61 @@ pa_result_t taf_pa_sim_Init()
     return TAF_PA_SIM_RESULT_OK;
 }
 
+pa_result_t taf_pa_sim_Deinit()
+{
+    PA_INFO("Starting SIM platform adaptor deinitialization...");
+
+    auto& pa = PlatformAdaptor::GetInstance();
+    pa_result_t overallResult = TAF_PA_SIM_RESULT_OK;
+
+    // Step 1: Clear the refresh change handler so no further refresh indications
+    // are dispatched after this point.
+    PA_INFO("Clearing refreshSvcStatus handler and context");
+    pa.indicators.refreshSvcStatus.handlerFuncPtr = nullptr;
+    pa.indicators.refreshSvcStatus.contextPtr     = nullptr;
+
+    // Step 2: Deregister subscription, card and multi-sim listeners from their
+    // respective SDK managers.
+    PA_INFO("Deregistering SDK listeners");
+    pa_result_t deregResult = taf_pa_sim_DeregisterListeners();
+    if (deregResult != TAF_PA_SIM_RESULT_OK)
+    {
+        PA_ERROR("taf_pa_sim_DeregisterListeners failed: err(%d) - continuing cleanup",
+                 deregResult);
+        overallResult = deregResult;  // Track the failure
+    }
+
+    // Step 3: Clear the PA-level event listener pointer so no further event
+    // callbacks are dispatched.
+    PA_INFO("Clearing eventListener_");
+    pa.eventListener_ = nullptr;
+
+    // Step 4: Reset all listener shared pointers so the listener objects are
+    // released once no other owners remain.
+    PA_INFO("Resetting listener shared pointers");
+    pa.subscriptionListener.reset();
+    pa.tafSubListener.reset();
+    pa.cardListener.reset();
+    pa.tafCardListener.reset();
+    pa.multiSimListener.reset();
+    pa.tafMultiSimListener.reset();
+
+    // Step 5: Clear the card map so stale ICard references are released.
+    PA_INFO("Clearing managers.cards map");
+    pa.managers.cards.clear();
+
+    // Step 6: Reset manager shared pointers so the underlying SDK objects are
+    // released once no other owners remain.
+    PA_INFO("Resetting subMgr, cardManager, multiSimMgr and managers.phone");
+    pa.subMgr.reset();
+    pa.cardManager.reset();
+    pa.multiSimMgr.reset();
+    pa.managers.phone.reset();
+
+    PA_INFO("SIM platform adaptor deinitialization complete.");
+    return overallResult;  // Return aggregated status;
+}
+
 pa_result_t taf_pa_sim_RefreshOk(taf_pa_sim_SessionType_t sessionType, bool* refreshAllow)
 {
     if(sessionType == TAF_PA_SIM_SESSION_TYPE_UNKNOWN)
@@ -1921,7 +1976,7 @@ void PlatformAdaptor::InitializeSimInfo
         }
         else if (phoneLen >= TAF_PA_SIM_PHONE_NUM_MAX_BYTES)
         {
-            PA_WARN("Phone number truncated: original length %d, buffer size %d", 
+            PA_WARN("Phone number truncated: original length %d, buffer size %d",
                     phoneLen, TAF_PA_SIM_PHONE_NUM_MAX_BYTES);
         }
         else if (phoneLen == 0)
@@ -2011,7 +2066,7 @@ void PlatformAdaptor::requestsSlotsStatusResponse(
                 (int) slotStatus.cardError);
         if(activeSlots == 1)
         {
-            if (slotStatus.slotState == telux::tel::SlotState::ACTIVE) 
+            if (slotStatus.slotState == telux::tel::SlotState::ACTIVE)
             {
                 slot = slotId;
             }

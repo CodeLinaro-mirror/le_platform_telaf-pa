@@ -92,6 +92,22 @@ public:
             taf_pa_sensor_EventListener* listener,
             std::any context);
 
+        pa_result_t RegisterConfigUpdateHandler(
+            taf_pa_sensor_SensorId sensorId,
+            taf_pa_sensor_ConfigUpdateCb callback,
+            std::any context);
+
+        pa_result_t UnregisterConfigUpdateHandler(
+            taf_pa_sensor_SensorId sensorId);
+
+        pa_result_t RegisterCapabilityHandler(
+            taf_pa_sensor_SensorId sensorId,
+            taf_pa_sensor_CapabilityCb callback,
+            std::any context);
+
+        pa_result_t UnregisterCapabilityHandler(
+            taf_pa_sensor_SensorId sensorId);
+
         bool isActivated() {
             return isActivated_;
         }
@@ -104,6 +120,10 @@ public:
         taf_pa_sensor_EventListener* eventListener_;
         taf_pa_sensor_SensorId sensorId_;
         std::any eventListenerContext_;
+        taf_pa_sensor_ConfigUpdateCb configUpdateCallback_;
+        std::any configUpdateContext_;
+        taf_pa_sensor_CapabilityCb capabilityCallback_;
+        std::any capabilityContext_;
     };
 
     static std::shared_ptr<SensorPAController> getInstance() {
@@ -124,6 +144,7 @@ public:
     }
 
     pa_result_t initialize();
+    pa_result_t deinitialize();
     pa_result_t MapStatus(telux::common::Status status);
     pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
 
@@ -186,6 +207,38 @@ pa_result_t SensorPAController::initialize() {
             return MapStatus(status);
         }
     }
+    return PA_OK;
+}
+
+pa_result_t SensorPAController::deinitialize() {
+    PA_INFO("Starting sensor platform adaptor deinitialization...");
+
+    // Step 1: Release all active sensor clients. Each ReleaseSensorClient() call
+    // deactivates the sensor (if active) and deregisters the SDK event listener.
+    PA_INFO("Releasing all active sensor clients...");
+    {
+        // Collect IDs first to avoid iterator invalidation during erasure.
+        std::vector<taf_pa_sensor_SensorId> clientIds;
+        clientIds.reserve(sensorClients_.size());
+        for (auto& entry : sensorClients_) {
+            clientIds.push_back(entry.first);
+        }
+        for (auto id : clientIds) {
+            ReleaseSensorClient(id);
+        }
+    }
+
+    // Step 2: Clear the cached sensor info list so stale entries are not
+    // visible after a subsequent re-initialization.
+    PA_INFO("Clearing sensor info list");
+    sList.clear();
+
+    // Step 3: Reset the sensor manager shared pointer so the underlying SDK
+    // object is released once no other owners remain.
+    PA_INFO("Resetting sensorManager_");
+    sensorManager_.reset();
+
+    PA_INFO("Sensor platform adaptor deinitialization complete.");
     return PA_OK;
 }
 
@@ -451,11 +504,10 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_SetEulerAngle(
     return PA_OK;
 }
 
-PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Activate(
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_SetConfig(
     taf_pa_sensor_SensorId sensorId,
-    double sampleRate,
-    uint32_t batchCount,
-    bool isRotated) {
+    double samplingRate,
+    uint32_t batchCount) {
 
     auto paCtrl = SensorPAController::getInstance();
     std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
@@ -464,15 +516,10 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Activate(
         return PA_BAD_PARAMETER;
     }
 
-    if (clientPtr->isActivated()) {
-        PA_ERROR("Sensor with ID %llu already activated!", sensorId);
-        return PA_UNAVAILABLE;
-    }
-
     SensorConfiguration s;
-    s.samplingRate = sampleRate;
+    s.samplingRate = samplingRate;
     s.batchCount = batchCount;
-    s.isRotated = isRotated;
+    s.isRotated = false;
     s.validityMask.set(SensorConfigParams::SAMPLING_RATE);
     s.validityMask.set(SensorConfigParams::BATCH_COUNT);
     s.validityMask.set(SensorConfigParams::ROTATE);
@@ -486,7 +533,24 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Activate(
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    status = clientPtr->Activate();
+    return PA_OK;
+}
+
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Activate(taf_pa_sensor_SensorId sensorId) {
+
+    auto paCtrl = SensorPAController::getInstance();
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
+    }
+
+    if (clientPtr->isActivated()) {
+        PA_ERROR("Sensor with ID %llu already activated!", sensorId);
+        return PA_UNAVAILABLE;
+    }
+
+    telux::common::Status status = clientPtr->Activate();
     if (status != telux::common::Status::SUCCESS) {
         PA_ERROR("Sensor activation failed for ID %llu with status code %d", sensorId, static_cast<int>(status));
         return paCtrl->MapStatus(status);
@@ -517,7 +581,7 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Deactivate(taf_pa_sen
     return PA_OK;
 }
 
-PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_SelfTest(
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_SelfTestAsync(
     taf_pa_sensor_SensorId sensorId,
     taf_pa_sensor_SelfTestMode mode,
     taf_pa_sensor_SelfTestResultCb callback,
@@ -548,7 +612,7 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_SelfTest(
     return paCtrl->MapStatus(status);
 }
 
-PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_RegisterListener(
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_AddListener(
     taf_pa_sensor_SensorId sensorId,
     taf_pa_sensor_EventListener* eventListener,
     std::any context) {
@@ -562,13 +626,32 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_RegisterListener(
 
     pa_result_t result = clientPtr->RegisterEventListener(sensorId, eventListener, context);
     if (result == PA_OK) {
-        PA_INFO("Register Event Listener successfully for ID %llu", sensorId);
+        PA_INFO("Add Event Listener successfully for ID %llu", sensorId);
         return PA_OK;
     }
-    PA_ERROR("Failed to register event listener for ID %llu", sensorId);
+    PA_ERROR("Failed to add event listener for ID %llu", sensorId);
     return PA_FAULT;
 }
 
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_RemoveListener(
+    taf_pa_sensor_SensorId sensorId) {
+
+    auto paCtrl = SensorPAController::getInstance();
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
+    }
+
+    // Clear the event listener by setting it to nullptr
+    pa_result_t result = clientPtr->RegisterEventListener(sensorId, nullptr, std::any());
+    if (result == PA_OK) {
+        PA_INFO("Remove Event Listener successfully for ID %llu", sensorId);
+        return PA_OK;
+    }
+    PA_ERROR("Failed to remove event listener for ID %llu", sensorId);
+    return PA_FAULT;
+}
 PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Init(int8_t& listSize) {
     auto paCtrl = SensorPAController::getInstance();
     pa_result_t res = paCtrl->initialize();
@@ -577,6 +660,17 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Init(int8_t& listSize
         listSize = static_cast<int8_t>(paCtrl->getSensorListSize());
     } else {
         PA_CRIT("Sensor Platform adapter initialization failed.");
+    }
+    return res;
+}
+
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Deinit() {
+    auto paCtrl = SensorPAController::getInstance();
+    pa_result_t res = paCtrl->deinitialize();
+    if (res == PA_OK) {
+        PA_INFO("Sensor Platform adapter deinitialization done.");
+    } else {
+        PA_ERROR("Sensor Platform adapter deinitialization failed.");
     }
     return res;
 }
@@ -617,10 +711,19 @@ void SensorPAController::PASensorClient::onEvent(std::shared_ptr<std::vector<Sen
 }
 
 void SensorPAController::PASensorClient::onConfigurationUpdate(SensorConfiguration configuration) {
+    std::lock_guard<std::mutex> lock(mtx_);
+
     if (sensorClient_) {
         PA_INFO("%s is configured for :[%f %d %d]", sensorClient_->getSensorInfo().name.c_str(),
                     configuration.samplingRate, configuration.batchCount,
                     static_cast<int>(configuration.isRotated));
+
+        // Call the registered configuration update callback if available
+        if (configUpdateCallback_) {
+            configUpdateCallback_(sensorId_, configuration.samplingRate,
+                                configuration.batchCount, configuration.isRotated,
+                                configUpdateContext_);
+        }
     } else {
         PA_ERROR("SensorClient null in onConfigurationUpdate");
     }
@@ -644,12 +747,8 @@ pa_result_t SensorPAController::PASensorClient::RegisterEventListener(
     std::any context) {
 
     sensorId_ = sensorId;
-    if (listener != nullptr) {
-        eventListener_ = listener;
-    } else {
-        PA_ERROR("Listener is NULL for sensor ID %llu", sensorId_);
-        return PA_BAD_PARAMETER;
-    }
+    // Allow nullptr to clear the listener (used by RemoveListener)
+    eventListener_ = listener;
 
     if (context.has_value())
     {
@@ -657,4 +756,146 @@ pa_result_t SensorPAController::PASensorClient::RegisterEventListener(
     }
 
     return PA_OK;
+}
+
+pa_result_t SensorPAController::PASensorClient::RegisterConfigUpdateHandler(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_ConfigUpdateCb callback,
+    std::any context) {
+
+    std::lock_guard<std::mutex> lock(mtx_);
+    sensorId_ = sensorId;
+
+    if (callback) {
+        configUpdateCallback_ = callback;
+        if (context.has_value()) {
+            configUpdateContext_ = std::move(context);
+        }
+        PA_INFO("Configuration update handler registered for sensor ID %llu", sensorId_);
+        return PA_OK;
+    } else {
+        PA_ERROR("Configuration update callback is NULL for sensor ID %llu", sensorId_);
+        return PA_BAD_PARAMETER;
+    }
+}
+
+pa_result_t SensorPAController::PASensorClient::UnregisterConfigUpdateHandler(
+    taf_pa_sensor_SensorId sensorId) {
+
+    std::lock_guard<std::mutex> lock(mtx_);
+    configUpdateCallback_ = nullptr;
+    configUpdateContext_ = std::any();
+    PA_INFO("Configuration update handler unregistered for sensor ID %llu", sensorId);
+    return PA_OK;
+}
+
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_AddConfigUpdateHandler(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_ConfigUpdateCb callback,
+    std::any context) {
+
+    auto paCtrl = SensorPAController::getInstance();
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
+    }
+
+    pa_result_t result = clientPtr->RegisterConfigUpdateHandler(sensorId, callback, context);
+    if (result == PA_OK) {
+        PA_INFO("Add configuration update handler successfully for ID %llu", sensorId);
+        return PA_OK;
+    }
+    PA_ERROR("Failed to add configuration update handler for ID %llu", sensorId);
+    return PA_FAULT;
+}
+
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_RemoveConfigUpdateHandler(
+    taf_pa_sensor_SensorId sensorId) {
+
+    auto paCtrl = SensorPAController::getInstance();
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
+    }
+
+    pa_result_t result = clientPtr->UnregisterConfigUpdateHandler(sensorId);
+    if (result == PA_OK) {
+        PA_INFO("Remove configuration update handler successfully for ID %llu", sensorId);
+        return PA_OK;
+    }
+    PA_ERROR("Failed to remove configuration update handler for ID %llu", sensorId);
+    return PA_FAULT;
+}
+
+pa_result_t SensorPAController::PASensorClient::RegisterCapabilityHandler(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_CapabilityCb callback,
+    std::any context) {
+
+    std::lock_guard<std::mutex> lock(mtx_);
+    sensorId_ = sensorId;
+
+    if (callback) {
+        capabilityCallback_ = callback;
+        if (context.has_value()) {
+            capabilityContext_ = std::move(context);
+        }
+        PA_INFO("Capability handler registered for sensor ID %llu", sensorId_);
+        return PA_OK;
+    } else {
+        PA_ERROR("Capability callback is NULL for sensor ID %llu", sensorId_);
+        return PA_BAD_PARAMETER;
+    }
+}
+
+pa_result_t SensorPAController::PASensorClient::UnregisterCapabilityHandler(
+    taf_pa_sensor_SensorId sensorId) {
+
+    std::lock_guard<std::mutex> lock(mtx_);
+    capabilityCallback_ = nullptr;
+    capabilityContext_ = std::any();
+    PA_INFO("Capability handler unregistered for sensor ID %llu", sensorId);
+    return PA_OK;
+}
+
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_AddCapabilityHandler(
+    taf_pa_sensor_SensorId sensorId,
+    taf_pa_sensor_CapabilityCb callback,
+    std::any context) {
+
+    auto paCtrl = SensorPAController::getInstance();
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
+    }
+
+    pa_result_t result = clientPtr->RegisterCapabilityHandler(sensorId, callback, context);
+    if (result == PA_OK) {
+        PA_INFO("Add capability handler successfully for ID %llu", sensorId);
+        return PA_OK;
+    }
+    PA_ERROR("Failed to add capability handler for ID %llu", sensorId);
+    return PA_FAULT;
+}
+
+PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_RemoveCapabilityHandler(
+    taf_pa_sensor_SensorId sensorId) {
+
+    auto paCtrl = SensorPAController::getInstance();
+    std::shared_ptr<SensorPAController::PASensorClient> clientPtr = paCtrl->GetClientPtr(sensorId);
+    if (!clientPtr) {
+        PA_ERROR("Invalid sensor ID (%llu) provided!", sensorId);
+        return PA_BAD_PARAMETER;
+    }
+
+    pa_result_t result = clientPtr->UnregisterCapabilityHandler(sensorId);
+    if (result == PA_OK) {
+        PA_INFO("Remove capability handler successfully for ID %llu", sensorId);
+        return PA_OK;
+    }
+    PA_ERROR("Failed to remove capability handler for ID %llu", sensorId);
+    return PA_FAULT;
 }

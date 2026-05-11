@@ -609,3 +609,51 @@ pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void)
     PA_INFO("Cooling level change handler deregistered");
     return PA_OK;
 }
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Deinitialize the thermal PA layer
+ */
+//--------------------------------------------------------------------------------------------------
+pa_result_t taf_pa_therm_Deinit(void)
+{
+    PA_INFO("Starting Thermal PA layer deinitialization...");
+
+    // Step 1: Clear the trip event and cooling level change handler function pointers
+    // so no further thermal event callbacks are dispatched after this point.
+    PA_INFO("Clearing g_tripEventHandler and g_coolingLevelChangeHandler");
+    g_tripEventHandler = nullptr;
+    g_coolingLevelChangeHandler = nullptr;
+
+    // Step 2: Deregister the thermal listener from the thermal manager so the SDK
+    // stops delivering events to it.
+    PA_INFO("Deregistering g_thermalListener from g_thermalManager");
+    if (g_thermalManager && g_thermalListener)
+    {
+        telux::common::Status status = g_thermalManager->deregisterListener(g_thermalListener);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to deregister thermal listener");
+            // Continue cleanup even if deregistration failed
+        }
+    }
+
+    // Step 3: Reset the thermal listener shared pointer so the listener object is
+    // released once no other owners remain.
+    PA_INFO("Resetting g_thermalListener");
+    g_thermalListener.reset();
+
+    // Step 4: Reset the thermal manager shared pointer so the underlying SDK object
+    // is released once no other owners remain.
+    PA_INFO("Resetting g_thermalManager");
+    g_thermalManager.reset();
+
+    // Step 5: Clear the cached name-to-ID maps so stale entries are not visible
+    // after a subsequent re-initialization.
+    PA_INFO("Clearing g_zoneNameToIdMap and g_deviceNameToIdMap");
+    g_zoneNameToIdMap.clear();
+    g_deviceNameToIdMap.clear();
+
+    PA_INFO("Thermal PA layer deinitialization complete.");
+    return PA_OK;
+}

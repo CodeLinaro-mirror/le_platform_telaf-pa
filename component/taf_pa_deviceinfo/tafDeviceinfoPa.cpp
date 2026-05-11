@@ -32,6 +32,7 @@ public:
     }
 
         pa_result_t initialize();
+        pa_result_t deinitialize();
 
     class DeviceInfoListener : public telux::platform::IDeviceInfoListener
     {
@@ -134,6 +135,33 @@ pa_result_t DeviceInfoPAController::initialize()
     return PA_OK;
 }
 
+pa_result_t DeviceInfoPAController::deinitialize()
+{
+    PA_INFO("Starting DeviceInfo PA deinitialization...");
+
+    // Step 1: Deregister the service status listener from the device info manager
+    // before releasing any state, so no further SDK callbacks arrive.
+    if (deviceInfoManager_ && devinfoServiceStatusListener_)
+    {
+        PA_INFO("Deregistering devinfoServiceStatusListener_ from deviceInfoManager_");
+        telux::common::Status status =
+            deviceInfoManager_->deregisterListener(devinfoServiceStatusListener_);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to deregister device info service status listener. Status: %d",
+                     static_cast<int>(status));
+        }
+        devinfoServiceStatusListener_.reset();
+    }
+
+    // Step 2: Reset device info manager shared pointer
+    PA_INFO("Resetting deviceInfoManager_");
+    deviceInfoManager_.reset();
+
+    PA_INFO("DeviceInfo PA deinitialization complete");
+    return PA_OK;
+}
+
 pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_GetIMEI(char* imeiPtr, size_t numElements)
 {
     if (imeiPtr == nullptr || numElements == 0) {
@@ -175,6 +203,25 @@ pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_Init()
     else
     {
         PA_CRIT("Failed to initialize DeviceInfo platform adapter, ret: %d", result);
+    }
+
+    return result;
+}
+
+pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_Deinit()
+{
+    auto pACtrl = DeviceInfoPAController::getInstance();
+
+    PA_INFO("taf_pa_deviceinfo_Deinit!!");
+
+    pa_result_t result = pACtrl->deinitialize();
+    if (result == PA_OK)
+    {
+        PA_INFO("DeviceInfo platform adapter deinitialization is done");
+    }
+    else
+    {
+        PA_ERROR("Failed to deinitialize DeviceInfo platform adapter, ret: %d", result);
     }
 
     return result;

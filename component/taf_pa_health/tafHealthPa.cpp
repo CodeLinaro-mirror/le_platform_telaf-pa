@@ -241,6 +241,41 @@ pa_result_t taf_pa_health_RegModemOperationModeUpdateHandler
 }
 
 
+pa_result_t taf_pa_health_DeregModemListener(void)
+{
+    if (!subsystemMgr)
+    {
+        PA_WARN("Subsystem manager not initialized, nothing to deregister.");
+        return PA_OK;
+    }
+
+    if (!stateListener)
+    {
+        PA_WARN("State listener not registered, nothing to deregister.");
+        return PA_OK;
+    }
+
+    // Reconstruct the same subsystem info list used during registration.
+    telux::common::SubsystemInfo subsysInfo{};
+    std::vector<telux::common::SubsystemInfo> listOfSubsystems;
+    subsysInfo.location = telux::common::ProcType::LOCAL_PROC;
+    subsysInfo.subsystems = telux::common::Subsystem::MPSS;
+    listOfSubsystems.push_back(subsysInfo);
+
+    telux::common::ErrorCode ec =
+        subsystemMgr->deRegisterListener(stateListener);
+    if (ec != telux::common::ErrorCode::SUCCESS)
+    {
+        PA_ERROR("Failed to deregister modem listener. ErrorCode: %d",
+                 static_cast<int>(ec));
+        return PA_FAULT;
+    }
+
+    stateListener.reset();
+    PA_INFO("Modem listener deregistered.");
+    return PA_OK;
+}
+
 pa_result_t taf_pa_health_RegModemListener(void)
 {
     telux::common::ErrorCode ec;
@@ -307,4 +342,40 @@ void ModemStatusPA::operatingModeResponse(telux::tel::OperatingMode operatingMod
         //Notify the client the connection was restored.
         ModemOperationModeUpdateHandlerPtr(status);
     }
+}
+
+pa_result_t taf_pa_health_Deinit(void)
+{
+    PA_INFO("Starting health PA deinitialization...");
+
+    // Step 1: Deregister modem listener from subsystem manager
+    pa_result_t result = taf_pa_health_DeregModemListener();
+    if (result != PA_OK)
+    {
+        PA_ERROR("Failed to deregister modem listener during deinit.");
+        // Continue cleanup even if deregistration failed
+    }
+
+    // Step 2: Reset subsystem manager shared pointer
+    PA_INFO("Resetting subsystemMgr");
+    subsystemMgr.reset();
+
+    // Step 3: Reset phone manager shared pointer (with null check)
+    if (modemStatus)
+    {
+        PA_INFO("Resetting phoneManager_");
+        modemStatus->phoneManager_.reset();
+    }
+    else
+    {
+        PA_WARN("modemStatus is null, skipping phoneManager_ reset");
+    }
+
+    // Step 4: Clear function pointer callbacks so no further notifications are dispatched
+    PA_INFO("Clearing ModemStatusUpdateHandlerPtr and ModemOperationModeUpdateHandlerPtr");
+    ModemStatusUpdateHandlerPtr = nullptr;
+    ModemOperationModeUpdateHandlerPtr = nullptr;
+
+    PA_INFO("Health PA deinitialization complete.");
+    return PA_OK;
 }

@@ -819,3 +819,13 @@ pa_result_t taf_pa_net_AddTunnelAsync(
 
 
 
+
+bool taf_pa_l2tp_Deinit()
+{
+    PA_DEBUG("Starting L2TP platform adaptor deinitialization...");
+    auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
+    PA_DEBUG("Resetting l2tpManager");
+    pL2tpAdaptor.l2tpManager.reset();
+    PA_DEBUG("L2TP platform adaptor deinitialization complete.");
+    return true;
+}

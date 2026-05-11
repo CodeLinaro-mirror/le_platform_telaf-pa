@@ -6,12 +6,6 @@
 #ifndef TAF_SOCKS_PA_HPP
 #define TAF_SOCKS_PA_HPP
 
-#ifdef TAF_PA_DEFAULT
-#define PA_WEAK __attribute__((weak))
-#else
-#define PA_WEAK
-#endif
-
 #include "tafCommonPa.h"
 
 //--------------------------------------------------------------------------------------------------
@@ -50,14 +44,16 @@ taf_pa_net_AuthMethod_t;
 
 typedef void (*taf_pa_socks_CallCb)(pa_result_t result,void *contextPtr);
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_socks_Init();
+PA_SHARED pa_result_t taf_pa_socks_Init();
+
+PA_SHARED pa_result_t taf_pa_socks_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Set device mode
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetDeviceMode
+PA_SHARED pa_result_t taf_pa_net_SetDeviceMode
 (
     taf_pa_net_DeviceMode_t deviceMode
 );
@@ -67,7 +63,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetDeviceMode
  * Get device mode
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK taf_pa_net_DeviceMode_t taf_pa_net_GetDeviceMode
+PA_SHARED taf_pa_net_DeviceMode_t taf_pa_net_GetDeviceMode
 (
 );
 
@@ -76,7 +72,7 @@ PA_SHARED PA_WEAK taf_pa_net_DeviceMode_t taf_pa_net_GetDeviceMode
  * Set SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetSocksAuthMethod
+PA_SHARED pa_result_t taf_pa_net_SetSocksAuthMethod
 (
     taf_pa_net_AuthMethod_t authMethod
 );
@@ -86,7 +82,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetSocksAuthMethod
  * Get SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK taf_pa_net_AuthMethod_t taf_pa_net_GetSocksAuthMethod
+PA_SHARED taf_pa_net_AuthMethod_t taf_pa_net_GetSocksAuthMethod
 (
 );
 
@@ -95,7 +91,7 @@ PA_SHARED PA_WEAK taf_pa_net_AuthMethod_t taf_pa_net_GetSocksAuthMethod
  * Sets SOCKS LAN interface
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetSocksLanInterface
+PA_SHARED pa_result_t taf_pa_net_SetSocksLanInterface
 (
     const char* ifName
 );
@@ -105,7 +101,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetSocksLanInterface
  * Gets SOCKS LAN interface
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetSocksLanInterface
+PA_SHARED pa_result_t taf_pa_net_GetSocksLanInterface
 (
     char* ifName,
     size_t ifNameSize
@@ -116,7 +112,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetSocksLanInterface
  * Adds username/profile association
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_AddSocksAssociation
+PA_SHARED pa_result_t taf_pa_net_AddSocksAssociation
 (
     const char* userName,
     uint32_t profileId
@@ -127,7 +123,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_AddSocksAssociation
  * Deletes username/profile association
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_RemoveSocksAssociation
+PA_SHARED pa_result_t taf_pa_net_RemoveSocksAssociation
 (
     const char* userName
 );
@@ -137,21 +133,21 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_RemoveSocksAssociation
  FUNCTION        EnableSocksCmdSync
 
 ======================================================================*/
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_EnableSocksCmdSync();
+PA_SHARED pa_result_t taf_pa_net_EnableSocksCmdSync();
 
 /*======================================================================
 
  FUNCTION        DisableSocksCmdSync
 
 ======================================================================*/
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_DisableSocksCmdSync();
+PA_SHARED pa_result_t taf_pa_net_DisableSocksCmdSync();
 
 /*======================================================================
 
  FUNCTION        EnableSocksCmdASync
 
 ======================================================================*/
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_EnableSocksCmdASync
+PA_SHARED pa_result_t taf_pa_net_EnableSocksCmdASync
 (
    taf_pa_socks_CallCb callback,void *contextPtr
 );
@@ -161,7 +157,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_EnableSocksCmdASync
  FUNCTION        DisableSocksCmdASync
 
 ======================================================================*/
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_DisableSocksCmdASync
+PA_SHARED pa_result_t taf_pa_net_DisableSocksCmdASync
 (
    taf_pa_socks_CallCb callback,void *contextPtr
 );
