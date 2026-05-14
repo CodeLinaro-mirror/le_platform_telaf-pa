@@ -7,7 +7,7 @@
 #define TAF_PROP_KEYSTORAGE_H
 
 #include "taf_ns_common.h"
-#include "taf_pa_keystore.h"
+#include "tafKeystorePa.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
