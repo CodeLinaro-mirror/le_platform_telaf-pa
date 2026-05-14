@@ -191,6 +191,11 @@ class Utility
                     tel::ServiceDomainPreference domain
                 );
 
+                static taf_pa_radio_RatServiceStatus_t RatServiceStatus
+                (
+                    tel::ServiceRegistrationState state
+                );
+
                 static tel::ServiceDomainPreference ServiceDomainPreference
                 (
                     taf_pa_radio_ServiceDomainBitMask_t bitmask
@@ -1248,6 +1253,30 @@ taf_pa_radio_ServiceDomain_t Utility::Convert::ServiceDomain
     }
 
     return TAF_PA_RADIO_SERVICE_DOMAIN_UNKNOWN;
+}
+
+taf_pa_radio_RatServiceStatus_t Utility::Convert::RatServiceStatus
+(
+    tel::ServiceRegistrationState state
+)
+{
+    switch (state)
+    {
+        case tel::ServiceRegistrationState::NO_SERVICE:
+            return TAF_PA_RADIO_RAT_SERVICE_STATUS_NO_SERVICE;
+        case tel::ServiceRegistrationState::LIMITED_SERVICE:
+            return TAF_PA_RADIO_RAT_SERVICE_STATUS_LIMITED;
+        case tel::ServiceRegistrationState::IN_SERVICE:
+            return TAF_PA_RADIO_RAT_SERVICE_STATUS_SERVICE;
+        case tel::ServiceRegistrationState::LIMITED_REGIONAL:
+            return TAF_PA_RADIO_RAT_SERVICE_STATUS_LIMITED_REGIONAL;
+        case tel::ServiceRegistrationState::POWER_SAVE:
+            return TAF_PA_RADIO_RAT_SERVICE_STATUS_POWER_SAVE;
+        default:
+            PA_DEBUG("Unknown RAT service status.");
+    }
+
+    return TAF_PA_RADIO_RAT_SERVICE_STATUS_UNKNOWN;
 }
 
 taf_pa_radio_ServiceDomainBitMask_t Utility::Convert::ServiceDomainPreference
@@ -6489,12 +6518,34 @@ pa_result_t taf_pa_radio_GetServingRat
         return -EINVAL;
     }
 
-    taf_prop_radio_Rat_t rat = TAF_PROP_RADIO_RAT_UNKNOWN;
-    int32_t result = taf_prop_radio_GetServingRat(instance, &rat);
+    if (instance >= MAX_INSTANCE)
+    {
+        PA_ERROR("Invalid instance %d.", instance);
+        return -EINVAL;
+    }
 
-    *ratPtr = Utility::Convert::Rat(rat);
+    auto& pa = PlatformAdaptor::GetInstance();
+    if (pa.managers.telephonyServingSystems[instance] == nullptr)
+    {
+        PA_ERROR("Telephony serving system manager %d is nullptr.", instance);
+        return -EFAULT;
+    }
 
-    return result;
+    tel::ServingSystemInfo info;
+    auto result = pa.managers.telephonyServingSystems[instance]->getSystemInfo(info);
+    if (result != common::Status::SUCCESS)
+    {
+        PA_ERROR("Failed to get serving system information with telephony serving system manager"
+            " %d.", instance);
+        return -EFAULT;
+    }
+
+    *ratPtr = Utility::Convert::Rat(info.rat);
+
+    PA_INFO("Serving RAT for instance %d from getSystemInfo: telux RAT %d -> PA RAT %d.",
+        instance, static_cast<int>(info.rat), *ratPtr);
+
+    return 0;
 }
 
 pa_result_t taf_pa_radio_GetRatSvcStatus
@@ -6510,13 +6561,43 @@ pa_result_t taf_pa_radio_GetRatSvcStatus
         return -EINVAL;
     }
 
-    taf_prop_radio_Rat_t propRat = Utility::Convert::Rat(rat);
-    taf_prop_radio_RatServiceStatus_t status = TAF_PROP_RADIO_RAT_SERVICE_STATUS_UNKNOWN;
-    int32_t result = taf_prop_radio_GetRatSvcStatus(instance, propRat, &status);
+    if (instance >= MAX_INSTANCE)
+    {
+        PA_ERROR("Invalid instance %d.", instance);
+        return -EINVAL;
+    }
 
-    *statusPtr = Utility::Convert::RatServiceStatus(status);
+    auto& pa = PlatformAdaptor::GetInstance();
+    if (pa.managers.telephonyServingSystems[instance] == nullptr)
+    {
+        PA_ERROR("Telephony serving system manager %d is nullptr.", instance);
+        return -EFAULT;
+    }
 
-    return result;
+    tel::ServingSystemInfo info;
+    auto result = pa.managers.telephonyServingSystems[instance]->getSystemInfo(info);
+    if (result != common::Status::SUCCESS)
+    {
+        PA_ERROR("Failed to get serving system information with telephony serving system manager"
+            " %d.", instance);
+        return -EFAULT;
+    }
+
+    taf_pa_radio_Rat_t servingRat = Utility::Convert::Rat(info.rat);
+    if (rat != TAF_PA_RADIO_RAT_UNKNOWN && rat != servingRat)
+    {
+        *statusPtr = TAF_PA_RADIO_RAT_SERVICE_STATUS_NO_SERVICE;
+    }
+    else
+    {
+        *statusPtr = Utility::Convert::RatServiceStatus(info.state);
+    }
+
+    PA_INFO("RAT service status for instance %d: requested PA RAT %d, serving PA RAT %d, "
+        "telux state %d -> PA status %d.",
+        instance, rat, servingRat, static_cast<int>(info.state), *statusPtr);
+
+    return 0;
 }
 
 pa_result_t taf_pa_radio_GetServingCellRac
