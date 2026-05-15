@@ -505,6 +505,7 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
     taf_pa_mrc_EfsUsageStats_t* statsPtr
 )
 {
+#if 0
     if (statsPtr == nullptr)
     {
         PA_ERROR("statsPtr is nullptr.");
@@ -512,13 +513,13 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
     }
 
     memset(statsPtr, 0, sizeof(*statsPtr));
-    PA_INFO("taf_pa_mrc_GetEfsUsageStats: statsPtr = %p", (void *)statsPtr);
+    PA_INFO("statsPtr = %p", (void *)statsPtr);
 
     taf_ns_mrc_EfsUsageStats_t stats;
     memset(&stats, 0, sizeof(stats));
 
     int32_t result = taf_ns_mrc_GetEfsUsageStats(&stats);
-    PA_INFO("taf_pa_mrc_GetEfsUsageStats: result from taf_ns_mrc_GetEfsUsageStats = %d", result);
+    PA_INFO("result from taf_ns_mrc_GetEfsUsageStats = %d", result);
     if (result != 0)
         return result;
 
@@ -553,10 +554,13 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
             statsPtr->clientList[i].taskName);
     }
     statsPtr->clientListLen = i;
-    PA_INFO("EFS clientListLen = %u", statsPtr->clientListLen);
-
-    PA_INFO("taf_pa_mrc_GetEfsUsageStats: returning result = %d", result);
+    PA_INFO("result = %d, EFS clientListLen = %u", result, statsPtr->clientListLen);
     return result;
+#else
+    (void)statsPtr;
+    PA_WARN("GetEfsUsageStats not supported");
+    return PA_UNSUPPORTED;
+#endif
 }
 
 pa_result_t taf_pa_mrc_SetTimerPeriod
