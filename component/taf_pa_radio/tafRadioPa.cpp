@@ -1481,18 +1481,19 @@ void Utility::Convert::SignalStrengthInfo
 
     if (strengthPtr->getGsmSignalStrength() != nullptr &&
         strengthPtr->getGsmSignalStrength()->getGsmSignalStrength() !=
-        INVALID_SIGNAL_STRENGTH_VALUE)
+        TAF_PA_STRENGTH_VALUE_UNKNOWN)
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_GSM;
-        infoPtr->gsmInfo.rssi = strengthPtr->getGsmSignalStrength()->getDbm();
+        infoPtr->gsmInfo.rssi = strengthPtr->getGsmSignalStrength()->getRssi();
         // infoPtr->gsmInfo.ber = strengthPtr->getGsmSignalStrength()->getGsmBitErrorRate();
-        infoPtr->gsmInfo.ber = INVALID_SIGNAL_STRENGTH_VALUE;
+        infoPtr->gsmInfo.ber = TAF_PA_STRENGTH_VALUE_UNKNOWN;
+        infoPtr->gsmInfo.ss = strengthPtr->getGsmSignalStrength()->getDbm();
     }
 
     /*
     // deprecated TelSDK API usage
     if (strengthPtr->getCdmaSignalStrength() != nullptr &&
-        strengthPtr->getCdmaSignalStrength()->getDbm() != INVALID_SIGNAL_STRENGTH_VALUE)
+        strengthPtr->getCdmaSignalStrength()->getDbm() != TAF_PA_STRENGTH_VALUE_UNKNOWN)
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_CDMA;
         infoPtr->cdmaInfo.ss = strengthPtr->getCdmaSignalStrength()->getDbm();
@@ -1504,19 +1505,20 @@ void Utility::Convert::SignalStrengthInfo
 
     if (strengthPtr->getWcdmaSignalStrength() != nullptr &&
         strengthPtr->getWcdmaSignalStrength()->getSignalStrength() !=
-        INVALID_SIGNAL_STRENGTH_VALUE)
+        TAF_PA_STRENGTH_VALUE_UNKNOWN)
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_UMTS;
         infoPtr->umtsInfo.ss = strengthPtr->getWcdmaSignalStrength()->getDbm();
+        infoPtr->umtsInfo.ecio = strengthPtr->getWcdmaSignalStrength()->getEcio();
         // infoPtr->umtsInfo.ber = strengthPtr->getWcdmaSignalStrength()->getBitErrorRate();
-        infoPtr->umtsInfo.ber = INVALID_SIGNAL_STRENGTH_VALUE;
+        infoPtr->umtsInfo.ber = TAF_PA_STRENGTH_VALUE_UNKNOWN;
         infoPtr->umtsInfo.rscp = strengthPtr->getWcdmaSignalStrength()->getRscp();
     }
 
     /*
     // deprecated TelSDK API usage
     if (strengthPtr->getTdscdmaSignalStrength() != nullptr &&
-        strengthPtr->getTdscdmaSignalStrength()->getRscp() != INVALID_SIGNAL_STRENGTH_VALUE)
+        strengthPtr->getTdscdmaSignalStrength()->getRscp() != TAF_PA_STRENGTH_VALUE_UNKNOWN)
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_TDSCDMA;
         infoPtr->tdscdmaInfo.rscp = strengthPtr->getTdscdmaSignalStrength()->getRscp();
@@ -1525,24 +1527,26 @@ void Utility::Convert::SignalStrengthInfo
 
     if (strengthPtr->getLteSignalStrength() != nullptr &&
         strengthPtr->getLteSignalStrength()->getLteSignalStrength() !=
-        INVALID_SIGNAL_STRENGTH_VALUE)
+        TAF_PA_STRENGTH_VALUE_UNKNOWN)
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_LTE;
-        infoPtr->lteInfo.rssi = strengthPtr->getLteSignalStrength()->getDbm();
+        infoPtr->lteInfo.rssi = strengthPtr->getLteSignalStrength()->getRssi();
         infoPtr->lteInfo.rsrq =
             strengthPtr->getLteSignalStrength()->getLteReferenceSignalReceiveQuality();
         infoPtr->lteInfo.rsrp = strengthPtr->getLteSignalStrength()->getDbm();
         infoPtr->lteInfo.snr = strengthPtr->getLteSignalStrength()->getLteReferenceSignalSnr();
+        infoPtr->lteInfo.ss = strengthPtr->getLteSignalStrength()->getLteSignalStrength();
     }
 
     if (strengthPtr->getNr5gSignalStrength() != nullptr &&
-        strengthPtr->getNr5gSignalStrength()->getDbm() != INVALID_SIGNAL_STRENGTH_VALUE)
+        strengthPtr->getNr5gSignalStrength()->getDbm() != TAF_PA_STRENGTH_VALUE_UNKNOWN)
     {
         infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_NR5G;
         infoPtr->nr5gInfo.rsrq =
             strengthPtr->getNr5gSignalStrength()->getReferenceSignalReceiveQuality();
         infoPtr->nr5gInfo.rsrp = strengthPtr->getNr5gSignalStrength()->getDbm();
         infoPtr->nr5gInfo.snr = strengthPtr->getNr5gSignalStrength()->getReferenceSignalSnr();
+        infoPtr->nr5gInfo.ss = strengthPtr->getNr5gSignalStrength()->getNr5gSignalStrength();
     }
 }
 
