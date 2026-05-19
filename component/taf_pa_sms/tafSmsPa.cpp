@@ -6,6 +6,7 @@
 #include <future>
 #include <string>
 #include <iomanip>
+#include <atomic>
 
 #include <telux/common/CommonDefines.hpp>
 #include <telux/common/DeviceConfig.hpp>
@@ -25,6 +26,8 @@ using namespace telux::platform;
 using namespace telux::tel;
 using namespace tafpa::sms;
 using namespace std;
+
+static std::atomic<bool> g_smsPaInitialized(false);
 
 std::map<telux::common::ErrorCode, std::string> errorCodeToStringMap_ = {
 
@@ -2029,6 +2032,7 @@ pa_result_t tafpa::sms::taf_pa_sms_Init
     if (result == PA_OK)
     {
         PA_INFO("SMS platform adapter initialization is done");
+        g_smsPaInitialized.store(true, std::memory_order_release);
     }
     else
     {
@@ -2101,12 +2105,20 @@ pa_result_t tafpa::sms::taf_pa_sms_Deinit
     void
 )
 {
+    // Step 0: Check if Init() was called successfully
+    if (!g_smsPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     auto pACtrl = SmsPAController::getInstance();
 
     pa_result_t result = pACtrl->deinitialize();
     if (result == PA_OK)
     {
         PA_INFO("SMS platform adapter deinitialization done.");
+        g_smsPaInitialized.store(false, std::memory_order_release);
     }
     else
     {

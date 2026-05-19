@@ -5,6 +5,11 @@
 
 #include "tafKeystorePa.h"
 #include "taf_prop_keystore.h"
+#include <stdatomic.h>
+#include <stdbool.h>
+
+// Thread-safe initialization flag
+static _Atomic(bool) g_keystore_initialized = false;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -18,7 +23,12 @@
 pa_result_t taf_pa_ks_Init(void)
 {
     PA_INFO("Telaf keyStore PA initializing ...");
-    return taf_prop_ks_Init();
+    pa_result_t result = taf_prop_ks_Init();
+    if (result == PA_OK)
+    {
+        atomic_store(&g_keystore_initialized, true);
+    }
+    return result;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -28,10 +38,18 @@ pa_result_t taf_pa_ks_Init(void)
 //--------------------------------------------------------------------------------------------------
 void taf_pa_ks_Deinit(void)
 {
+    // Check if initialization was successful before proceeding with deinitialization
+    if (!atomic_load(&g_keystore_initialized))
+    {
+        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return;
+    }
+
     // The keystore PA is a stateless pass-through wrapper: it holds no shared pointers,
     // maps, or open handles of its own. The underlying taf_prop_keystore layer does not
     // expose a Deinit API. This function provides the symmetric counterpart to
     // taf_pa_ks_Init() so callers can follow a consistent Init/Deinit lifecycle.
+    atomic_store(&g_keystore_initialized, false);
     PA_INFO("Telaf keyStore PA deinitialized.");
 }
 

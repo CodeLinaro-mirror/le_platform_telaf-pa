@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <unordered_map>
 #include <vector>
+#include <atomic>
 
 #include "tafFlashPa.hpp"
 
@@ -20,6 +21,7 @@ class PlatformAdaptor
     public:
         unordered_map<taf_pa_flash_MtdRef_t, taf_ns_flash_MtdRef_t> mtdRefMap;
         unordered_map<taf_pa_flash_UbiVolumeRef_t, taf_ns_flash_UbiVolumeRef_t> ubiVolumeRefMap;
+        std::atomic<bool> isInitialized_{false};
 
         static PlatformAdaptor& GetInstance
         (
@@ -63,6 +65,12 @@ pa_result_t taf_pa_flash_Init()
     if (result == -ENOSYS)
         PA_INFO("Flash proprietary platform adaptor is not implemented.");
 
+    if (result == 0)
+    {
+        auto& pa = PlatformAdaptor::GetInstance();
+        pa.isInitialized_.store(true, std::memory_order_release);
+    }
+
     return result;
 }
 
@@ -71,6 +79,13 @@ pa_result_t taf_pa_flash_Deinit()
     PA_INFO("Flash platform adaptor deinitialization starting.");
 
     auto& pa = PlatformAdaptor::GetInstance();
+
+    // Check if initialization was successful before proceeding with deinitialization
+    if (!pa.isInitialized_.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return PA_FAULT;
+    }
 
     // Close all open MTD references and free their malloc'd keys.
     // Collect keys and close handles first, then clear the map, then free the
@@ -118,6 +133,7 @@ pa_result_t taf_pa_flash_Deinit()
     }
 
     PA_INFO("Flash platform adaptor deinitialization complete.");
+    pa.isInitialized_.store(false, std::memory_order_release);
     return 0;
 }
 

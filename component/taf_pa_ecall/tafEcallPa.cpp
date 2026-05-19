@@ -8,6 +8,7 @@
 #include "telux/common/CommonDefines.hpp"
 #include <telux/platform/SubsystemFactory.hpp>
 #include <telux/platform/SubsystemManager.hpp>
+#include <atomic>
 
 #define MAX_INIT_TIMEOUT 5
 
@@ -201,6 +202,7 @@ private:
     std::shared_ptr<tafPaECallModemEvtListener> ecallModemListener_;
     const taf_pa_ecall_event_listener_t* eventListener_;
     std::any contextPtr_;
+    std::atomic<bool> isInitialized_{false};
 };
 
 void EcallPaController::tafPaECallModemEvtListener::onStateChange(telux::common::SubsystemInfo
@@ -949,6 +951,7 @@ pa_result_t EcallPaController::initialize()
         PA_ERROR("Failed to register phone listener");
         return PA_FAULT;
     }
+    isInitialized_.store(true, std::memory_order_release);
     return PA_OK;
 }
 
@@ -1902,6 +1905,13 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
 
 pa_result_t EcallPaController::deinitialize()
 {
+    // Check if initialization was successful before proceeding with deinitialization
+    if (!isInitialized_.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     PA_INFO("Starting ECall PA deinitialization...");
 
     // Step 1: Deregister ecall call listener from CallManager
@@ -1966,6 +1976,7 @@ pa_result_t EcallPaController::deinitialize()
     contextPtr_.reset();
 
     PA_INFO("ECall PA deinitialization complete");
+    isInitialized_.store(false, std::memory_order_release);
     return PA_OK;
 }
 

@@ -7,7 +7,7 @@
 #include <errno.h>
 #include <semaphore.h>
 #include <shared_mutex>
-
+#include <atomic>
 #include <telux/common/DeviceConfig.hpp>
 #include <telux/common/Utils.hpp>
 #include <telux/tel/PhoneDefines.hpp>
@@ -29,6 +29,7 @@ using namespace telux;
 static bool subListenerRegistered = {false};
 static bool cardListenerRegistered = {false};
 static bool multiSimListenerRegistered = {false};
+static std::atomic<bool> g_simPaInitialized(false);
 
 #define SERVICE_PROMISE_AND_CALLBACK(name)                                \
     auto name##Promise = make_shared<promise<common::ServiceStatus>>();   \
@@ -1220,14 +1221,22 @@ pa_result_t taf_pa_sim_Init()
         PA_INFO("Sim proprietary platform adaptor is not Initialized.");
         return paResult;
     }
-        taf_prop_sim_AddRefreshChangeHandler(RefreshSvcStatusHandler,nullptr);
-        PA_INFO("Sim proprietary platform adaptor initialization is done.");
+            taf_prop_sim_AddRefreshChangeHandler(RefreshSvcStatusHandler,nullptr);
+    PA_INFO("Sim proprietary platform adaptor initialization is done.");
+    g_simPaInitialized.store(true, std::memory_order_release);
     return TAF_PA_SIM_RESULT_OK;
 }
 
 pa_result_t taf_pa_sim_Deinit()
 {
     PA_INFO("Starting SIM platform adaptor deinitialization...");
+
+    // Step 0: Check if Init() was called successfully
+    if (!g_simPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
 
     auto& pa = PlatformAdaptor::GetInstance();
     pa_result_t overallResult = TAF_PA_SIM_RESULT_OK;
@@ -1275,6 +1284,10 @@ pa_result_t taf_pa_sim_Deinit()
     pa.cardManager.reset();
     pa.multiSimMgr.reset();
     pa.managers.phone.reset();
+
+    // Step 7: Reset the initialization flag
+    PA_INFO("Resetting initialization flag");
+    g_simPaInitialized.store(false, std::memory_order_release);
 
     PA_INFO("SIM platform adaptor deinitialization complete.");
     return overallResult;  // Return aggregated status;

@@ -8,6 +8,7 @@
 #include <cstring>
 #include <future>
 #include <condition_variable>
+#include <atomic>
 
 #include <telux/common/CommonDefines.hpp>
 #include <telux/platform/PlatformFactory.hpp>
@@ -23,6 +24,9 @@
 using namespace std;
 using namespace telux::common;
 using namespace telux::platform;
+
+// Thread-safe initialization flag
+static std::atomic<bool> gMrcPaInitialized(false);
 
 #define SERVICE_PROMISE_AND_CALLBACK(name)                                \
     auto name##Promise = make_shared<promise<ServiceStatus>>();           \
@@ -309,6 +313,15 @@ static void ScrubStatusHandler
 
 pa_result_t taf_pa_mrc_Init()
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if already initialized (idempotent pattern)
+    if (gMrcPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("MRC platform adaptor already initialized");
+        return PA_OK;  // Idempotent - safe to call multiple times
+    }
+
     auto& pa = PlatformAdaptor::GetInstance();
     auto& platformFactory = PlatformFactory::getInstance();
 
@@ -327,6 +340,8 @@ pa_result_t taf_pa_mrc_Init()
         PA_INFO("MRC proprietary platform adaptor initialization is done.");
     }
 
+    gMrcPaInitialized.store(true, std::memory_order_release);
+    PA_INFO("MRC platform adaptor initialization flag set to true.");
     return 0;
 }
 
@@ -595,6 +610,15 @@ pa_result_t taf_pa_mrc_AckSlotToggle
 
 pa_result_t taf_pa_mrc_Deinit()
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if initialized before attempting deinit
+    if (!gMrcPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     PA_INFO("Starting MRC platform adaptor deinitialization...");
 
     auto& pa = PlatformAdaptor::GetInstance();
@@ -615,6 +639,8 @@ pa_result_t taf_pa_mrc_Deinit()
     PA_INFO("Resetting managers.fs");
     pa.managers.fs.reset();
 
+    gMrcPaInitialized.store(false, std::memory_order_release);
+    PA_INFO("MRC platform adaptor initialization flag reset to false.");
     PA_INFO("MRC platform adaptor deinitialization complete.");
     return 0;
 }

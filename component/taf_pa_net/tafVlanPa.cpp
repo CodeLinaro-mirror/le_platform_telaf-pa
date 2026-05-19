@@ -11,6 +11,7 @@
 #include <string>
 #include <iostream>
 #include <shared_mutex>
+#include <atomic>
 #include <glib.h>
 
 #include <telux/data/DataFactory.hpp>
@@ -47,6 +48,8 @@ class taf_VlanAdaptor
             static taf_VlanAdaptor &getInstance();
 
             pa_result_t initialize();
+
+            std::atomic<bool> isInitialized{false};
 
             std::shared_ptr<telux::data::net::IVlanManager> getVlanManager()
             {
@@ -366,10 +369,12 @@ pa_result_t taf_pa_vlan_Init()
     if (result == PA_OK)
     {
         PA_INFO("VLAN platform adapter initialization is done");
+        pVlanAdaptor.isInitialized = true;
     }
     else
     {
         PA_INFO("Failed to initialize VLAN platform adapter, ret: %d", result);
+        pVlanAdaptor.isInitialized = false;
     }
 
     return result;
@@ -1765,6 +1770,14 @@ pa_result_t taf_pa_vlan_Deinit()
     PA_INFO("Starting VLAN platform adaptor deinitialization...");
 
     auto &tafVlan = taf_VlanAdaptor::getInstance();
+
+    // Check if Init() was successfully called
+    if (!tafVlan.isInitialized)
+    {
+        PA_WARN("VLAN Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     auto vlanManager = tafVlan.getVlanManager();
 
     // Step 1: Deregister the VLAN listener if it is currently registered.
@@ -1791,6 +1804,7 @@ pa_result_t taf_pa_vlan_Deinit()
     // Step 3: Reset manager shared pointers via the public helper.
     PA_INFO("Resetting vlanManager and dataSettingsManager");
     tafVlan.resetManagers();
+    tafVlan.isInitialized = false;
 
     PA_INFO("VLAN platform adaptor deinitialization complete.");
     return PA_OK;

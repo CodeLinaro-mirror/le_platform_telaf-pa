@@ -4,6 +4,7 @@
  */
 
 #include <queue>
+#include <atomic>
 #include <telux/audio/AudioFactory.hpp>
 #include "telux/audio/AudioManager.hpp"
 #include "telux/audio/AudioPlayer.hpp"
@@ -15,6 +16,9 @@
 #include "telux/tel/PhoneFactory.hpp"
 #include "tafAudioPa.hpp"
 #include "tafInternalCommonPa.h"
+
+// Thread-safe initialization flag
+static std::atomic<bool> gAudioPaInitialized(false);
 
 #define SUBSYSTEM_TIMEOUT 5
 
@@ -1413,6 +1417,9 @@ pa_result_t tafpa::audio::taf_pa_audio_Init()
     if (result == PA_OK)
     {
         PA_INFO("Audio platform adapter initialization is done");
+        // Mark initialization as complete
+        gAudioPaInitialized.store(true, std::memory_order_release);
+        PA_INFO("Audio PA initialization flag set to true.");
     }
     else
     {
@@ -1423,12 +1430,22 @@ pa_result_t tafpa::audio::taf_pa_audio_Init()
 
 pa_result_t tafpa::audio::taf_pa_audio_Deinit()
 {
+    // Check if Init() was called before Deinit()
+    if (!gAudioPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     auto pACtrl = AudioPAController::getInstance();
 
     pa_result_t result = pACtrl->deinitialize();
     if (result == PA_OK)
     {
         PA_INFO("Audio platform adapter deinitialization is done");
+        // Reset initialization flag
+        gAudioPaInitialized.store(false, std::memory_order_release);
+        PA_INFO("Audio PA initialization flag reset to false.");
     }
     else
     {
