@@ -6,12 +6,6 @@
 #ifndef TAF_L2TP_PA_HPP
 #define TAF_L2TP_PA_HPP
 
-#ifdef TAF_PA_DEFAULT
-#define PA_WEAK __attribute__((weak))
-#else
-#define PA_WEAK
-#endif
-
 #include <string>
 #include <memory>
 #include <vector>
@@ -118,14 +112,15 @@ typedef struct
 // Typedef for asynchronous callbacks
 typedef void (*taf_pa_l2tp_CallCb)(pa_result_t result, void *contextPtr);
 
-PA_SHARED PA_WEAK bool taf_pa_l2tp_Init();
+PA_SHARED bool taf_pa_l2tp_Init();
+PA_SHARED bool taf_pa_l2tp_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Add Tunnel Asynchronously
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_AddTunnelAsync
+PA_SHARED pa_result_t taf_pa_net_AddTunnelAsync
 (
     const taf_pa_net_L2tpTunnel_t& addTunnelConfig,   // IN
     taf_pa_l2tp_CallCb callback,           // IN
@@ -137,7 +132,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_AddTunnelAsync
  * Add Tunnel Synchronously
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_AddTunnelSync
+PA_SHARED pa_result_t taf_pa_net_AddTunnelSync
 (
     const taf_pa_net_L2tpTunnel_t& addTunnelConfig   // IN
 );
@@ -147,7 +142,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_AddTunnelSync
  * Remove Tunnel Asynchronously
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_RemoveTunnelAsync
+PA_SHARED pa_result_t taf_pa_net_RemoveTunnelAsync
 (
     const uint32_t tunnelId,   // IN
     taf_pa_l2tp_CallCb callback,          // IN
@@ -159,7 +154,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_RemoveTunnelAsync
  * Remove Tunnel Synchronously
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_RemoveTunnelSync
+PA_SHARED pa_result_t taf_pa_net_RemoveTunnelSync
 (
     const uint32_t tunnelId  // IN
 );
@@ -169,7 +164,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_RemoveTunnelSync
  * Request L2TP Configuration
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_RequestL2tpConfig
+PA_SHARED pa_result_t taf_pa_net_RequestL2tpConfig
 (
     taf_pa_net_L2tpConfig_t& L2tpConfig  // OUT
 );
@@ -179,7 +174,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_RequestL2tpConfig
  * Set L2TP Configuration Asynchronously
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetL2tpConfigAsync
+PA_SHARED pa_result_t taf_pa_net_SetL2tpConfigAsync
 (
     const taf_pa_net_L2tpConfig_t& L2tpConfig,  // IN
     taf_pa_l2tp_CallCb callback,     // IN
@@ -191,7 +186,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetL2tpConfigAsync
  * Set L2TP Configuration Synchronously
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_SetL2tpConfigSync
+PA_SHARED pa_result_t taf_pa_net_SetL2tpConfigSync
 (
     taf_pa_net_L2tpConfig_t& L2tpConfig  // IN
 );

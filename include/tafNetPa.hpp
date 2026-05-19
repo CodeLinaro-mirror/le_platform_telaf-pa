@@ -6,16 +6,12 @@
 #ifndef TAF_NET_PA_HPP
 #define TAF_NET_PA_HPP
 
-#ifdef TAF_PA_DEFAULT
-#define PA_WEAK __attribute__((weak))
-#else
-#define PA_WEAK
-#endif
-
 #include <vector>
 #include "tafCommonPa.h"
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_Init();
+PA_SHARED pa_result_t taf_pa_net_Init();
+
+PA_SHARED pa_result_t taf_pa_net_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -26,7 +22,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_Init();
  *         PA_FAULT         Failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetPhoneIdFromSlotId
+PA_SHARED pa_result_t taf_pa_net_GetPhoneIdFromSlotId
 (
     uint8_t slotId,      ///< [IN] Slot ID
     uint8_t *phoneIdPtr  ///< [OUT] Phone ID
@@ -41,7 +37,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetPhoneIdFromSlotId
  *         PA_FAULT         Failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetSlotIdFromPhoneId
+PA_SHARED pa_result_t taf_pa_net_GetSlotIdFromPhoneId
 (
     uint8_t phoneId,     ///< [IN] Phone ID
     uint8_t *slotIdPtr   ///< [OUT] Slot ID
@@ -56,7 +52,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetSlotIdFromPhoneId
  *         PA_FAULT         Failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_net_GetSupportedSlotIds
+PA_SHARED pa_result_t taf_pa_net_GetSupportedSlotIds
 (
     std::vector<uint8_t> &slotIds   ///< [OUT] Slot IDs
 );

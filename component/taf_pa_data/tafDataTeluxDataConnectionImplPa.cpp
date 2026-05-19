@@ -623,6 +623,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManager
     dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
     dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
 
+    // Reset request call list state: release the stored context shared_ptr and
+    // clear the in-progress flag so a subsequent Init()/Deinit() cycle starts clean.
+    PA_INFO("Reset requestCallListClientEntry_ and bRequestCallListInProgress_");
+    requestCallListClientEntry_ = {nullptr, nullptr};
+    bRequestCallListInProgress_.store(false);
+
     PA_INFO("Data connection managers deinitialization complete");
     return PA_OK;
 }
@@ -1950,4 +1956,37 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetLastThroughputInfo
     }
 
     return PA_OK;
+}
+
+pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetMtuByInterfaceName
+(
+    const std::string& interfaceName,
+    int32_t& mtu
+)
+{
+    if (interfaceName.empty())
+    {
+        PA_ERROR("Interface name is empty");
+        return PA_BAD_PARAMETER;
+    }
+
+    // Iterate through all slot listeners to find the data call with the matching interface name.
+    // The MTU is read directly from IpAddrInfo (SDK-provided) via the active IDataCall object.
+    for (auto& entry : tafPaTeluxDataConnectionListenersMap_)
+    {
+        pa_result_t result = entry.second->GetMtuByInterfaceName(interfaceName, mtu);
+        if (PA_OK == result)
+        {
+            return PA_OK;
+        }
+        else if (PA_NOT_FOUND != result)
+        {
+            // Interface found but MTU not available
+            return result;
+        }
+        // PA_NOT_FOUND: interface not in this slot's listener, try next slot
+    }
+
+    PA_WARN("Interface %s not found in any active data calls", interfaceName.c_str());
+    return PA_NOT_FOUND;
 }

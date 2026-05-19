@@ -98,6 +98,12 @@ namespace data
             const std::shared_ptr<telux::data::IDataCall> &iCall,
             DataCallEventInfo_t &dataCallInfo);
 
+        pa_result_t GetMtuByInterfaceName
+        (
+            const std::string& interfaceName,
+            int32_t& mtu
+        );
+
     private:
         SlotId slotId_;
         // Mutex
@@ -274,6 +280,12 @@ namespace data
         );
 
         void resetCallListClientEntry();
+
+        pa_result_t PaGetMtuByInterfaceName
+        (
+            const std::string& interfaceName,
+            int32_t& mtu
+        );
 
     private:
         // Variables

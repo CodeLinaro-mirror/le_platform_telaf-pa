@@ -20,6 +20,7 @@ public:
     static WlanPAController *getInstance();
 
     pa_result_t initialize();
+    pa_result_t deinitialize();
 
     pa_result_t registerDeviceListener
     (
@@ -952,4 +953,58 @@ pa_result_t taf::pa::wlan::SetBandInterferenceConfig
 {
     PA_INFO("SetBandInterferenceConfig: enable=%d", (int)enable);
     return WlanPAController::getInstance()->setBandInterferenceConfig(enable, cfg);
+}
+
+pa_result_t WlanPAController::deinitialize
+(
+    void
+)
+{
+    PA_INFO("Starting WLAN platform adaptor deinitialization...");
+
+    // Step 1: Clear the PA-level device callback and context under the mutex
+    // so no further device enable/service-status notifications are dispatched.
+    PA_INFO("Clearing devCb_ and devCtx_");
+    {
+        std::lock_guard<std::mutex> lock(cbMutex_);
+        devCb_ = nullptr;
+        devCtx_.reset();
+    }
+
+    // Step 2: Deregister the device listener from the device manager so the SDK
+    // stops delivering WLAN events to it.
+    PA_INFO("Deregistering devListener_ from devMgr_");
+    if (devMgr_ && devListener_)
+    {
+        auto rc = devMgr_->deregisterListener(devListener_);
+        if (rc != telux::common::ErrorCode::SUCCESS)
+        {
+            PA_ERROR("Failed to deregister device listener, errorcode: %d", (int)rc);
+            // Continue cleanup even if deregistration failed
+        }
+    }
+
+    // Step 3: Reset the device listener shared pointer so the listener object is
+    // released once no other owners remain.
+    PA_INFO("Resetting devListener_");
+    devListener_.reset();
+
+    // Step 4: Reset all manager shared pointers so the underlying SDK objects
+    // are released once no other owners remain.
+    PA_INFO("Resetting staMgr_, dataMgr_ and devMgr_");
+    staMgr_.reset();
+    dataMgr_.reset();
+    devMgr_.reset();
+
+    PA_INFO("WLAN platform adaptor deinitialization complete.");
+    return PA_OK;
+}
+
+pa_result_t taf::pa::wlan::Deinit
+(
+    void
+)
+{
+    PA_INFO("Deinit called");
+    return WlanPAController::getInstance()->deinitialize();
 }

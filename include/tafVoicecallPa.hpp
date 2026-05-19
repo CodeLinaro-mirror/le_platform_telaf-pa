@@ -76,47 +76,49 @@ typedef void (*taf_pa_voicecall_EventListener)(
     std::any context
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_Init();
+PA_SHARED pa_result_t taf_pa_voicecall_Init();
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_Make(
+PA_SHARED pa_result_t taf_pa_voicecall_Deinit();
+
+PA_SHARED pa_result_t taf_pa_voicecall_Make(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_Stop(
+PA_SHARED pa_result_t taf_pa_voicecall_Stop(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_Hold(
+PA_SHARED pa_result_t taf_pa_voicecall_Hold(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_Resume(
+PA_SHARED pa_result_t taf_pa_voicecall_Resume(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_Answer(
+PA_SHARED pa_result_t taf_pa_voicecall_Answer(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_Swap(
+PA_SHARED pa_result_t taf_pa_voicecall_Swap(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_RegisterEventListener(taf_pa_voicecall_EventListener listener, std::any context);
+PA_SHARED pa_result_t taf_pa_voicecall_RegisterEventListener(taf_pa_voicecall_EventListener listener, std::any context);
 
-PA_SHARED PA_WEAK pa_result_t taf_pa_voicecall_GetCallTermination(const taf_pa_voicecall_CallInfo_t& callInfo, taf_pa_voicecall_termination_t *termination);
+PA_SHARED pa_result_t taf_pa_voicecall_GetCallTermination(const taf_pa_voicecall_CallInfo_t& callInfo, taf_pa_voicecall_termination_t *termination);
 
 }
 

@@ -501,6 +501,31 @@ pa_result_t taf::pa::data::TafPaTeluxData::deInitDataServingSystemManagers()
     servingSystemManagersInitStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
     servingSystemManagersInitStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
 
+    // Clear subsystem state change event callbacks
+    PA_INFO("Clear subsystemEventsCallbacks_");
+    {
+        std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
+        subsystemEventsCallbacks_.clear();
+    }
+
+    // Clear roaming event callbacks
+    PA_INFO("Clear roamingEventsCallbacks_");
+    {
+        std::lock_guard<std::mutex> lock(roamingEventsCbksMtx_);
+        roamingEventsCallbacks_.clear();
+    }
+
+    // Clear phone IDs vector and serving-system listener registration tracking map
+    PA_INFO("Clear phoneIds_ and bDataSSLRegisteredMap_");
+    phoneIds_.clear();
+    bDataSSLRegisteredMap_.clear();
+
+    // Reset phone manager shared pointer and its init state so that any post-deinit
+    // call that checks dataPhoneMngrInitState_ will correctly see FAILED.
+    PA_INFO("Reset phoneManager_ and dataPhoneMngrInitState_");
+    phoneManager_.reset();
+    dataPhoneMngrInitState_ = SubsystemState_e::FAILED;
+
     PA_INFO("Data serving system managers deinitialization complete");
     return PA_OK;
 }

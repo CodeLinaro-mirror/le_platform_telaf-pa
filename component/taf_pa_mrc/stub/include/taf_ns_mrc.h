@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+
 #ifndef TAF_NS_MRC_H
 #define TAF_NS_MRC_H
 
@@ -13,6 +14,8 @@ extern "C" {
 #endif
 
 #define TAF_NS_MRC_EFS_PARTITION_BLOCKS 90
+#define TAF_NS_MRC_EFS_WRITE_TASKS      100
+#define TAF_NS_MRC_EFS_TASK_NAME_LEN    20
 
 typedef enum
 {
@@ -67,6 +70,29 @@ typedef struct
     uint32_t maxEraseCount;
     uint32_t totalBadBlocks;
 } taf_ns_mrc_EfsBlockStatus_t;
+
+typedef struct
+{
+    uint32_t blockReadStats;
+    uint32_t blockEraseStats;
+    uint32_t blockEccBitflipStats;
+} taf_ns_mrc_EfsBlockCounters_t;
+
+typedef struct
+{
+    uint64_t writeCallCounters;
+    uint64_t maxNbyte;
+    uint32_t taskNameLen;
+    char taskName[TAF_NS_MRC_EFS_TASK_NAME_LEN];
+} taf_ns_mrc_EfsWriteClient_t;
+
+typedef struct
+{
+    uint32_t blockStatsLen;
+    taf_ns_mrc_EfsBlockCounters_t blockStats[TAF_NS_MRC_EFS_PARTITION_BLOCKS];
+    uint32_t clientListLen;
+    taf_ns_mrc_EfsWriteClient_t clientList[TAF_NS_MRC_EFS_WRITE_TASKS];
+} taf_ns_mrc_EfsUsageStats_t;
 
 typedef struct taf_ns_mrc_ProcessStatusHandler* taf_ns_mrc_ProcessStatusHandlerRef_t;
 
@@ -131,6 +157,11 @@ NS_SHARED taf_ns_mrc_ScrubStatusHandlerRef_t taf_ns_mrc_AddScrubStatusHandler
 (
     taf_ns_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
     void* contextPtr
+);
+
+NS_SHARED int32_t taf_ns_mrc_GetEfsUsageStats
+(
+    taf_ns_mrc_EfsUsageStats_t* statsPtr
 );
 
 /**

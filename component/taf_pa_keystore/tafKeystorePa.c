@@ -23,6 +23,20 @@ pa_result_t taf_pa_ks_Init(void)
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * PA deinitialization.
+ */
+//--------------------------------------------------------------------------------------------------
+void taf_pa_ks_Deinit(void)
+{
+    // The keystore PA is a stateless pass-through wrapper: it holds no shared pointers,
+    // maps, or open handles of its own. The underlying taf_prop_keystore layer does not
+    // expose a Deinit API. This function provides the symmetric counterpart to
+    // taf_pa_ks_Init() so callers can follow a consistent Init/Deinit lifecycle.
+    PA_INFO("Telaf keyStore PA deinitialized.");
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
  * Create or import a RSA encryption key and return a key file reference
  *
  * The impData must be a PKCS#8 der bytes if provided.

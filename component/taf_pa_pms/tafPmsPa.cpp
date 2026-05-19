@@ -741,36 +741,73 @@ void taf_pa_pms_Deinit
         return;
     }
 
+    PA_INFO("Starting PMS PA deinitialization...");
 
+    // Step 1: Deregister wakeup listener and release its shared pointer so no
+    // further wakeup callbacks are dispatched after this point.
+    PA_INFO("Deregistering wakeup listener [wakeupMgr]");
     telux::common::ErrorCode err = pa.wakeupMgr_->deRegisterListener(pa.wakeupReasonListener_);
     if (err != telux::common::ErrorCode::SUCCESS)
     {
         PA_ERROR("Failed to call SDK deRegisterListener [wakeupMgr]");
     }
+    pa.wakeupReasonListener_.reset();
 
     telux::common::Status sdkStatus = telux::common::Status::FAILED;
 
+    // Step 2: Deregister service state listener from master manager and release
+    // its shared pointer.
+    PA_INFO("Deregistering service state listener [masterMgr]");
     sdkStatus = pa.masterMgr_->deregisterServiceStateListener(pa.masterSvcListener_);
     if (sdkStatus != telux::common::Status::SUCCESS)
     {
         PA_ERROR("Failed to call SDK deregisterServiceStateListener [masterMgr]");
     }
+    pa.masterSvcListener_.reset();
 
+    // Step 3: Deregister TCU activity listener from master manager and release
+    // its shared pointer.
+    PA_INFO("Deregistering state update listener [masterMgr]");
     sdkStatus = pa.masterMgr_->deregisterListener(pa.masterStateUpdateListener_);
     if (sdkStatus != telux::common::Status::SUCCESS)
     {
         PA_ERROR("Failed to call SDK deregisterListener [masterMgr]");
     }
+    pa.masterStateUpdateListener_.reset();
 
+    // Step 4: Deregister TCU activity listener from slave manager and release
+    // its shared pointer.
+    PA_INFO("Deregistering state update listener [slaveMgr]");
     sdkStatus = pa.slaveMgr_->deregisterListener(pa.slaveStateUpdateListener_);
     if (sdkStatus != telux::common::Status::SUCCESS)
     {
         PA_ERROR("Failed to call SDK deregisterListener [slaveMgr]");
     }
+    pa.slaveStateUpdateListener_.reset();
 
+    // Step 5: Deinitialize the ns-layer QMI client to release modem resources.
+    PA_INFO("Deinitializing ns-layer PMS QMI client");
+    taf_ns_pa_pms_Result_t nsResult = taf_ns_pa_pms_Deinit(&pa.mpssRef);
+    if (nsResult != taf_ns_pa_pms_Result_OK)
+    {
+        PA_ERROR("taf_ns_pa_pms_Deinit failed: err(%d)", nsResult);
+        // Continue cleanup even if ns-layer deinit failed
+    }
+
+    // Step 6: Reset SDK manager shared pointers so the underlying SDK objects
+    // are released once no other owners remain.
+    PA_INFO("Resetting wakeupMgr_, masterMgr_ and slaveMgr_");
+    pa.wakeupMgr_.reset();
+    pa.masterMgr_.reset();
+    pa.slaveMgr_.reset();
+
+    // Step 7: Clear the event-reporter callback so no further events are raised.
+    PA_INFO("Clearing SendEvent callback");
     SendEvent = NULL;
 
     *paRefPtr = NULL; // Reset caller reference pointer
+
+    PA_INFO("PMS PA deinitialization complete.");
 }
 
 pa_result_t taf_pa_pms_SetPowerStateAsMaster

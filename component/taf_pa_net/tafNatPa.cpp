@@ -425,3 +425,13 @@ pa_result_t taf_pa_nat_QueryDestNatEntryList(
         return PA_FAULT;
     }
 }
+
+pa_result_t taf_pa_nat_Deinit()
+{
+    PA_INFO("Starting NAT platform adaptor deinitialization...");
+    auto &pNatAdaptor = taf_NatAdaptor::getInstance();
+    PA_INFO("Resetting staticNatManager");
+    pNatAdaptor.staticNatManager.reset();
+    PA_INFO("NAT platform adaptor deinitialization complete.");
+    return PA_OK;
+}

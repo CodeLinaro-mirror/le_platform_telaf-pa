@@ -260,6 +260,7 @@ public:
     }
 
     pa_result_t initialize();
+    pa_result_t deinitialize();
 
     std::shared_ptr<telux::tel::ICallManager> getCallManager()
     {
@@ -1235,6 +1236,65 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Init()
     else
     {
         PA_CRIT("Failed to initialize voice call platform adapter, ret: %d", result);
+    }
+
+    return result;
+}
+
+pa_result_t VoiceCallPAController::deinitialize()
+{
+    PA_INFO("Starting voice call platform adaptor deinitialization...");
+
+    // Step 1: Clear the PA-level event listener and context so no further call
+    // state change or incoming call notifications are dispatched after this point.
+    PA_INFO("Clearing eventListener_ and eventListenerContext_");
+    eventListener_ = nullptr;
+    eventListenerContext_.reset();
+
+    // Step 2: Deregister the call listener from the call manager so the SDK
+    // stops delivering call events to it.
+    PA_INFO("Deregistering callListener_ from callManager_");
+    if (callManager_ && callListener_)
+    {
+        telux::common::Status status = callManager_->removeListener(callListener_);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to remove call listener");
+            // Continue cleanup even if removal failed
+        }
+    }
+
+    // Step 3: Reset the call listener shared pointer so the listener object is
+    // released once no other owners remain.
+    PA_INFO("Resetting callListener_");
+    callListener_.reset();
+
+    // Step 4: Clear the obsoleted ICall vector so stale call references are
+    // released.
+    PA_INFO("Clearing obsoletedIcalls");
+    obsoletedIcalls.clear();
+
+    // Step 5: Reset the call manager shared pointer so the underlying SDK object
+    // is released once no other owners remain.
+    PA_INFO("Resetting callManager_");
+    callManager_.reset();
+
+    PA_INFO("Voice call platform adaptor deinitialization complete.");
+    return PA_OK;
+}
+
+pa_result_t tafpa::voicecall::taf_pa_voicecall_Deinit()
+{
+    auto pACtrl = VoiceCallPAController::getInstance();
+
+    pa_result_t result = pACtrl->deinitialize();
+    if (result == PA_OK)
+    {
+        PA_INFO("Voice call platform adapter deinitialization done.");
+    }
+    else
+    {
+        PA_ERROR("Voice call platform adapter deinitialization failed, ret: %d", result);
     }
 
     return result;
