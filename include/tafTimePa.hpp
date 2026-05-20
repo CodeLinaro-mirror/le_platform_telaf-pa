@@ -113,4 +113,3 @@ PA_SHARED pa_result_t taf_pa_time_RequestNetworkTime
 
 
 #endif /* TAF_TIME_PA_HPP */
-

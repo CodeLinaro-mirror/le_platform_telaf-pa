@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -16,7 +16,7 @@ static _Atomic(bool) g_fscrypt_initialized = false;
  * PA initialization.
  */
 //--------------------------------------------------------------------------------------------------
-void taf_pa_fsc_Init
+pa_result_t taf_pa_fsc_Init
 (
     void* cryptoFunc
 )
@@ -25,6 +25,7 @@ void taf_pa_fsc_Init
     taf_prop_fsc_Init(cryptoFunc);
     atomic_store(&g_fscrypt_initialized, true);
     PA_INFO("Telaf fscrypt PA initialized.");
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -32,7 +33,7 @@ void taf_pa_fsc_Init
  * PA deinitialization.
  */
 //--------------------------------------------------------------------------------------------------
-void taf_pa_fsc_Deinit
+pa_result_t taf_pa_fsc_Deinit
 (
     void
 )
@@ -41,7 +42,7 @@ void taf_pa_fsc_Deinit
     if (!atomic_load(&g_fscrypt_initialized))
     {
         PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
-        return;
+        return PA_FAULT;
     }
 
     // The fscrypt PA is a stateless pass-through wrapper: it holds no shared pointers,
@@ -50,6 +51,7 @@ void taf_pa_fsc_Deinit
     // taf_pa_fsc_Init() so callers can follow a consistent Init/Deinit lifecycle.
     atomic_store(&g_fscrypt_initialized, false);
     PA_INFO("Telaf fscrypt PA deinitialized.");
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------

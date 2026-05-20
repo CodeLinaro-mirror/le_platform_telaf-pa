@@ -471,10 +471,11 @@ pa_result_t taf_pa_mrc_PerformABSync
     return 0;
 }
 
-taf_pa_mrc_ProcessStatusHandlerRef_t taf_pa_mrc_AddProcessStatusHandler
+pa_result_t taf_pa_mrc_AddProcessStatusHandler
 (
     taf_pa_mrc_ProcessStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_mrc_ProcessStatusHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -482,7 +483,8 @@ taf_pa_mrc_ProcessStatusHandlerRef_t taf_pa_mrc_AddProcessStatusHandler
     pa.indicators.processStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.processStatus.contextPtr = contextPtr;
 
-    return nullptr;
+    if (handlerRefPtr) *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_mrc_GetEfsPeStatus
@@ -588,16 +590,18 @@ pa_result_t taf_pa_mrc_SetTimerPeriod
     return taf_ns_mrc_SetTimerPeriod(nsTimer, period);
 }
 
-taf_pa_mrc_ScrubStatusHandlerRef_t taf_pa_mrc_AddScrubStatusHandler
+pa_result_t taf_pa_mrc_AddScrubStatusHandler
 (
     taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_mrc_ScrubStatusHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
     pa.indicators.scrubStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.scrubStatus.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr) *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_mrc_AckSlotToggle

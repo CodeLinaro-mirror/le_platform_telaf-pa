@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -228,9 +228,10 @@ static taf_pa_common_LogLevel_t PropLevelToPaLevel(taf_prop_common_LogLevel_t le
     }
 }
 
-void taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
+pa_result_t taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
 {
     gLogLevel = level;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_common_LogSetBackend(taf_pa_common_LogBackend_t backend)
@@ -271,12 +272,12 @@ static void EmitLog(taf_pa_common_LogLevel_t level, const char* msg)
 }
 
 
-void taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
+pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
                               const char* file, const char* func, int line,
                               const char* fmt, ...)
 {
     if (level < GetLevel())
-        return;
+        return PA_OK;
 
     char buf[MAX_MSG_SIZE];
 
@@ -287,7 +288,7 @@ void taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
     va_end(ap);
 
     if (len < 0)
-        return;
+        return PA_OK;
 
     // If truncated, optionally append "..." to make truncation visible.
     if ((size_t)len >= sizeof(buf))
@@ -303,6 +304,7 @@ void taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
     }
 
     EmitLog(level, buf);
+    return PA_OK;
 }
 
 static void taf_pa_common_LogVMessage(taf_pa_common_LogLevel_t level,

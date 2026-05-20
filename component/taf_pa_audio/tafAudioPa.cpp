@@ -1695,13 +1695,15 @@ pa_result_t tafpa::audio::taf_pa_audio_StopDtmf(
     return result;
 }
 
-std::shared_ptr<PaAudioCaptureStream> tafpa::audio::taf_pa_audio_GetCaptureStream(
-    tafpa::audio::PaStreamDirection streamDir
+pa_result_t tafpa::audio::taf_pa_audio_GetCaptureStream(
+    tafpa::audio::PaStreamDirection streamDir,
+    std::shared_ptr<PaAudioCaptureStream>& captureStream
 )
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    return pACtrl->GetCaptureStream(streamDir);
+    captureStream = pACtrl->GetCaptureStream(streamDir);
+    return PA_OK;
 }
 
 pa_result_t tafpa::audio::taf_pa_audio_registerDtmfListener(

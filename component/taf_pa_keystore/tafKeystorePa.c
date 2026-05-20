@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -36,13 +36,13 @@ pa_result_t taf_pa_ks_Init(void)
  * PA deinitialization.
  */
 //--------------------------------------------------------------------------------------------------
-void taf_pa_ks_Deinit(void)
+pa_result_t taf_pa_ks_Deinit(void)
 {
     // Check if initialization was successful before proceeding with deinitialization
     if (!atomic_load(&g_keystore_initialized))
     {
         PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
-        return;
+        return PA_FAULT;
     }
 
     // The keystore PA is a stateless pass-through wrapper: it holds no shared pointers,
@@ -51,6 +51,7 @@ void taf_pa_ks_Deinit(void)
     // taf_pa_ks_Init() so callers can follow a consistent Init/Deinit lifecycle.
     atomic_store(&g_keystore_initialized, false);
     PA_INFO("Telaf keyStore PA deinitialized.");
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------

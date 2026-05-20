@@ -246,11 +246,13 @@ pa_result_t taf_pa_net_SetDeviceMode
  *
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_net_DeviceMode_t taf_pa_net_GetDeviceMode
+pa_result_t taf_pa_net_GetDeviceMode
 (
+    taf_pa_net_DeviceMode_t* deviceModePtr
 )
 {
-    return TAF_PA_NET_DEVICE_NONE;
+    if (deviceModePtr) *deviceModePtr = TAF_PA_NET_DEVICE_NONE;
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -281,17 +283,16 @@ pa_result_t taf_pa_net_SetSocksAuthMethod
  * Get SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_net_AuthMethod_t taf_pa_net_GetSocksAuthMethod
+pa_result_t taf_pa_net_GetSocksAuthMethod
 (
+    taf_pa_net_AuthMethod_t* authMethodPtr
 )
 {
     PA_INFO("Actual taf_pa_net_GetSocksAuthMethod implementation");
 
     taf_prop_net_AuthMethod_t auth = taf_prop_net_GetSocksAuthMethod();
-
-    taf_pa_net_AuthMethod_t authMethod = static_cast<taf_pa_net_AuthMethod_t>(auth);
-
-    return authMethod;
+    if (authMethodPtr) *authMethodPtr = static_cast<taf_pa_net_AuthMethod_t>(auth);
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------

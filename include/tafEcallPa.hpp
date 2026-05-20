@@ -660,8 +660,10 @@ PA_SHARED pa_result_t taf_pa_ecall_SetConfig(
 );
 
 // Gets in Progress Calls
-PA_SHARED std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>
-    taf_pa_ecall_GetInProgressCalls();
+PA_SHARED pa_result_t
+    taf_pa_ecall_GetInProgressCalls(
+        std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>* callListPtr
+    );
 
 // Request Network Deregistration.
 PA_SHARED pa_result_t taf_pa_ecall_RequestNetworkDeregistration(
@@ -789,8 +791,9 @@ PA_SHARED pa_result_t taf_pa_ecall_RestartHlapTimer(
 );
 
 // Converts slot ID to phone ID.
-PA_SHARED int8_t taf_pa_ecall_GetPhoneIdFromSlotId(
-    int8_t slotId
+PA_SHARED pa_result_t taf_pa_ecall_GetPhoneIdFromSlotId(
+    int8_t slotId,
+    int8_t* phoneIdPtr
 );
 
 // Hangs up an active eCall.

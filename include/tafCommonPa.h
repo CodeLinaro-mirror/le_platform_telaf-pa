@@ -90,12 +90,12 @@ PA_SHARED pa_result_t taf_pa_common_LogSetBackend
     taf_pa_common_LogBackend_t backend
 );
 
-PA_SHARED void taf_pa_common_LogSetlevel
+PA_SHARED pa_result_t taf_pa_common_LogSetlevel
 (
     taf_pa_common_LogLevel_t level
 );
 
-PA_SHARED void taf_pa_common_LogMessage
+PA_SHARED pa_result_t taf_pa_common_LogMessage
 (
     taf_pa_common_LogLevel_t level,
     const char* file,
@@ -121,6 +121,7 @@ PA_SHARED pa_result_t taf_pa_common_LogDeinit
 #define PA_FATAL(fmt, ...) { PA_EMERG(fmt, ##__VA_ARGS__); exit(EXIT_FAILURE); }
 #define PA_FATAL_IF(condition, fmt, ...) if (condition) { PA_FATAL(fmt, ##__VA_ARGS__) }
 #define PA_ASSERT(condition) PA_FATAL_IF(!(condition), "Assert Failed: '%s'", #condition)
+#define PA_INFO_NOT_IMPLEMENTED() PA_INFO("%s: not implemented", __func__)
 
 #ifdef __cplusplus
 }

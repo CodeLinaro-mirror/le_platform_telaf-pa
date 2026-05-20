@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -745,7 +745,7 @@ pa_result_t taf_pa_pms_Init
     return PA_OK;
 }
 
-void taf_pa_pms_Deinit
+pa_result_t taf_pa_pms_Deinit
 (
     taf_pa_pms_Reference_t *paRefPtr
 )
@@ -756,13 +756,13 @@ void taf_pa_pms_Deinit
     if (!gPmsPaInitialized.load(std::memory_order_acquire))
     {
         PA_WARN("Deinit() called before Init() - ignoring deinit request.");
-        return;
+        return PA_FAULT;
     }
 
     if (paRefPtr == NULL || *paRefPtr != &pa)
     {
         PA_ERROR("Bad paRefPtr");
-        return;
+        return PA_FAULT;
     }
 
     PA_INFO("Starting PMS PA deinitialization...");
@@ -834,6 +834,7 @@ void taf_pa_pms_Deinit
     gPmsPaInitialized.store(false, std::memory_order_release);
     PA_INFO("PMS platform adaptor initialization flag reset to false.");
     PA_INFO("PMS PA deinitialization complete.");
+    return PA_OK;
 }
 
 pa_result_t taf_pa_pms_SetPowerStateAsMaster

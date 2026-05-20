@@ -436,9 +436,12 @@ telux::common::Status SensorPAController::PASensorClient::SelfTest(
     return status;
 }
 
-taf_pa_sensor_SensorId tafpa::sensor::taf_pa_sensor_GetSensorClient(const std::string& sensorName) {
+pa_result_t tafpa::sensor::taf_pa_sensor_GetSensorClient(const std::string& sensorName, taf_pa_sensor_SensorId& sensorId) {
     auto paCtrl = SensorPAController::getInstance();
-    return paCtrl->CreateSensorClient(sensorName);
+    sensorId = paCtrl->CreateSensorClient(sensorName);
+    if (sensorId == ReusableIdGenerator::INVALID_SENSOR_ID)
+        return PA_FAULT;
+    return PA_OK;
 }
 
 pa_result_t tafpa::sensor::taf_pa_sensor_ReleaseSensorClient(taf_pa_sensor_SensorId sensorId) {

@@ -63,8 +63,9 @@ PA_SHARED pa_result_t taf_pa_net_SetDeviceMode
  * Get device mode
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED taf_pa_net_DeviceMode_t taf_pa_net_GetDeviceMode
+PA_SHARED pa_result_t taf_pa_net_GetDeviceMode
 (
+    taf_pa_net_DeviceMode_t* deviceModePtr
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -82,8 +83,9 @@ PA_SHARED pa_result_t taf_pa_net_SetSocksAuthMethod
  * Get SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED taf_pa_net_AuthMethod_t taf_pa_net_GetSocksAuthMethod
+PA_SHARED pa_result_t taf_pa_net_GetSocksAuthMethod
 (
+    taf_pa_net_AuthMethod_t* authMethodPtr
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -163,4 +165,3 @@ PA_SHARED pa_result_t taf_pa_net_DisableSocksCmdASync
 );
 
 #endif /* TAF_SOCKS_PA_HPP */
-

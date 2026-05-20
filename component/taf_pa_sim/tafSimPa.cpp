@@ -1337,20 +1337,21 @@ pa_result_t taf_pa_sim_RefreshComplete
     return Utility::Convert::Result(result);
 }
 
-taf_pa_sim_RefreshChangeHandlerRef_t taf_pa_sim_AddRefreshChangeHandler
+pa_result_t taf_pa_sim_AddRefreshChangeHandler
 (
     taf_pa_sim_RefreshChangeHandlerFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_sim_RefreshChangeHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
     pa.indicators.refreshSvcStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.refreshSvcStatus.contextPtr = contextPtr;
-    return (taf_pa_sim_RefreshChangeHandlerRef_t)&pa.indicators.refreshSvcStatus;
-
+    if (handlerRefPtr) *handlerRefPtr = (taf_pa_sim_RefreshChangeHandlerRef_t)&pa.indicators.refreshSvcStatus;
+    return PA_OK;
 }
 
-void taf_pa_sim_RemoveRefreshChangeHandler
+pa_result_t taf_pa_sim_RemoveRefreshChangeHandler
 (
    taf_pa_sim_RefreshChangeHandlerRef_t handlerRef ///< [IN] Handler reference.
 )
@@ -1360,50 +1361,52 @@ void taf_pa_sim_RemoveRefreshChangeHandler
   // Reset the stored handler details
   pa.indicators.refreshSvcStatus.handlerFuncPtr = nullptr;
   pa.indicators.refreshSvcStatus.contextPtr = nullptr;
+  return PA_OK;
 }
 
-uint8_t taf_pa_sim_GetProfileNum
-(
-    taf_pa_sim_SlotId_t slot
-)
-{
-    if (slot == TAF_PA_SIM_SLOT_UNKNOWN)
-    {
-        PA_ERROR("invalid slot");
-        return 0;
-    }
-
-    uint8_t slotIndex = SlotToIndex(slot);
-    const uint32_t MAX_PROFILES = 8;
-
-    taf_prop_sim_ProfileInfo_t propProfiles[MAX_PROFILES];
-    memset(propProfiles, 0, sizeof(propProfiles));
-
-    uint32_t count = MAX_PROFILES;
-    taf_prop_sim_Result_t r = taf_prop_sim_GetProfileList(slotIndex, propProfiles, &count);
-    pa_result_t paRes = Utility::Convert::Result(r);
-
-    if (paRes != TAF_PA_SIM_RESULT_OK)
-    {
-        PA_ERROR("taf_prop_sim_GetProfileList failed (res=%d)", (int)r);
-        return 0;
-    }
-
-    return (uint8_t)count;
-}
-
-taf_pa_sim_ProfileInfo_t taf_pa_sim_GetProfile
+pa_result_t taf_pa_sim_GetProfileNum
 (
     taf_pa_sim_SlotId_t slot,
-    uint8_t index
+    uint8_t* countPtr
 )
 {
-    taf_pa_sim_ProfileInfo_t info = MakeInvalidProfileInfo();
-
     if (slot == TAF_PA_SIM_SLOT_UNKNOWN)
     {
         PA_ERROR("invalid slot");
-        return info;
+        return PA_BAD_PARAMETER;
+    }
+
+    uint8_t slotIndex = SlotToIndex(slot);
+    const uint32_t MAX_PROFILES = 8;
+
+    taf_prop_sim_ProfileInfo_t propProfiles[MAX_PROFILES];
+    memset(propProfiles, 0, sizeof(propProfiles));
+
+    uint32_t count = MAX_PROFILES;
+    taf_prop_sim_Result_t r = taf_prop_sim_GetProfileList(slotIndex, propProfiles, &count);
+    pa_result_t paRes = Utility::Convert::Result(r);
+
+    if (paRes != TAF_PA_SIM_RESULT_OK)
+    {
+        PA_ERROR("taf_prop_sim_GetProfileList failed (res=%d)", (int)r);
+        return paRes;
+    }
+
+    if (countPtr) *countPtr = (uint8_t)count;
+    return PA_OK;
+}
+
+pa_result_t taf_pa_sim_GetProfile
+(
+    taf_pa_sim_SlotId_t slot,
+    uint8_t index,
+    taf_pa_sim_ProfileInfo_t* profileInfoPtr
+)
+{
+    if (slot == TAF_PA_SIM_SLOT_UNKNOWN)
+    {
+        PA_ERROR("invalid slot");
+        return PA_BAD_PARAMETER;
     }
 
     uint8_t slotIndex = SlotToIndex(slot);
@@ -1419,24 +1422,25 @@ taf_pa_sim_ProfileInfo_t taf_pa_sim_GetProfile
     if (paRes != TAF_PA_SIM_RESULT_OK)
     {
         PA_ERROR("taf_prop_sim_GetProfileList failed (res=%d)", (int)r);
-        return info;
+        return paRes;
     }
 
     if (index >= count)
     {
         PA_ERROR("index %u out of range (count=%u)", (unsigned)index, (unsigned)count);
-        return info;
+        return PA_BAD_PARAMETER;
     }
 
-    auto &src = propProfiles[index];
-
-    info.profileId = ProfileIdToEnum(src.profileId);
-    info.type      = ConvertToPaProfileType(src.profileType);
-    info.state     = src.isActive
-                     ? TAF_PA_SIM_PROFILE_STATE_ACTIVE
-                     : TAF_PA_SIM_PROFILE_STATE_INACTIVE;
-
-    return info;
+    if (profileInfoPtr)
+    {
+        auto &src = propProfiles[index];
+        profileInfoPtr->profileId = ProfileIdToEnum(src.profileId);
+        profileInfoPtr->type      = ConvertToPaProfileType(src.profileType);
+        profileInfoPtr->state     = src.isActive
+                                    ? TAF_PA_SIM_PROFILE_STATE_ACTIVE
+                                    : TAF_PA_SIM_PROFILE_STATE_INACTIVE;
+    }
+    return PA_OK;
 }
 
 pa_result_t taf_pa_sim_SetActiveProfile

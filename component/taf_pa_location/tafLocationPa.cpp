@@ -660,9 +660,16 @@ LocationPAController::GetClientPtr(taf_pa_location_LocationId id) {
     return nullptr;
 }
 
-taf_pa_location_LocationId tafpa::location::taf_pa_location_CreateClient() {
+pa_result_t tafpa::location::taf_pa_location_CreateClient(taf_pa_location_LocationId* clientIdPtr) {
     auto paCtrl = LocationPAController::getInstance();
-    return paCtrl->CreateLocationClient();
+    taf_pa_location_LocationId id = paCtrl->CreateLocationClient();
+    // CreateLocationClient() returns INVALID_LOCATION_ID (0) on failure
+    if (id == ReusableIdGenerator::INVALID_LOCATION_ID) {
+        PA_ERROR("Failed to create location client: CreateLocationClient returned invalid ID");
+        return PA_FAULT;
+    }
+    if (clientIdPtr) *clientIdPtr = id;
+    return PA_OK;
 }
 
 pa_result_t tafpa::location::taf_pa_location_DeleteClient(taf_pa_location_LocationId locationId) {
@@ -1004,18 +1011,18 @@ uint32_t LocationPAController::PALocationClient::GetCapabilities()
     return sdkCapData;
 }
 
-uint32_t tafpa::location::taf_pa_location_getCapabilities(taf_pa_location_LocationId clientId, std::any context)
+pa_result_t tafpa::location::taf_pa_location_getCapabilities(taf_pa_location_LocationId clientId, uint32_t* capabilitiesPtr, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
-   std::shared_ptr<LocationPAController::PALocationClient> clientPtr = paCtrl->GetClientPtr(clientId);
+    std::shared_ptr<LocationPAController::PALocationClient> clientPtr = paCtrl->GetClientPtr(clientId);
     if (!clientPtr) {
         PA_ERROR("Invalid location ID (%llu) provided!", clientId);
         return PA_BAD_PARAMETER;
     }
 
-    uint32_t capData = clientPtr->GetCapabilities();
-    return capData;
+    if (capabilitiesPtr) *capabilitiesPtr = clientPtr->GetCapabilities();
+    return PA_OK;
 }
 
 telux::common::Status LocationPAController::ConfigureConstellations(std::vector<telux::loc::SvBlackListInfo> SvBlackList, taf_pa_location_GeneralCb callback, bool deviceReset, std::any context)

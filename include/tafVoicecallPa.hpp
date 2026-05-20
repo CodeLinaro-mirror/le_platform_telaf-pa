@@ -123,4 +123,3 @@ PA_SHARED pa_result_t taf_pa_voicecall_GetCallTermination(const taf_pa_voicecall
 }
 
 #endif /* TAF_VOICECALL_PA_HPP */
-

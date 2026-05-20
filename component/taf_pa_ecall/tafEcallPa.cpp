@@ -1589,30 +1589,34 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     return paCtrl->MapStatus(ret);
 }
 
-std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>
-    tafpa::ecall::taf_pa_ecall_GetInProgressCalls()
+pa_result_t tafpa::ecall::taf_pa_ecall_GetInProgressCalls
+(
+    std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>* callListPtr
+)
 {
+    if (!callListPtr) {
+        PA_ERROR("callListPtr is null");
+        return PA_BAD_PARAMETER;
+    }
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
         PA_ERROR("Call Manager is Null");
-        return {} ;
+        return PA_FAULT;
     }
     auto activeCall = callMngr->getInProgressCalls();
-    std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>> calls;
     for (auto icall = std::begin(activeCall); icall != std::end(activeCall); icall++)
     {
-        std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
-                std::make_shared<taf_pa_ecall_CallInfo_t>();
+        auto callInfo = std::make_shared<taf_pa_ecall_CallInfo_t>();
         callInfo->phoneId = (*icall)->getPhoneId();
         callInfo->callIndex = (*icall)->getCallIndex();
         callInfo->callState = paCtrl->stateToEvent((*icall)->getCallState());
         callInfo->dir =  paCtrl->directionToPaDirection((*icall)->getCallDirection());
         callInfo->remotePartyNumber = (*icall)->getRemotePartyNumber();
         callInfo->endCause = paCtrl->convertToPaTermination((*icall)->getCallEndCause());
-        calls.push_back(callInfo);
+        callListPtr->push_back(callInfo);
     }
-    return calls;
+    return PA_OK;
 }
 
 pa_result_t tafpa::ecall::taf_pa_ecall_RequestNetworkDeregistration(
@@ -1761,16 +1765,20 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     return paCtrl->MapStatus(ret);
 }
 
-int8_t tafpa::ecall::taf_pa_ecall_GetPhoneIdFromSlotId(int8_t slotId)
+pa_result_t tafpa::ecall::taf_pa_ecall_GetPhoneIdFromSlotId
+(
+    int8_t slotId,
+    int8_t* phoneIdPtr
+)
 {
     auto paCtrl =  EcallPaController::getInstance();
     auto phnMngr = paCtrl->getPhoneManager();
     if(!phnMngr){
         PA_ERROR("phone Manager is Null");
-        return -1;
+        return PA_FAULT;
     }
-    int8_t phoneId = phnMngr->getPhoneIdFromSlotId(slotId);
-    return phoneId;
+    if (phoneIdPtr) *phoneIdPtr = phnMngr->getPhoneIdFromSlotId(slotId);
+    return PA_OK;
 }
 
 pa_result_t tafpa::ecall::taf_pa_ecall_Answer(
