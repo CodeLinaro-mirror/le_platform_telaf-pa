@@ -6,7 +6,8 @@
 #include <time.h>
 #include <errno.h>
 #include <semaphore.h>
-
+#include <atomic>
+#include <mutex>
 #include <telux/common/DeviceConfig.hpp>
 #include <telux/common/Utils.hpp>
 #include <telux/tel/PhoneDefines.hpp>
@@ -786,6 +787,11 @@ class PlatformAdaptor
         Callback_t callbacks;
         Manager_t managers;
         Listener_t listeners;
+
+        // Thread-safe initialization state management. This flag is set to true only after
+        // taf_pa_radio_Init() has completed successfully and reset to false after cleanup.
+        std::atomic<bool> gRadioPaInitialized{false};
+        std::mutex initMutex;
 
         static PlatformAdaptor& GetInstance
         (
@@ -3919,6 +3925,14 @@ static void DataAvailSysStatusHandler
 pa_result_t taf_pa_radio_Init()
 {
     auto& pa = PlatformAdaptor::GetInstance();
+
+    std::lock_guard<std::mutex> lock(pa.initMutex);
+    if (pa.gRadioPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Radio platform adaptor is already initialized.");
+        return PA_OK;
+    }
+
     auto& phoneFactory = tel::PhoneFactory::getInstance();
     auto& dataFactory = data::DataFactory::getInstance();
     uint32_t instances = 0;
@@ -3997,16 +4011,22 @@ pa_result_t taf_pa_radio_Init()
         PA_INFO("Radio private platform adaptor initialization is done.");
     }
 
+        pa.gRadioPaInitialized.store(true, std::memory_order_release);
     PA_INFO("Radio platform adaptor initialization is done.");
-
-    return 0;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_radio_Deinit()
 {
     PA_INFO("Starting radio platform adaptor deinitialization...");
-
     auto& pa = PlatformAdaptor::GetInstance();
+
+    std::lock_guard<std::mutex> lock(pa.initMutex);
+    if (!pa.gRadioPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Radio platform adaptor Deinit() invoked before successful Init().");
+        return PA_FAULT;
+    }
 
     // Step 1: Clear all indicator handler function pointers and context pointers
     // so no further indication callbacks are dispatched after this point.
@@ -4146,8 +4166,9 @@ pa_result_t taf_pa_radio_Deinit()
     PA_INFO("Resetting request callback");
     pa.callbacks.request.reset();
 
+    pa.gRadioPaInitialized.store(false, std::memory_order_release);
     PA_INFO("Radio platform adaptor deinitialization complete.");
-    return 0;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_radio_GetOperatingMode
