@@ -33,6 +33,7 @@ using namespace std;
 
 static taf_pa_health_ModemStatusUpdateHandler_t ModemStatusUpdateHandlerPtr = nullptr;
 static taf_pa_health_ModemOperatingModeUpdateHandler_t ModemOperationModeUpdateHandlerPtr = nullptr;
+static std::mutex healthHandlerMutex;
 std::shared_ptr<telux::platform::ISubsystemManager> subsystemMgr;
 static std::atomic<bool> g_health_initialized{false};
 
@@ -170,9 +171,14 @@ void tafHmsListenerPA:: onStateChange(telux::common::SubsystemInfo subsystemInfo
     taf_health_ModemStatusInfo_t modemStatusInfo;
     modemStatusInfo.subSystemInfo = MapSubsytemInfo(subsystemInfo);
     modemStatusInfo.newOperationalStatus = MapOperationStatus(newOperationalStatus);
-    if (ModemStatusUpdateHandlerPtr != nullptr)
+    taf_pa_health_ModemStatusUpdateHandler_t handler = nullptr;
     {
-        ModemStatusUpdateHandlerPtr(modemStatusInfo);
+        std::lock_guard<std::mutex> lock(healthHandlerMutex);
+        handler = ModemStatusUpdateHandlerPtr;
+    }
+    if (handler != nullptr)
+    {
+        handler(modemStatusInfo);
     }
 }
 
@@ -216,15 +222,24 @@ pa_result_t taf_pa_health_RegModemStatusUpdateHandler
     taf_pa_health_ModemStatusUpdateHandler_t handlerFunc
 )
 {
-    if ((handlerFunc != nullptr) && (ModemStatusUpdateHandlerPtr == nullptr))
+    if (handlerFunc == nullptr)
     {
-        ModemStatusUpdateHandlerPtr = handlerFunc;
-        PA_INFO("Modem Status Change Handler registered.");
-        return PA_OK;
+        PA_ERROR("Parameter is NULL");
+        return PA_BAD_PARAMETER;
     }
 
-    PA_ERROR("Modem Status Change handler registered.");
-    return PA_FAULT;
+    if (ModemStatusUpdateHandlerPtr != nullptr)
+    {
+        PA_ERROR("Modem Status Change handler already registered.");
+        return PA_FAULT;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(healthHandlerMutex);
+        ModemStatusUpdateHandlerPtr = handlerFunc;
+    }
+    PA_INFO("Modem Status Change Handler registered.");
+    return PA_OK;
 }
 
 pa_result_t taf_pa_health_RegModemOperationModeUpdateHandler
@@ -232,15 +247,24 @@ pa_result_t taf_pa_health_RegModemOperationModeUpdateHandler
     taf_pa_health_ModemOperatingModeUpdateHandler_t handlerFunc
 )
 {
-    if ((handlerFunc != nullptr) && (ModemOperationModeUpdateHandlerPtr == nullptr))
+    if (handlerFunc == nullptr)
     {
-        ModemOperationModeUpdateHandlerPtr = handlerFunc;
-        PA_INFO("Modem Operation Mode Change Handler registered.");
-        return PA_OK;
+        PA_ERROR("Parameter is NULL");
+        return PA_BAD_PARAMETER;
     }
 
-    PA_ERROR("Modem Operation Mode Change handler registered.");
-    return PA_FAULT;
+    if (ModemOperationModeUpdateHandlerPtr != nullptr)
+    {
+        PA_ERROR("Modem Operation Mode Change handler already registered.");
+        return PA_FAULT;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(healthHandlerMutex);
+        ModemOperationModeUpdateHandlerPtr = handlerFunc;
+    }
+    PA_INFO("Modem Operation Mode Change Handler registered.");
+    return PA_OK;
 }
 
 
@@ -340,10 +364,15 @@ void ModemStatusPA::operatingModeResponse(telux::tel::OperatingMode operatingMod
         PA_ERROR("Operating Mode unknown, errorCode: %d", static_cast<int>(error));
     }
 
-    if (ModemOperationModeUpdateHandlerPtr != nullptr)
+    taf_pa_health_ModemOperatingModeUpdateHandler_t modeHandler = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(healthHandlerMutex);
+        modeHandler = ModemOperationModeUpdateHandlerPtr;
+    }
+    if (modeHandler != nullptr)
     {
         //Notify the client the connection was restored.
-        ModemOperationModeUpdateHandlerPtr(status);
+        modeHandler(status);
     }
 }
 
@@ -381,10 +410,16 @@ pa_result_t taf_pa_health_Deinit(void)
         PA_WARN("modemStatus is null, skipping phoneManager_ reset");
     }
 
-    // Step 4: Clear function pointer callbacks so no further notifications are dispatched
+    // Step 4: Clear function pointer callbacks so no further notifications are dispatched.
+    // Hold healthHandlerMutex so the clears are mutually exclusive with any in-flight
+    // SB callback (onStateChange / operatingModeResponse) that reads the same pointers
+    // under the same mutex.
     PA_INFO("Clearing ModemStatusUpdateHandlerPtr and ModemOperationModeUpdateHandlerPtr");
-    ModemStatusUpdateHandlerPtr = nullptr;
-    ModemOperationModeUpdateHandlerPtr = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(healthHandlerMutex);
+        ModemStatusUpdateHandlerPtr = nullptr;
+        ModemOperationModeUpdateHandlerPtr = nullptr;
+    }
 
     PA_INFO("Health PA deinitialization complete.");
     g_health_initialized.store(false, std::memory_order_release);

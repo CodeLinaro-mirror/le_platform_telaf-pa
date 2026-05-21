@@ -70,6 +70,7 @@ std::condition_variable cv;
 static taf_pa_time_NetworkChangeHandler_t NetworkChangeHandlerPtr = nullptr;
 static taf_pa_time_NetworkInfoHandler_t NetworkRespHandlerPtrs[NETWORK_SLOT_NUM_MAX + 1]
                                         = { nullptr };
+static std::mutex timeHandlerMutex;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -115,9 +116,14 @@ void taf_TimeGnssListener::onGnssUtcTimeUpdate
     const uint64_t utc
 )
 {
-    if (GnssUtcTimeUpdateHandlerPtr != nullptr)
+    taf_pa_time_GnssUtcTimeUpdateHandler_t handler = nullptr;
     {
-        GnssUtcTimeUpdateHandlerPtr(utc);
+        std::lock_guard<std::mutex> lock(timeHandlerMutex);
+        handler = GnssUtcTimeUpdateHandlerPtr;
+    }
+    if (handler != nullptr)
+    {
+        handler(utc);
     }
 }
 
@@ -238,6 +244,7 @@ pa_result_t taf_pa_time_RegGnssUtcTimeUpdateHandler
         return PA_BAD_PARAMETER;
     }
 
+    std::lock_guard<std::mutex> lock(timeHandlerMutex);
     if (GnssUtcTimeUpdateHandlerPtr != nullptr)
     {
         PA_ERROR("GNSS UTC time update handler already registered.");
@@ -477,7 +484,12 @@ void NetworkDateInfoRespone
     taf_time_NetTimeInfo_t dateInfo;
 
 
-    if (NetworkRespHandlerPtrs[slotId] == nullptr)
+    taf_pa_time_NetworkInfoHandler_t respHandler = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(timeHandlerMutex);
+        respHandler = NetworkRespHandlerPtrs[slotId];
+    }
+    if (respHandler == nullptr)
     {
         PA_ERROR("Date info pointer for slot %d is NULL", slotId);
         return;
@@ -500,7 +512,7 @@ void NetworkDateInfoRespone
 
         result = PA_OK;
     }
-    NetworkRespHandlerPtrs[slotId](dateInfo, slotId, result);
+    respHandler(dateInfo, slotId, result);
 }
 
 
@@ -548,7 +560,10 @@ pa_result_t taf_pa_time_RequestNetworkTime
     }
 
     //Save the callback function for this 'slotid'
-    NetworkRespHandlerPtrs[slotId] = handlerFunc;
+    {
+        std::lock_guard<std::mutex> lock(timeHandlerMutex);
+        NetworkRespHandlerPtrs[slotId] = handlerFunc;
+    }
 
     if (servSysListeners[slotId] == nullptr)
     {
@@ -604,7 +619,12 @@ void taf_TimeServingSystemListener::onNetworkTimeChanged
     telux::tel::NetworkTimeInfo info ///< [IN] Network time information.
 )
 {
-    if (NetworkChangeHandlerPtr != nullptr)
+    taf_pa_time_NetworkChangeHandler_t changeHandler = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(timeHandlerMutex);
+        changeHandler = NetworkChangeHandlerPtr;
+    }
+    if (changeHandler != nullptr)
     {
         int slotId = phoneManager->getPhoneIdFromSlotId(phone);
 
@@ -621,7 +641,7 @@ void taf_TimeServingSystemListener::onNetworkTimeChanged
         snprintf(dateInfo.nitzTime, sizeof(dateInfo.nitzTime), "%s" , info.nitzTime.c_str());
 
         PA_DEBUG("SlotId %d, Phone %d, NITZ:%s", slotId, phone, info.nitzTime.c_str());
-        NetworkChangeHandlerPtr(dateInfo, slotId);
+        changeHandler(dateInfo, slotId);
     }
 }
 
@@ -635,15 +655,22 @@ pa_result_t taf_pa_time_RegNetworkTimeChangeHandler
     taf_pa_time_NetworkChangeHandler_t handlerFunc
 )
 {
-    if ((handlerFunc != nullptr) && (NetworkChangeHandlerPtr == nullptr))
+    if (handlerFunc == nullptr)
     {
-        NetworkChangeHandlerPtr = handlerFunc;
-        PA_INFO("Network time change handler registered.");
-        return PA_OK;
+        PA_ERROR("Parameter is NULL");
+        return PA_BAD_PARAMETER;
     }
 
-    PA_ERROR("Network time change handler register failed.");
-    return PA_FAULT;
+    std::lock_guard<std::mutex> lock(timeHandlerMutex);
+    if (NetworkChangeHandlerPtr != nullptr)
+    {
+        PA_ERROR("Network time change handler already registered.");
+        return PA_FAULT;
+    }
+
+    NetworkChangeHandlerPtr = handlerFunc;
+    PA_INFO("Network time change handler registered.");
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -663,14 +690,19 @@ pa_result_t taf_pa_time_Deinit(void)
     }
 
     // Step 1: Clear all handler function pointers so no further time-related
-    // callbacks are dispatched after this point.
+    // callbacks are dispatched after this point.  Hold timeHandlerMutex so the
+    // clears are mutually exclusive with any in-flight SB callback that reads
+    // the same pointers under the same mutex.
     PA_INFO("Clearing GnssUtcTimeUpdateHandlerPtr, NetworkChangeHandlerPtr and "
             "NetworkRespHandlerPtrs");
-    GnssUtcTimeUpdateHandlerPtr = nullptr;
-    NetworkChangeHandlerPtr = nullptr;
-    for (int i = 0; i <= NETWORK_SLOT_NUM_MAX; i++)
     {
-        NetworkRespHandlerPtrs[i] = nullptr;
+        std::lock_guard<std::mutex> lock(timeHandlerMutex);
+        GnssUtcTimeUpdateHandlerPtr = nullptr;
+        NetworkChangeHandlerPtr = nullptr;
+        for (int i = 0; i <= NETWORK_SLOT_NUM_MAX; i++)
+        {
+            NetworkRespHandlerPtrs[i] = nullptr;
+        }
     }
 
     // Step 2: Deregister the GNSS time listener from the time manager so the SDK

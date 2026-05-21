@@ -25,6 +25,7 @@
 static std::shared_ptr<telux::therm::IThermalManager> g_thermalManager = nullptr;
 static taf_pa_therm_TripEventHandler_t g_tripEventHandler = nullptr;
 static taf_pa_therm_CoolingLevelChangeHandler_t g_coolingLevelChangeHandler = nullptr;
+static std::mutex thermHandlerMutex;
 static std::map<std::string, uint32_t> g_zoneNameToIdMap;
 static std::map<std::string, uint32_t> g_deviceNameToIdMap;
 static std::atomic<bool> g_thermPaInitialized(false);
@@ -45,7 +46,12 @@ public:
     void onTripEvent(std::shared_ptr<telux::therm::ITripPoint> tripPoint,
                      telux::therm::TripEvent tripEvent) override
     {
-        if (g_tripEventHandler && tripPoint)
+        taf_pa_therm_TripEventHandler_t handler = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(thermHandlerMutex);
+            handler = g_tripEventHandler;
+        }
+        if (handler && tripPoint)
         {
             taf_pa_therm_TripEventInfo eventInfo;
 
@@ -93,13 +99,18 @@ public:
                     eventInfo.tripEvent = taf_pa_therm_TripEvent::NONE;
                     break;
             }
-            g_tripEventHandler(eventInfo);
+            handler(eventInfo);
         }
     }
 
     void onCoolingDeviceLevelChange(std::shared_ptr<telux::therm::ICoolingDevice> coolingDevice) override
     {
-        if (g_coolingLevelChangeHandler && coolingDevice)
+        taf_pa_therm_CoolingLevelChangeHandler_t coolHandler = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(thermHandlerMutex);
+            coolHandler = g_coolingLevelChangeHandler;
+        }
+        if (coolHandler && coolingDevice)
         {
             taf_pa_therm_CoolingLevelChangeInfo changeInfo;
             changeInfo.coolingDevice.deviceId = coolingDevice->getId();
@@ -107,7 +118,7 @@ public:
             changeInfo.coolingDevice.currentCoolingLevel = coolingDevice->getCurrentCoolingLevel();
             changeInfo.coolingDevice.description = coolingDevice->getDescription();
 
-            g_coolingLevelChangeHandler(changeInfo);
+            coolHandler(changeInfo);
         }
     }
 };
@@ -563,7 +574,10 @@ pa_result_t taf_pa_therm_RegisterTripEventHandler(
         return PA_FAULT;
     }
 
-    g_tripEventHandler = handler;
+    {
+        std::lock_guard<std::mutex> lock(thermHandlerMutex);
+        g_tripEventHandler = handler;
+    }
     PA_INFO("Trip event handler registered");
     return PA_OK;
 }
@@ -575,6 +589,7 @@ pa_result_t taf_pa_therm_RegisterTripEventHandler(
 //--------------------------------------------------------------------------------------------------
 pa_result_t taf_pa_therm_DeregisterTripEventHandler(void)
 {
+    std::lock_guard<std::mutex> lock(thermHandlerMutex);
     g_tripEventHandler = nullptr;
     PA_INFO("Trip event handler deregistered");
     return PA_OK;
@@ -596,7 +611,10 @@ pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
         return PA_FAULT;
     }
 
-    g_coolingLevelChangeHandler = handler;
+    {
+        std::lock_guard<std::mutex> lock(thermHandlerMutex);
+        g_coolingLevelChangeHandler = handler;
+    }
     PA_INFO("Cooling level change handler registered");
     return PA_OK;
 }
@@ -608,6 +626,7 @@ pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
 //--------------------------------------------------------------------------------------------------
 pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void)
 {
+    std::lock_guard<std::mutex> lock(thermHandlerMutex);
     g_coolingLevelChangeHandler = nullptr;
     PA_INFO("Cooling level change handler deregistered");
     return PA_OK;

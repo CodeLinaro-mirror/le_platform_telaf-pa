@@ -274,6 +274,7 @@ public:
     {
         if (listener)
         {
+            std::lock_guard<std::mutex> lock(eventListenerMutex_);
             eventListener_ = listener;
         }
         else
@@ -405,6 +406,7 @@ private:
     VoiceCallPAController& operator=(const VoiceCallPAController&) = delete;
     std::shared_ptr<telux::tel::ICallManager> callManager_;
     std::shared_ptr<VoiceCallListener> callListener_;
+    std::mutex eventListenerMutex_;
     taf_pa_voicecall_EventListener eventListener_;
     std::any eventListenerContext_;
     std::vector<std::shared_ptr<telux::tel::ICall>> obsoletedIcalls;
@@ -870,7 +872,13 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
     PA_INFO("On call state change dest: %s, state: %s",
         iCall->getRemotePartyNumber().c_str(), pACtrl->stateToStr(state));
     // call platform listener
-    if (controller_ && controller_->eventListener_)
+    taf_pa_voicecall_EventListener listener = nullptr;
+    if (controller_)
+    {
+        std::lock_guard<std::mutex> lock(controller_->eventListenerMutex_);
+        listener = controller_->eventListener_;
+    }
+    if (controller_ && listener)
     {
         taf_pa_voicecall_CallInfo_t callInfo;
         callInfo.phoneId = iCall->getPhoneId();
@@ -892,7 +900,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
         {
             callInfo.termination = pACtrl->convertToPaTermination(iCall->getCallEndCause());
         }
-        controller_->eventListener_(callInfo, pACtrl->stateToEvent(state), controller_->eventListenerContext_);
+        listener(callInfo, pACtrl->stateToEvent(state), controller_->eventListenerContext_);
     }
     else
     {
@@ -933,7 +941,13 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
     }
 
     // call platform listener
-    if (controller_ && controller_->eventListener_)
+    taf_pa_voicecall_EventListener listener2 = nullptr;
+    if (controller_)
+    {
+        std::lock_guard<std::mutex> lock(controller_->eventListenerMutex_);
+        listener2 = controller_->eventListener_;
+    }
+    if (controller_ && listener2)
     {
         taf_pa_voicecall_CallInfo_t callInfo;
         callInfo.phoneId = static_cast<int8_t>(iCall->getPhoneId());
@@ -951,7 +965,7 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
         }
         callInfo.direction = static_cast<taf_pa_voicecall_dir_t>(iCall->getCallDirection());
         callInfo.termination = taf_pa_voicecall_termination_t::TAF_PA_VOICECALL_TERM_NORMAL;
-        controller_->eventListener_(callInfo, pACtrl->stateToEvent(state), controller_->eventListenerContext_);
+        listener2(callInfo, pACtrl->stateToEvent(state), controller_->eventListenerContext_);
     }
     else
     {
@@ -1387,9 +1401,14 @@ pa_result_t VoiceCallPAController::deinitialize()
 
     // Step 1: Clear the PA-level event listener and context so no further call
     // state change or incoming call notifications are dispatched after this point.
+    // Hold eventListenerMutex_ so the clear is mutually exclusive with any in-flight
+    // SB callback that reads eventListener_ under the same mutex.
     PA_INFO("Clearing eventListener_ and eventListenerContext_");
-    eventListener_ = nullptr;
-    eventListenerContext_.reset();
+    {
+        std::lock_guard<std::mutex> lock(eventListenerMutex_);
+        eventListener_ = nullptr;
+        eventListenerContext_.reset();
+    }
 
     // Step 2: Deregister the call listener from the call manager so the SDK
     // stops delivering call events to it.

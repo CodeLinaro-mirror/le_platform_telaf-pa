@@ -8,6 +8,7 @@
 #include <semaphore.h>
 #include <atomic>
 #include <mutex>
+
 #include <telux/common/DeviceConfig.hpp>
 #include <telux/common/Utils.hpp>
 #include <telux/tel/PhoneDefines.hpp>
@@ -787,6 +788,8 @@ class PlatformAdaptor
         Callback_t callbacks;
         Manager_t managers;
         Listener_t listeners;
+        std::mutex indicatorMutex;
+        std::mutex apiMutex;
 
         // Thread-safe initialization state management. This flag is set to true only after
         // taf_pa_radio_Init() has completed successfully and reset to false after cleanup.
@@ -3496,8 +3499,13 @@ void Listener::TelephonyServingSystemListener::onNetworkRejection
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_NetworkRejectHdlrFunc_t handlerFunc =
-        (taf_pa_radio_NetworkRejectHdlrFunc_t)pa.indicators.networkReject.handlerFuncPtr;
+    taf_pa_radio_NetworkRejectHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_NetworkRejectHdlrFunc_t)pa.indicators.networkReject.handlerFuncPtr;
+        ctx = pa.indicators.networkReject.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_NetworkRejectIndication_t indication;
@@ -3520,7 +3528,7 @@ void Listener::TelephonyServingSystemListener::onNetworkRejection
         }
 
         if (indication.plmnIdValid)
-            handlerFunc(instance, indication, pa.indicators.networkReject.contextPtr);
+            handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3531,22 +3539,29 @@ void Listener::TelephonyServingSystemListener::onSystemInfoChanged
 {
     auto& pa = PlatformAdaptor::GetInstance();
 
-    taf_pa_radio_RatChangeHdlrFunc_t handlerFunc1 =
-        (taf_pa_radio_RatChangeHdlrFunc_t)pa.indicators.ratChange.handlerFuncPtr;
+    taf_pa_radio_RatChangeHdlrFunc_t handlerFunc1;
+    void* ctx1;
+    taf_pa_radio_ServiceDomainHdlrFunc_t handlerFunc2;
+    void* ctx2;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc1 = (taf_pa_radio_RatChangeHdlrFunc_t)pa.indicators.ratChange.handlerFuncPtr;
+        ctx1 = pa.indicators.ratChange.contextPtr;
+        handlerFunc2 = (taf_pa_radio_ServiceDomainHdlrFunc_t)pa.indicators.serviceDomain.handlerFuncPtr;
+        ctx2 = pa.indicators.serviceDomain.contextPtr;
+    }
     if (handlerFunc1 != nullptr)
     {
         taf_pa_radio_RatChangeIndication_t indication;
         indication.rat = Utility::Convert::Rat(info.rat);
-        handlerFunc1(instance, indication, pa.indicators.ratChange.contextPtr);
+        handlerFunc1(instance, indication, ctx1);
     }
 
-    taf_pa_radio_ServiceDomainHdlrFunc_t handlerFunc2 =
-        (taf_pa_radio_ServiceDomainHdlrFunc_t)pa.indicators.serviceDomain.handlerFuncPtr;
     if (handlerFunc2 != nullptr)
     {
         taf_pa_radio_ServiceDomainIndication_t indication;
         indication.domain = Utility::Convert::ServiceDomain(info.domain);
-        handlerFunc2(instance, indication, pa.indicators.serviceDomain.contextPtr);
+        handlerFunc2(instance, indication, ctx2);
     }
 }
 
@@ -3557,13 +3572,18 @@ void Listener::TelephonyServingSystemListener::onLteCsCapabilityChanged
 {
     auto& pa = PlatformAdaptor::GetInstance();
 
-    taf_pa_radio_LteCsCapabilityHdlrFunc_t handlerFunc =
-        (taf_pa_radio_LteCsCapabilityHdlrFunc_t)pa.indicators.lteCsCapability.handlerFuncPtr;
+    taf_pa_radio_LteCsCapabilityHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_LteCsCapabilityHdlrFunc_t)pa.indicators.lteCsCapability.handlerFuncPtr;
+        ctx = pa.indicators.lteCsCapability.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_LteCsCapabilityIndication_t indication;
         indication.capability = Utility::Convert::LteCsCapability(capability);
-        handlerFunc(instance, indication, pa.indicators.lteCsCapability.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3600,14 +3620,19 @@ void Listener::PhoneListener::onVoiceServiceStateChanged
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_VoiceServiceInfoHdlrFunc_t handlerFunc =
-        (taf_pa_radio_VoiceServiceInfoHdlrFunc_t)pa.indicators.voiceServiceInfo.handlerFuncPtr;
+    taf_pa_radio_VoiceServiceInfoHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_VoiceServiceInfoHdlrFunc_t)pa.indicators.voiceServiceInfo.handlerFuncPtr;
+        ctx = pa.indicators.voiceServiceInfo.contextPtr;
+    }
     if (handlerFunc != nullptr && infoPtr != nullptr)
     {
         taf_pa_radio_VoiceServiceInfoIndication_t indication;
         uint32_t instance = Utility::Convert::PhoneToInstance(phone);
         Utility::Convert::VoiceServiceInfo(infoPtr->getVoiceServiceState(), &indication.info);
-        handlerFunc(instance, indication, pa.indicators.voiceServiceInfo.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3618,14 +3643,19 @@ void Listener::PhoneListener::onSignalStrengthChanged
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_SignalStrengthInfoChangeHdlrFunc_t handlerFunc =
-        (taf_pa_radio_SignalStrengthInfoChangeHdlrFunc_t)pa.indicators.signalStrengthInfoChange.handlerFuncPtr;
+    taf_pa_radio_SignalStrengthInfoChangeHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_SignalStrengthInfoChangeHdlrFunc_t)pa.indicators.signalStrengthInfoChange.handlerFuncPtr;
+        ctx = pa.indicators.signalStrengthInfoChange.contextPtr;
+    }
     if (handlerFunc != nullptr && strengthPtr != nullptr)
     {
         taf_pa_radio_SignalStrengthInfoChangeIndication_t indication;
         uint32_t instance = Utility::Convert::PhoneToInstance(phone);
         Utility::Convert::SignalStrengthInfo(strengthPtr, &indication.info);
-        handlerFunc(instance, indication, pa.indicators.signalStrengthInfoChange.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3635,13 +3665,18 @@ void Listener::PhoneListener::onOperatingModeChanged
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_OperatingModeChangeHdlrFunc_t handlerFunc =
-        (taf_pa_radio_OperatingModeChangeHdlrFunc_t)pa.indicators.operatingModeChange.handlerFuncPtr;
+    taf_pa_radio_OperatingModeChangeHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_OperatingModeChangeHdlrFunc_t)pa.indicators.operatingModeChange.handlerFuncPtr;
+        ctx = pa.indicators.operatingModeChange.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_OperatingModeChangeIndication_t indication;
         indication.mode = Utility::Convert::OperatingMode(mode);
-        handlerFunc(0, indication, pa.indicators.operatingModeChange.contextPtr);
+        handlerFunc(0, indication, ctx);
     }
 }
 
@@ -3665,14 +3700,19 @@ void Listener::PhoneListener::onCellInfoListChanged
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_CellInfoChangeHdlrFunc_t handlerFunc =
-        (taf_pa_radio_CellInfoChangeHdlrFunc_t)pa.indicators.cellInfoChange.handlerFuncPtr;
+    taf_pa_radio_CellInfoChangeHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_CellInfoChangeHdlrFunc_t)pa.indicators.cellInfoChange.handlerFuncPtr;
+        ctx = pa.indicators.cellInfoChange.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_CellInfoChangeIndication_t indication;
         indication.cellRoleValid = 1;
         indication.cellRole = bitmask;
-        handlerFunc(0, indication, pa.indicators.cellInfoChange.contextPtr);
+        handlerFunc(0, indication, ctx);
     }
 }
 
@@ -3682,13 +3722,18 @@ void Listener::DataServingSystemListener::onServiceStateChanged
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_DataServiceStatusHdlrFunc_t handlerFunc =
-        (taf_pa_radio_DataServiceStatusHdlrFunc_t)pa.indicators.dataServiceStatus.handlerFuncPtr;
+    taf_pa_radio_DataServiceStatusHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_DataServiceStatusHdlrFunc_t)pa.indicators.dataServiceStatus.handlerFuncPtr;
+        ctx = pa.indicators.dataServiceStatus.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_DataServiceStatusIndication_t indication;
         indication.state = Utility::Convert::ServiceState(status.serviceState);
-        handlerFunc(instance, indication, pa.indicators.dataServiceStatus.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3698,8 +3743,13 @@ void Listener::DataServingSystemListener::onRoamingStatusChanged
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_DataRoamingStatusHdlrFunc_t handlerFunc =
-        (taf_pa_radio_DataRoamingStatusHdlrFunc_t)pa.indicators.dataRoamingStatus.handlerFuncPtr;
+    taf_pa_radio_DataRoamingStatusHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_DataRoamingStatusHdlrFunc_t)pa.indicators.dataRoamingStatus.handlerFuncPtr;
+        ctx = pa.indicators.dataRoamingStatus.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_DataRoamingStatusIndication_t indication;
@@ -3707,7 +3757,7 @@ void Listener::DataServingSystemListener::onRoamingStatusChanged
             indication.status = TAF_PA_RADIO_DATA_ROAMING_STATUS_ON;
         else
             indication.status = TAF_PA_RADIO_DATA_ROAMING_STATUS_OFF;
-        handlerFunc(instance, indication, pa.indicators.dataRoamingStatus.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3717,13 +3767,18 @@ void Listener::DataServingSystemListener::onNrIconTypeChanged
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_NrIconChangeHdlrFunc_t handlerFunc =
-        (taf_pa_radio_NrIconChangeHdlrFunc_t)pa.indicators.nrIconChange.handlerFuncPtr;
+    taf_pa_radio_NrIconChangeHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_NrIconChangeHdlrFunc_t)pa.indicators.nrIconChange.handlerFuncPtr;
+        ctx = pa.indicators.nrIconChange.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_NrIconChangeIndication_t indication;
         indication.icon = Utility::Convert::NrIcon(type);
-        handlerFunc(instance, indication, pa.indicators.nrIconChange.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3733,13 +3788,18 @@ void Listener::ImsServingSystemListener::onImsRegStatusChange
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_ImsRegStatusChangeHdlrFunc_t handlerFunc =
-        (taf_pa_radio_ImsRegStatusChangeHdlrFunc_t)pa.indicators.imsRegStatusChange.handlerFuncPtr;
+    taf_pa_radio_ImsRegStatusChangeHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_ImsRegStatusChangeHdlrFunc_t)pa.indicators.imsRegStatusChange.handlerFuncPtr;
+        ctx = pa.indicators.imsRegStatusChange.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_ImsRegStatusChangeIndication_t indication;
         indication.status = Utility::Convert::ImsRegistrationStatus(info.imsRegStatus);
-        handlerFunc(instance, indication, pa.indicators.imsRegStatusChange.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3749,8 +3809,13 @@ void Listener::ImsServingSystemListener::onImsServiceInfoChange
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_ImsServiceInfoHdlrFunc_t handlerFunc =
-        (taf_pa_radio_ImsServiceInfoHdlrFunc_t)pa.indicators.imsServiceInfo.handlerFuncPtr;
+    taf_pa_radio_ImsServiceInfoHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_ImsServiceInfoHdlrFunc_t)pa.indicators.imsServiceInfo.handlerFuncPtr;
+        ctx = pa.indicators.imsServiceInfo.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_ImsServiceInfoIndication_t indication;
@@ -3758,7 +3823,7 @@ void Listener::ImsServingSystemListener::onImsServiceInfoChange
         indication.voipServiceStatus = Utility::Convert::ImsServiceStatus(info.voice);
         indication.smsServiceStatusValid = 1;
         indication.smsServiceStatus = Utility::Convert::ImsServiceStatus(info.sms);
-        handlerFunc(instance, indication, pa.indicators.imsServiceInfo.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3768,14 +3833,19 @@ void Listener::ImsServingSystemListener::onImsPdpStatusInfoChange
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    taf_pa_radio_ImsPdpErrorHdlrFunc_t handlerFunc =
-        (taf_pa_radio_ImsPdpErrorHdlrFunc_t)pa.indicators.imsPdpError.handlerFuncPtr;
+    taf_pa_radio_ImsPdpErrorHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_ImsPdpErrorHdlrFunc_t)pa.indicators.imsPdpError.handlerFuncPtr;
+        ctx = pa.indicators.imsPdpError.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_ImsPdpErrorIndication_t indication;
         indication.failureErrorCodeValid = 1;
         indication.failureErrorCode = Utility::Convert::ImsPdpFailureErrorCode(info.failureCode);
-        handlerFunc(instance, indication, pa.indicators.imsPdpError.contextPtr);
+        handlerFunc(instance, indication, ctx);
     }
 }
 
@@ -3797,8 +3867,13 @@ static void RatSvcStatusHandler
 {
     auto& pa = PlatformAdaptor::GetInstance();
 
-    taf_pa_radio_RatSvcStatusHdlrFunc_t handlerFunc =
-        (taf_pa_radio_RatSvcStatusHdlrFunc_t)pa.indicators.ratSvcStatus.handlerFuncPtr;
+    taf_pa_radio_RatSvcStatusHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_RatSvcStatusHdlrFunc_t)pa.indicators.ratSvcStatus.handlerFuncPtr;
+        ctx = pa.indicators.ratSvcStatus.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_RatSvcStatusIndication_t paIndication;
@@ -3833,7 +3908,7 @@ static void RatSvcStatusHandler
             paIndication.nr5gSvcStatus = Utility::Convert::RatServiceStatus(
                 indication.nr5gSvcStatus);
 
-        handlerFunc(instance, paIndication, pa.indicators.ratSvcStatus.contextPtr);
+        handlerFunc(instance, paIndication, ctx);
     }
 }
 
@@ -3846,8 +3921,13 @@ static void LteCphyCaHandler
 {
     auto& pa = PlatformAdaptor::GetInstance();
 
-    taf_pa_radio_LteCphyCaHdlrFunc_t handlerFunc =
-        (taf_pa_radio_LteCphyCaHdlrFunc_t)pa.indicators.lteCphyCa.handlerFuncPtr;
+    taf_pa_radio_LteCphyCaHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_LteCphyCaHdlrFunc_t)pa.indicators.lteCphyCa.handlerFuncPtr;
+        ctx = pa.indicators.lteCphyCa.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_LteCphyCaIndication_t paIndication;
@@ -3883,7 +3963,7 @@ static void LteCphyCaHandler
             paIndication.scellInfoCount = i;
         }
 
-        handlerFunc(instance, paIndication, pa.indicators.lteCphyCa.contextPtr);
+        handlerFunc(instance, paIndication, ctx);
     }
 }
 
@@ -3896,8 +3976,13 @@ static void DataAvailSysStatusHandler
 {
     auto& pa = PlatformAdaptor::GetInstance();
 
-    taf_pa_radio_DataAvailSysStatusHdlrFunc_t handlerFunc =
-        (taf_pa_radio_DataAvailSysStatusHdlrFunc_t)pa.indicators.dataAvailSysStatus.handlerFuncPtr;
+    taf_pa_radio_DataAvailSysStatusHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_radio_DataAvailSysStatusHdlrFunc_t)pa.indicators.dataAvailSysStatus.handlerFuncPtr;
+        ctx = pa.indicators.dataAvailSysStatus.contextPtr;
+    }
     if (handlerFunc != nullptr)
     {
         taf_pa_radio_DataAvailSysStatusIndication_t paIndication;
@@ -3918,12 +4003,13 @@ static void DataAvailSysStatusHandler
             paIndication.availSys.availSysCount = i;
         }
 
-        handlerFunc(instance, paIndication, pa.indicators.dataAvailSysStatus.contextPtr);
+        handlerFunc(instance, paIndication, ctx);
     }
 }
 
 pa_result_t taf_pa_radio_Init()
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     auto& pa = PlatformAdaptor::GetInstance();
 
     std::lock_guard<std::mutex> lock(pa.initMutex);
@@ -3973,7 +4059,7 @@ pa_result_t taf_pa_radio_Init()
         SERVICE_PROMISE_AND_CALLBACK(telephonyServingSystem)
         pa.managers.telephonyServingSystems[i] = phoneFactory.getServingSystemManager(slot,
             telephonyServingSystemCallback);
-        SERVICE_READY(telephonyServingSystem, pa.managers.imsServingSystems[i])
+        SERVICE_READY(telephonyServingSystem, pa.managers.telephonyServingSystems[i])
         pa.listeners.telephonyServingSystems[i] =
             make_shared<Listener::TelephonyServingSystemListener>(i);
 
@@ -4018,6 +4104,7 @@ pa_result_t taf_pa_radio_Init()
 
 pa_result_t taf_pa_radio_Deinit()
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     PA_INFO("Starting radio platform adaptor deinitialization...");
     auto& pa = PlatformAdaptor::GetInstance();
 
@@ -4030,41 +4117,46 @@ pa_result_t taf_pa_radio_Deinit()
 
     // Step 1: Clear all indicator handler function pointers and context pointers
     // so no further indication callbacks are dispatched after this point.
+    // Hold indicatorMutex so this clear is mutually exclusive with any in-flight
+    // SB callback that reads the same pointers under the same mutex.
     PA_INFO("Clearing all indicator handlers and contexts");
-    pa.indicators.networkReject.handlerFuncPtr      = nullptr;
-    pa.indicators.networkReject.contextPtr          = nullptr;
-    pa.indicators.ratChange.handlerFuncPtr          = nullptr;
-    pa.indicators.ratChange.contextPtr              = nullptr;
-    pa.indicators.voiceServiceInfo.handlerFuncPtr   = nullptr;
-    pa.indicators.voiceServiceInfo.contextPtr       = nullptr;
-    pa.indicators.dataServiceStatus.handlerFuncPtr  = nullptr;
-    pa.indicators.dataServiceStatus.contextPtr      = nullptr;
-    pa.indicators.dataRoamingStatus.handlerFuncPtr  = nullptr;
-    pa.indicators.dataRoamingStatus.contextPtr      = nullptr;
-    pa.indicators.signalStrengthInfoChange.handlerFuncPtr = nullptr;
-    pa.indicators.signalStrengthInfoChange.contextPtr     = nullptr;
-    pa.indicators.ratSvcStatus.handlerFuncPtr       = nullptr;
-    pa.indicators.ratSvcStatus.contextPtr           = nullptr;
-    pa.indicators.lteCphyCa.handlerFuncPtr          = nullptr;
-    pa.indicators.lteCphyCa.contextPtr              = nullptr;
-    pa.indicators.dataAvailSysStatus.handlerFuncPtr = nullptr;
-    pa.indicators.dataAvailSysStatus.contextPtr     = nullptr;
-    pa.indicators.imsRegStatusChange.handlerFuncPtr = nullptr;
-    pa.indicators.imsRegStatusChange.contextPtr     = nullptr;
-    pa.indicators.operatingModeChange.handlerFuncPtr = nullptr;
-    pa.indicators.operatingModeChange.contextPtr    = nullptr;
-    pa.indicators.serviceDomain.handlerFuncPtr      = nullptr;
-    pa.indicators.serviceDomain.contextPtr          = nullptr;
-    pa.indicators.lteCsCapability.handlerFuncPtr    = nullptr;
-    pa.indicators.lteCsCapability.contextPtr        = nullptr;
-    pa.indicators.imsServiceInfo.handlerFuncPtr     = nullptr;
-    pa.indicators.imsServiceInfo.contextPtr         = nullptr;
-    pa.indicators.imsPdpError.handlerFuncPtr        = nullptr;
-    pa.indicators.imsPdpError.contextPtr            = nullptr;
-    pa.indicators.cellInfoChange.handlerFuncPtr     = nullptr;
-    pa.indicators.cellInfoChange.contextPtr         = nullptr;
-    pa.indicators.nrIconChange.handlerFuncPtr       = nullptr;
-    pa.indicators.nrIconChange.contextPtr           = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        pa.indicators.networkReject.handlerFuncPtr      = nullptr;
+        pa.indicators.networkReject.contextPtr          = nullptr;
+        pa.indicators.ratChange.handlerFuncPtr          = nullptr;
+        pa.indicators.ratChange.contextPtr              = nullptr;
+        pa.indicators.voiceServiceInfo.handlerFuncPtr   = nullptr;
+        pa.indicators.voiceServiceInfo.contextPtr       = nullptr;
+        pa.indicators.dataServiceStatus.handlerFuncPtr  = nullptr;
+        pa.indicators.dataServiceStatus.contextPtr      = nullptr;
+        pa.indicators.dataRoamingStatus.handlerFuncPtr  = nullptr;
+        pa.indicators.dataRoamingStatus.contextPtr      = nullptr;
+        pa.indicators.signalStrengthInfoChange.handlerFuncPtr = nullptr;
+        pa.indicators.signalStrengthInfoChange.contextPtr     = nullptr;
+        pa.indicators.ratSvcStatus.handlerFuncPtr       = nullptr;
+        pa.indicators.ratSvcStatus.contextPtr           = nullptr;
+        pa.indicators.lteCphyCa.handlerFuncPtr          = nullptr;
+        pa.indicators.lteCphyCa.contextPtr              = nullptr;
+        pa.indicators.dataAvailSysStatus.handlerFuncPtr = nullptr;
+        pa.indicators.dataAvailSysStatus.contextPtr     = nullptr;
+        pa.indicators.imsRegStatusChange.handlerFuncPtr = nullptr;
+        pa.indicators.imsRegStatusChange.contextPtr     = nullptr;
+        pa.indicators.operatingModeChange.handlerFuncPtr = nullptr;
+        pa.indicators.operatingModeChange.contextPtr    = nullptr;
+        pa.indicators.serviceDomain.handlerFuncPtr      = nullptr;
+        pa.indicators.serviceDomain.contextPtr          = nullptr;
+        pa.indicators.lteCsCapability.handlerFuncPtr    = nullptr;
+        pa.indicators.lteCsCapability.contextPtr        = nullptr;
+        pa.indicators.imsServiceInfo.handlerFuncPtr     = nullptr;
+        pa.indicators.imsServiceInfo.contextPtr         = nullptr;
+        pa.indicators.imsPdpError.handlerFuncPtr        = nullptr;
+        pa.indicators.imsPdpError.contextPtr            = nullptr;
+        pa.indicators.cellInfoChange.handlerFuncPtr     = nullptr;
+        pa.indicators.cellInfoChange.contextPtr         = nullptr;
+        pa.indicators.nrIconChange.handlerFuncPtr       = nullptr;
+        pa.indicators.nrIconChange.contextPtr           = nullptr;
+    }
 
     // Step 2: Deregister per-instance listeners from their SDK managers so the
     // SDK stops delivering events to them.
@@ -4177,6 +4269,7 @@ pa_result_t taf_pa_radio_GetOperatingMode
     taf_pa_radio_OperatingMode_t* modePtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     auto& pa = PlatformAdaptor::GetInstance();
     auto& request = pa.callbacks.request;
 
@@ -4214,6 +4307,7 @@ pa_result_t taf_pa_radio_SetOperatingMode
     taf_pa_radio_OperatingMode_t mode
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     auto& pa = PlatformAdaptor::GetInstance();
     auto& request = pa.callbacks.request;
 
@@ -4250,6 +4344,7 @@ pa_result_t taf_pa_radio_SetNetworkSelectionPreference
     taf_pa_radio_NetworkSelectionPreference_t* preferencePtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (preferencePtr == nullptr)
     {
         PA_ERROR("preferencePtr is nullptr.");
@@ -4310,6 +4405,7 @@ pa_result_t taf_pa_radio_GetNetworkSelectionPreference
     taf_pa_radio_NetworkSelectionPreference_t* preferencePtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (preferencePtr == nullptr)
     {
         PA_ERROR("preferencePtr is nullptr.");
@@ -4381,6 +4477,7 @@ pa_result_t taf_pa_radio_SetPreferredNetwork
     taf_pa_radio_PreferredNetworkConfig_t* configPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (configPtr == nullptr)
     {
         PA_ERROR("configPtr is nullptr.");
@@ -4454,6 +4551,7 @@ pa_result_t taf_pa_radio_GetPreferredNetwork
     taf_pa_radio_PreferredNetworks_t* networksPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (networksPtr == nullptr)
     {
         PA_ERROR("networksPtr is nullptr.");
@@ -4507,6 +4605,7 @@ PA_SHARED PA_WEAK pa_result_t taf_pa_radio_SetPreferredRat
     taf_pa_radio_RatBitMask_t bitmask
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (instance >= MAX_INSTANCE)
     {
         PA_ERROR("Invalid instance %d.", instance);
@@ -4542,6 +4641,7 @@ pa_result_t taf_pa_radio_GetPreferredRat
     taf_pa_radio_RatBitMask_t* bitmaskPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         PA_ERROR("bitmaskPtr is nullptr.");
@@ -4588,6 +4688,7 @@ pa_result_t taf_pa_radio_GetVoiceServiceInfo
     taf_pa_radio_VoiceServiceInfo_t* infoPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         PA_ERROR("infoPtr is nullptr.");
@@ -4637,6 +4738,7 @@ pa_result_t taf_pa_radio_GetDataServieState
     taf_pa_radio_DataServiceState_t* statePtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statePtr == nullptr)
     {
         PA_ERROR("statePtr is nullptr.");
@@ -4683,6 +4785,7 @@ pa_result_t taf_pa_radio_GetServiceDomain
     taf_pa_radio_ServiceDomain_t* domainPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (domainPtr == nullptr)
     {
         PA_ERROR("domainPtr is nullptr.");
@@ -4722,6 +4825,7 @@ pa_result_t taf_pa_radio_GetServiceDomainPreferences
     taf_pa_radio_ServiceDomainBitMask_t* bitmaskPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         PA_ERROR("bitmaskPtr is nullptr.");
@@ -4769,6 +4873,7 @@ pa_result_t taf_pa_radio_SetServiceDomainPreferences
     taf_pa_radio_ServiceDomainBitMask_t bitmask
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (instance >= MAX_INSTANCE)
     {
         PA_ERROR("Invalid instance %d.", instance);
@@ -4806,6 +4911,7 @@ pa_result_t taf_pa_radio_GetSignalStrengthLevel
     taf_pa_radio_SignalStrengthLevel_t* levelPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (levelPtr == nullptr)
     {
         PA_ERROR("levelPtr is nullptr.");
@@ -4855,6 +4961,7 @@ pa_result_t taf_pa_radio_GetSignalStrengthInfo
     taf_pa_radio_SignalStrengthInfo_t* infoPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         PA_ERROR("infoPtr is nullptr.");
@@ -4904,6 +5011,7 @@ pa_result_t taf_pa_radio_SetSignalStrengthInd
     taf_pa_radio_SignalStrengthIndConfig_t* configPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (configPtr == nullptr)
     {
         PA_ERROR("configPtr is nullptr.");
@@ -4958,6 +5066,7 @@ pa_result_t taf_pa_radio_GetCellLocationListInfo
     taf_pa_radio_CellLocationListInfo_t* infoPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         PA_ERROR("infoPtr is nullptr.");
@@ -5009,6 +5118,7 @@ pa_result_t taf_pa_radio_GetCurrNetworkName
     taf_pa_radio_CurrNetworkName_t* namePtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (namePtr == nullptr)
     {
         PA_ERROR("namePtr is nullptr.");
@@ -5064,6 +5174,7 @@ pa_result_t taf_pa_radio_PerformPlmnNetworkScan
     taf_pa_radio_PlmnScanInformation_t* informationPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (configPtr == nullptr)
     {
         PA_ERROR("configPtr is nullptr.");
@@ -5252,6 +5363,7 @@ pa_result_t taf_pa_radio_GetBandCapabilities
     taf_pa_radio_BandBitMask_t* bitmaskPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         PA_ERROR("bitmaskPtr is nullptr.");
@@ -5298,6 +5410,7 @@ pa_result_t taf_pa_radio_GetLteBandCapabilities
     taf_pa_radio_LteBand_t* bandPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bandPtr == nullptr)
     {
         PA_ERROR("bandPtr is nullptr.");
@@ -5344,6 +5457,7 @@ pa_result_t taf_pa_radio_SetBandPreferences
     taf_pa_radio_BandBitMask_t bitmask
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (instance >= MAX_INSTANCE)
     {
         PA_ERROR("Invalid instance %d.", instance);
@@ -5433,6 +5547,7 @@ pa_result_t taf_pa_radio_GetBandPreferences
     taf_pa_radio_BandBitMask_t* bitmaskPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         PA_ERROR("bitmaskPtr is nullptr.");
@@ -5480,6 +5595,7 @@ pa_result_t taf_pa_radio_SetLteBandPreferences
     taf_pa_radio_LteBand_t* bandPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bandPtr == nullptr)
     {
         PA_ERROR("bandPtr is nullptr.");
@@ -5541,6 +5657,7 @@ pa_result_t taf_pa_radio_GetLteBandPreferences
     taf_pa_radio_LteBand_t* bandPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bandPtr == nullptr)
     {
         PA_ERROR("bandPtr is nullptr.");
@@ -5588,6 +5705,7 @@ pa_result_t taf_pa_radio_GetImsRegistrationStatus
     taf_pa_radio_ImsRegistrationStatus_t* statusPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         PA_ERROR("statusPtr is nullptr.");
@@ -5633,6 +5751,7 @@ pa_result_t taf_pa_radio_GetLteCsCapability
     taf_pa_radio_LteCsCapability_t* capabilityPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (capabilityPtr == nullptr)
     {
         PA_ERROR("capabilityPtr is nullptr.");
@@ -5674,6 +5793,7 @@ pa_result_t taf_pa_radio_GetImsServiceStatus
     taf_pa_radio_ImsServiceStatus_t* statusPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         PA_ERROR("statusPtr is nullptr.");
@@ -5716,6 +5836,7 @@ pa_result_t taf_pa_radio_GetImsPdpFailureErrorCode
     taf_pa_radio_ImsPdpFailureErrorCode_t* codePtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (codePtr == nullptr)
     {
         PA_ERROR("codePtr is nullptr.");
@@ -5761,6 +5882,7 @@ pa_result_t taf_pa_radio_ToggleImsService
     bool enable
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     auto& pa = PlatformAdaptor::GetInstance();
     if (pa.managers.imsSetting == nullptr)
     {
@@ -5813,6 +5935,7 @@ pa_result_t taf_pa_radio_GetEnabledImsService
     taf_pa_radio_ImsServiceSettingBitMask_t* bitmaskPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         PA_ERROR("bitmaskPtr is nullptr.");
@@ -5882,6 +6005,7 @@ pa_result_t taf_pa_radio_SetImsUserAgent
     const char* namePtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (namePtr == nullptr)
     {
         PA_ERROR("namePtr is nullptr.");
@@ -5922,6 +6046,7 @@ pa_result_t taf_pa_radio_GetImsUserAgent
     size_t namePtrSize
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (namePtr == nullptr)
     {
         PA_ERROR("namePtr is nullptr.");
@@ -5979,6 +6104,7 @@ pa_result_t taf_pa_radio_GetEndcAvailability
     taf_pa_radio_EndcAvailability_t* availabilityPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (availabilityPtr == nullptr)
     {
         PA_ERROR("availabilityPtr is nullptr.");
@@ -6011,6 +6137,7 @@ pa_result_t taf_pa_radio_GetDcnrRestriction
     taf_pa_radio_DcnrRestriction_t* restrictionPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (restrictionPtr == nullptr)
     {
         PA_ERROR("restrictionPtr is nullptr.");
@@ -6042,6 +6169,7 @@ pa_result_t taf_pa_radio_GetSimCapacityInfo
     taf_pa_radio_SimCapabilityInfo_t* infoPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         PA_ERROR("infoPtr is nullptr.");
@@ -6079,6 +6207,7 @@ pa_result_t taf_pa_radio_GetDeviceAndSimCardRatCapability
     taf_pa_radio_DeviceAndSimCardRatCapability_t* capabilityPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (capabilityPtr == nullptr)
     {
         PA_ERROR("capabilityPtr is nullptr.");
@@ -6123,6 +6252,7 @@ pa_result_t taf_pa_radio_GetServingCellBandInfo
     taf_pa_radio_ServingCellBandInfo_t* infoPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         PA_ERROR("infoPtr is nullptr.");
@@ -6166,6 +6296,7 @@ pa_result_t taf_pa_radio_GetNrIcon
     taf_pa_radio_NrIcon_t* iconPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (iconPtr == nullptr)
     {
         PA_ERROR("iconPtr is nullptr.");
@@ -6204,256 +6335,214 @@ pa_result_t taf_pa_radio_GetNrIcon
     return 0;
 }
 
-pa_result_t taf_pa_radio_AddNetworkRejectHandler
+taf_pa_radio_NetworkRejectHandlerRef_t taf_pa_radio_AddNetworkRejectHandler
 (
     uint32_t instance,
     taf_pa_radio_NetworkRejectHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_NetworkRejectHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.networkReject.instance = instance;
     pa.indicators.networkReject.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.networkReject.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddRatChangeHandler
+taf_pa_radio_RatChangeHandlerRef_t taf_pa_radio_AddRatChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_RatChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_RatChangeHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.ratChange.instance = instance;
     pa.indicators.ratChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.ratChange.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddVoiceServiceInfoHandler
+taf_pa_radio_VoiceServiceInfoHandlerRef_t taf_pa_radio_AddVoiceServiceInfoHandler
 (
     uint32_t instance,
     taf_pa_radio_VoiceServiceInfoHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_VoiceServiceInfoHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.voiceServiceInfo.instance = instance;
     pa.indicators.voiceServiceInfo.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.voiceServiceInfo.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddDataServiceStatusHandler
+taf_pa_radio_DataServiceStatusHandlerRef_t taf_pa_radio_AddDataServiceStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataServiceStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_DataServiceStatusHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.dataServiceStatus.instance = instance;
     pa.indicators.dataServiceStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.dataServiceStatus.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddDataRoamingStatusHandler
+taf_pa_radio_DataRoamingStatusHandlerRef_t taf_pa_radio_AddDataRoamingStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataRoamingStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_DataRoamingStatusHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.dataRoamingStatus.instance = instance;
     pa.indicators.dataRoamingStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.dataRoamingStatus.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddSignalStrengthInfoChangeHandler
+taf_pa_radio_SignalStrengthInfoChangeHandlerRef_t taf_pa_radio_AddSignalStrengthInfoChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_SignalStrengthInfoChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_SignalStrengthInfoChangeHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.signalStrengthInfoChange.instance = instance;
     pa.indicators.signalStrengthInfoChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.signalStrengthInfoChange.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddImsRegStatusChangeHandler
+taf_pa_radio_ImsRegStatusChangeHandlerRef_t taf_pa_radio_AddImsRegStatusChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsRegStatusChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_ImsRegStatusChangeHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.imsRegStatusChange.instance = instance;
     pa.indicators.imsRegStatusChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.imsRegStatusChange.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddOperatingModeChangeHandler
+taf_pa_radio_OperatingModeChangeHandlerRef_t taf_pa_radio_AddOperatingModeChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_OperatingModeChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_OperatingModeChangeHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.operatingModeChange.instance = instance;
     pa.indicators.operatingModeChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.operatingModeChange.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddServiceDomainHandler
+taf_pa_radio_ServiceDomainHandlerRef_t taf_pa_radio_AddServiceDomainHandler
 (
     uint32_t instance,
     taf_pa_radio_ServiceDomainHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_ServiceDomainHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.serviceDomain.instance = instance;
     pa.indicators.serviceDomain.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.serviceDomain.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddLteCsCapabilityHandler
+taf_pa_radio_LteCsCapabilityHandlerRef_t taf_pa_radio_AddLteCsCapabilityHandler
 (
     uint32_t instance,
     taf_pa_radio_LteCsCapabilityHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_LteCsCapabilityHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.lteCsCapability.instance = instance;
     pa.indicators.lteCsCapability.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.lteCsCapability.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddImsServiceInfoHandler
+taf_pa_radio_ImsServiceInfoHandlerRef_t taf_pa_radio_AddImsServiceInfoHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsServiceInfoHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_ImsServiceInfoHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.imsServiceInfo.instance = instance;
     pa.indicators.imsServiceInfo.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.imsServiceInfo.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddImsPdpErrorHandler
+taf_pa_radio_ImsPdpErrorHandlerRef_t taf_pa_radio_AddImsPdpErrorHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsPdpErrorHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_ImsPdpErrorHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.imsPdpError.instance = instance;
     pa.indicators.imsPdpError.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.imsPdpError.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddCellInfoChangeHandler
+taf_pa_radio_CellInfoChangeHandlerRef_t taf_pa_radio_AddCellInfoChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_CellInfoChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_CellInfoChangeHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.cellInfoChange.instance = instance;
     pa.indicators.cellInfoChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.cellInfoChange.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddNrIconChangeHandler
+taf_pa_radio_NrIconChangeHandlerRef_t taf_pa_radio_AddNrIconChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_NrIconChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_NrIconChangeHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.nrIconChange.instance = instance;
     pa.indicators.nrIconChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.nrIconChange.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
 pa_result_t taf_pa_radio_RegisterIndication
@@ -6462,6 +6551,7 @@ pa_result_t taf_pa_radio_RegisterIndication
     uint8_t registration
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (!common::DeviceConfig::isMultiSimSupported() && instance > 0)
         return -ENOTSUP;
 
@@ -6533,6 +6623,7 @@ pa_result_t taf_pa_radio_PerformPciNetworkScan
     taf_pa_radio_PciScanInformation_t* informationPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (informationPtr == nullptr)
     {
         PA_ERROR("informationPtr is nullptr.");
@@ -6574,6 +6665,7 @@ pa_result_t taf_pa_radio_GetServingRat
     taf_pa_radio_Rat_t* ratPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (ratPtr == nullptr)
     {
         PA_ERROR("ratPtr is nullptr.");
@@ -6617,6 +6709,7 @@ pa_result_t taf_pa_radio_GetRatSvcStatus
     taf_pa_radio_RatServiceStatus_t* statusPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         PA_ERROR("statusPtr is nullptr.");
@@ -6669,6 +6762,7 @@ pa_result_t taf_pa_radio_GetServingCellRac
     uint8_t* racPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (racPtr == nullptr)
     {
         PA_ERROR("racPtr is nullptr.");
@@ -6687,6 +6781,7 @@ pa_result_t taf_pa_radio_GetDataAvailSysStatus
     taf_pa_radio_DataAvailSysStatus_t* statusPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         PA_ERROR("statusPtr is nullptr.");
@@ -6716,6 +6811,7 @@ pa_result_t taf_pa_radio_GetLteCphyCaInfo
     taf_pa_radio_LteCphyCaInfo_t* infoPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         PA_ERROR("infoPtr is nullptr.");
@@ -6750,58 +6846,49 @@ pa_result_t taf_pa_radio_GetLteCphyCaInfo
     return result;
 }
 
-pa_result_t taf_pa_radio_AddRatSvcStatusHandler
+taf_pa_radio_RatSvcStatusHandlerRef_t taf_pa_radio_AddRatSvcStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_RatSvcStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_RatSvcStatusHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.ratSvcStatus.instance = instance;
     pa.indicators.ratSvcStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.ratSvcStatus.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddLteCphyCaHandler
+taf_pa_radio_LteCphyCaHandlerRef_t taf_pa_radio_AddLteCphyCaHandler
 (
     uint32_t instance,
     taf_pa_radio_LteCphyCaHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_LteCphyCaHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.lteCphyCa.instance = instance;
     pa.indicators.lteCphyCa.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.lteCphyCa.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
-pa_result_t taf_pa_radio_AddDataAvailSysStatusHandler
+taf_pa_radio_DataAvailSysStatusHandlerRef_t taf_pa_radio_AddDataAvailSysStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataAvailSysStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr,
-    taf_pa_radio_DataAvailSysStatusHandlerRef_t* handlerRefPtr
+    void* contextPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-
+    std::lock_guard<std::mutex> lock(pa.indicatorMutex);
     pa.indicators.dataAvailSysStatus.instance = instance;
     pa.indicators.dataAvailSysStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.dataAvailSysStatus.contextPtr = contextPtr;
-
-    if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return nullptr;
 }
 
 pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
@@ -6810,6 +6897,7 @@ pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
     taf_pa_radio_DataRoamingStatus_t* statusPtr
 )
 {
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         PA_ERROR("statusPtr is nullptr.");

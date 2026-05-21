@@ -36,9 +36,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::PaGetSubsysState
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
                                                              "PA phone manager not initialized.");
 
-    PA_INFO("Profile init state for slot Id[%d]: %d", slotId,
-                                                    dataProfileManagersInitStateMap_[slotId]);
-    sState = dataProfileManagersInitStateMap_[slotId];
+    {
+        std::shared_lock<std::shared_mutex> lock(dataProfileSubsysStateMapMtx_);
+        sState = dataProfileManagersInitStateMap_[slotId];
+    }
+    PA_INFO("Profile init state for slot Id[%d]: %d", slotId, TO_INT(sState));
     return PA_OK;
 }
 
@@ -54,9 +56,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::SetSubsysState
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
                                                              "PA phone manager not initialized.");
 
-    dataProfileManagersInitStateMap_[slotId] = sState;
-    PA_INFO("Profile init state for slot Id[%d]: %d", slotId,
-                                                    dataProfileManagersInitStateMap_[slotId]);
+    {
+        std::unique_lock<std::shared_mutex> lock(dataProfileSubsysStateMapMtx_);
+        dataProfileManagersInitStateMap_[slotId] = sState;
+    }
+    PA_INFO("Profile init state for slot Id[%d]: %d", slotId, TO_INT(sState));
     if (bSendEvent)
     {
         PA_INFO("Send event to clients.");
@@ -257,27 +261,36 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::PaListProfiles
     }
 
 
-    TAF_PA_ERROR_IF_RET_VAL(
-        tafPaDataProfileListCbksMap_[slotId]->GetListProfilesCmdInProgress(),PA_BUSY,
-                                            "Command in progress for slot ID: %d", TO_INT(slotId) );
+    // replace the separate GetListProfilesCmdInProgress() check and the late
+    // SetListProfilesCmdInProgress(true) with a single atomic compare_exchange_strong so two
+    // concurrent NB threads cannot both pass the "not busy" guard and both issue
+    // requestProfileList().  TryAcquireListProfilesCmd() atomically transitions the flag
+    // false→true; if it returns false the flag was already true and we must return PA_BUSY.
+    if (!tafPaDataProfileListCbksMap_[slotId]->TryAcquireListProfilesCmd())
+    {
+        PA_WARN("Command in progress for slot ID: %d", TO_INT(slotId));
+        return PA_BUSY;
+    }
 
     PA_DEBUG("Calling requestProfileList.");
-    tafPaDataProfileListCbksMap_[slotId]->SetListProfilesCallback(callback);
-    tafPaDataProfileListCbksMap_[slotId]->SetListProfilesContext(contextPtr);
+    // set both callback and context atomically under profileListMutex_ so the
+    // SB callback (onProfileListResponse) can never observe a partially-updated pair
+    // (new callback with stale/null context, or vice versa).
+    tafPaDataProfileListCbksMap_[slotId]->SetListProfilesCallbackAndContext(callback, contextPtr);
     status = dataProfileManagersMap_[slotId]->requestProfileList(
                                                             tafPaDataProfileListCbksMap_[slotId]);
 
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_WARN("requestProfileList failed: %d", TO_INT(status) );
-        tafPaDataProfileListCbksMap_[slotId]->SetListProfilesCallback(nullptr);
-        tafPaDataProfileListCbksMap_[slotId]->SetListProfilesContext(nullptr);
+        PA_WARN("requestProfileList failed: %d", TO_INT(status));
+        tafPaDataProfileListCbksMap_[slotId]->SetListProfilesCallbackAndContext(nullptr, nullptr);
+        // Release the in-progress token so future calls are not permanently blocked
+        tafPaDataProfileListCbksMap_[slotId]->SetListProfilesCmdInProgress(false);
         return PA_FAULT;
     }
     PA_DEBUG("Callback will be triggered...");
-
-    // Set the flag to indicate that the request is in progress
-    tafPaDataProfileListCbksMap_[slotId]->SetListProfilesCmdInProgress(true);
+    // bListProfilesCmdInProgress_ is already true (set by TryAcquireListProfilesCmd above);
+    // it will be cleared by onProfileListResponse when the SDK callback fires.
     return PA_OK;
 }
 
@@ -773,27 +786,63 @@ void taf::pa::data::TafPaTeluxDataProfile::PaUpdateProfileEventInfo
     PA_INFO("SlotId: %d, ProfileId: %d, TechPref: %d", TO_INT(slotId), profileId,
                                                                     TO_INT(techPreference));
 
-    // Launch a thread to get profile details.
-    // This is because if called from the callback context, TelSDK will not trigger the callback.
-    // Launch detached thread - captures by value to ensure thread safety
-    std::thread([this, slotId, profileId, techPreference,
-                 paPhoneID, paProfileEvent, event]() {
-        ProfileInfo_t asyncProfileInfo;
-        asyncProfileInfo.profileId = taf::pa::data::Utils::ConvertProfileId(profileId);
-
-        pa_result_t result = getProfileDetails(slotId, profileId, techPreference,
-                                               asyncProfileInfo);
-        if (PA_OK != result)
+    // before launching the worker thread, acquire asyncThreadDrainMtx_ and
+    // check deinitInProgress_.  If Deinit() has already started (i.e. the flag is true),
+    // drop the event rather than launching a thread that would race with the map clear.
+    // Otherwise increment activeAsyncThreadCount_ so that deInitDataProfileManagers() will
+    // wait for this thread to finish before it clears dataProfileManagersMap_.
+    {
+        std::lock_guard<std::mutex> lk(asyncThreadDrainMtx_);
+        if (deinitInProgress_)
         {
-            PA_ERROR("Profile details request failed in async thread. Dropping event.");
+            PA_WARN("Deinit in progress — dropping profile event for slot %d profile %d.",
+                    TO_INT(slotId), profileId);
             return;
         }
+        activeAsyncThreadCount_.fetch_add(1, std::memory_order_acq_rel);
+    }
 
-        // Send the event to clients from this thread
-        PA_INFO("%s event. Send to clients from async thread",
-                taf::pa::data::Utils::ProfileChangeEventToString(event));
-        PaSendProfileEventInfoToClients(paPhoneID, paProfileEvent, asyncProfileInfo);
-    }).detach();
+    // Launch a thread to get profile details.
+    // This is because if called from the callback context, TelSDK will not trigger the callback.
+    // Launch detached thread - captures by value to ensure thread safety.
+    try
+    {
+        std::thread([this, slotId, profileId, techPreference,
+                     paPhoneID, paProfileEvent, event]() {
+            ProfileInfo_t asyncProfileInfo;
+            asyncProfileInfo.profileId = taf::pa::data::Utils::ConvertProfileId(profileId);
+
+            pa_result_t result = getProfileDetails(slotId, profileId, techPreference,
+                                                   asyncProfileInfo);
+            if (PA_OK != result)
+            {
+                PA_ERROR("Profile details request failed in async thread. Dropping event.");
+            }
+            else
+            {
+                // Send the event to clients from this thread
+                PA_INFO("%s event. Send to clients from async thread",
+                        taf::pa::data::Utils::ProfileChangeEventToString(event));
+                PaSendProfileEventInfoToClients(paPhoneID, paProfileEvent, asyncProfileInfo);
+            }
+
+            // decrement the active-thread counter and wake up any
+            // deInitDataProfileManagers() that is waiting for all threads to finish.
+            {
+                std::lock_guard<std::mutex> lk(asyncThreadDrainMtx_);
+                activeAsyncThreadCount_.fetch_sub(1, std::memory_order_acq_rel);
+                asyncThreadDrainCv_.notify_all();
+            }
+        }).detach();
+    }
+    catch (const std::system_error &e)
+    {
+        // Thread creation failed — undo the counter increment so Deinit() is not blocked.
+        PA_ERROR("Failed to launch async profile thread: %s. Dropping event.", e.what());
+        std::lock_guard<std::mutex> lk(asyncThreadDrainMtx_);
+        activeAsyncThreadCount_.fetch_sub(1, std::memory_order_acq_rel);
+        asyncThreadDrainCv_.notify_all();
+    }
 
     PA_INFO("Async thread launched and detached, returning from callback thread");
     return;
@@ -885,6 +934,14 @@ void taf::pa::data::TafPaTeluxDataProfile::initDataProfileManagers()
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
     TAF_PA_ERROR_IF_RET_NIL(SubsystemState_e::AVAILABLE != phoneMngrState,
                                                              "PA phone manager not initialized.");
+
+    // clear the deinit guard so that PaUpdateProfileEventInfo() is allowed
+    // to launch async threads again after a Deinit()/Init() cycle.
+    {
+        std::lock_guard<std::mutex> lk(asyncThreadDrainMtx_);
+        deinitInProgress_ = false;
+    }
+
     // Get the data factory
     auto &dataFactory = telux::data::DataFactory::getInstance();
 
@@ -900,8 +957,12 @@ void taf::pa::data::TafPaTeluxDataProfile::initDataProfileManagers()
         taf::pa::data::SlotId_e paSlotId = static_cast<taf::pa::data::SlotId_e>(slotId);
 
         // Check if already initialized
-        if (taf::pa::data::SubsystemState_e::AVAILABLE ==
-                                                        dataProfileManagersInitStateMap_[paSlotId])
+        SubsystemState_e profInitCheckState;
+        {
+            std::shared_lock<std::shared_mutex> lock(dataProfileSubsysStateMapMtx_);
+            profInitCheckState = dataProfileManagersInitStateMap_[paSlotId];
+        }
+        if (taf::pa::data::SubsystemState_e::AVAILABLE == profInitCheckState)
         {
             PA_INFO("Data profile manager already initialized for slot ID: %d", slotId);
             successfulSlots.push_back(slotId);
@@ -989,7 +1050,10 @@ void taf::pa::data::TafPaTeluxDataProfile::initDataProfileManagers()
             PA_INFO("Listener for slot %d added", slotId);
 
             // Update that the data profile manager is initialized.
-            dataProfileManagersInitStateMap_[paSlotId] = SubsystemState_e::AVAILABLE;
+            {
+                std::unique_lock<std::shared_mutex> lock(dataProfileSubsysStateMapMtx_);
+                dataProfileManagersInitStateMap_[paSlotId] = SubsystemState_e::AVAILABLE;
+            }
             successfulSlots.push_back(slotId);
             PA_INFO("Data profile manager initialization for slot %d complete", slotId);
         }
@@ -1064,6 +1128,34 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::deInitDataProfileManagers()
 
     PA_INFO("Callbacks successfully deregistered, proceeding with cleanup...");
 
+    // set deinitInProgress_ = true (under asyncThreadDrainMtx_) so that any
+    // concurrent PaUpdateProfileEventInfo() call that has not yet incremented the counter will
+    // see the flag and drop its event instead of launching a new thread.  Then wait — with a
+    // bounded timeout — for all already-running async threads to finish accessing
+    // dataProfileManagersMap_ before we clear it.  Without this wait, a thread inside
+    // getProfileDetails() can dereference a map entry that has already been destroyed.
+    {
+        std::unique_lock<std::mutex> lk(asyncThreadDrainMtx_);
+        deinitInProgress_ = true;
+        bool drained = asyncThreadDrainCv_.wait_for(
+            lk,
+            std::chrono::seconds(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT),
+            [this]() {
+                return activeAsyncThreadCount_.load(std::memory_order_acquire) == 0;
+            }
+        );
+        if (!drained)
+        {
+            PA_ERROR("Timeout waiting for async profile threads to finish. "
+                     "Proceeding with map clear anyway — possible use-after-free if a "
+                     "thread is still running.");
+        }
+        else
+        {
+            PA_INFO("All async profile threads have finished.");
+        }
+    }
+
     PA_INFO("Clear dataProfileManagersMap_");
     dataProfileManagersMap_.clear();
 
@@ -1073,8 +1165,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataProfile::deInitDataProfileManagers()
     PA_INFO("Clear tafPaTeluxDataProfListenersMap_");
     tafPaTeluxDataProfListenersMap_.clear();
 
-    dataProfileManagersInitStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
-    dataProfileManagersInitStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
+    {
+        std::unique_lock<std::shared_mutex> lock(dataProfileSubsysStateMapMtx_);
+        dataProfileManagersInitStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
+        dataProfileManagersInitStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
+    }
 
     // Clear profile events callbacks
     PA_INFO("Clear profileEventsCallbacks_");

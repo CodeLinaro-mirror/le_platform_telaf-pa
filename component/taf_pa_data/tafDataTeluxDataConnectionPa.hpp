@@ -322,12 +322,18 @@ namespace data
         );
         std::atomic<bool> bRequestCallListInProgress_ = false;
         RequestDataCallListCallbackEntry_t requestCallListClientEntry_ = {nullptr,nullptr};
+        // Mutex protecting requestCallListClientEntry_:
+        // ensures the entry write and the atomic flag set are atomic w.r.t. the SB read.
+        std::mutex requestCallListMutex_;
 
         // Used to track if connection listeners are registered or not.
         bool bDataConnectionListenersRegistered_[MAX_SLOT_NUM] = {false,false};
 
         // Use a share mutex for registering, deregistering and calling callbacks.
         std::shared_mutex dataConnectionCbksMtx_;
+
+        // Mutex for protecting dataConnectionManagersSubsysStateMap_ (NB reads, SB writes).
+        std::shared_mutex dataConnSubsysStateMapMtx_;
 
         // Functions
         // The callback fuction for TelSDK startDataCall()

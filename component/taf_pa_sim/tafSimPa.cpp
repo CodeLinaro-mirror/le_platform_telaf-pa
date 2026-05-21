@@ -188,6 +188,11 @@ class PlatformAdaptor
         std::mutex eventMutex;
         std::mutex subscriptionMutex;
         std::mutex slotChangeMutex;
+        // Single mutex shared by RegisterListeners and DeregisterListeners to ensure
+        // they are mutually exclusive
+        std::mutex listenerRegistrationMutex_;
+        std::mutex eventListenerMutex_;
+        std::mutex refreshHandlerMutex_;
         static PlatformAdaptor& GetInstance
         (
             void
@@ -214,6 +219,17 @@ class PlatformAdaptor
         (
             int slotId
         );
+
+        // thread-safe accessors for pa.slot.
+        // All reads of pa.slot must go through GetCurrentSlot() (shared lock) and all
+        // writes must go through SetCurrentSlot() (unique lock) so that the SB write in
+        // onSlotStatusChanged() / requestsSlotsStatusResponse() cannot race with the NB
+        // reads in the APDU/card-pin/power functions.
+        int  GetCurrentSlot();
+        void SetCurrentSlot(int newSlot);
+        // Convenience wrapper: reads pa.slot under the shared lock and returns the
+        // corresponding card pointer.
+        std::shared_ptr<telux::tel::ICard> GetCurrentCard();
 
         pa_result_t RegisterEventListener
         (
@@ -351,6 +367,7 @@ pa_result_t PlatformAdaptor::RegisterEventListener
 {
     PA_INFO("RegisterEventListener listener: %p",listener);
     if (listener != nullptr) {
+        std::lock_guard<std::mutex> lock(eventListenerMutex_);
         eventListener_ = listener;
     }
     else
@@ -432,17 +449,24 @@ void tafPaSubscriptionListener::onSubscriptionInfoChanged
     else
     {
         PA_INFO("Subscription is null");
-        pa.InitializeSimInfo(nullptr,(taf_pa_sim_Id_t)pa.slot);
-        simPtr = pa.GetSimContext((taf_pa_sim_Id_t)pa.slot);
+        // read pa.slot under simSlotMutex_ (shared lock).
+        int curSlot = pa.GetCurrentSlot();
+        pa.InitializeSimInfo(nullptr,(taf_pa_sim_Id_t)curSlot);
+        simPtr = pa.GetSimContext((taf_pa_sim_Id_t)curSlot);
     }
     auto simIccidEvent = std::make_shared<taf_pa_sim_Iccid_t>();
     simIccidEvent->simId = (taf_pa_sim_Id_t)simPtr->simId;
     simIccidEvent->ICCID = simPtr->ICCID;
     PA_INFO(" simIccidEvent->ICCID : %s",simIccidEvent->ICCID.c_str());
-    if(pa.eventListener_ && pa.eventListener_->onSubscriptionInfoChanged)
+    taf_pa_sim_EventListener* listener1 = nullptr;
+    {
+        std::lock_guard<std::mutex> elLock(pa.eventListenerMutex_);
+        listener1 = pa.eventListener_;
+    }
+    if(listener1 && listener1->onSubscriptionInfoChanged)
     {
         PA_INFO("onSubscriptionInfoChanged triggered");
-        pa.eventListener_->onSubscriptionInfoChanged(simIccidEvent);
+        listener1->onSubscriptionInfoChanged(simIccidEvent);
     }
     else
     {
@@ -499,10 +523,15 @@ void tafPaCardListener::onCardInfoChanged(int slotId)
     simCardInfo->slotId = (taf_pa_sim_Id_t)slotWithCard;
     simCardInfo->state = simEvent.state;
 
-    if(pa.eventListener_ && pa.eventListener_->onCardInfoChanged)
+    taf_pa_sim_EventListener* listener2 = nullptr;
+    {
+        std::lock_guard<std::mutex> elLock(pa.eventListenerMutex_);
+        listener2 = pa.eventListener_;
+    }
+    if(listener2 && listener2->onCardInfoChanged)
     {
         PA_INFO("onCardInfoChanged is triggered");
-        pa.eventListener_->onCardInfoChanged(simCardInfo);
+        listener2->onCardInfoChanged(simCardInfo);
     }
     else
     {
@@ -552,7 +581,8 @@ void tafPaMultiSimListener::onSlotStatusChanged
         { //Single Active slot
             if (slotStatus.slotState == telux::tel::SlotState::ACTIVE)
             {
-                pa.slot = slotId;
+                // write pa.slot under simSlotMutex_ (unique lock).
+                pa.SetCurrentSlot(slotId);
             }
             if (slotStatus.cardState != telux::tel::CardState::CARDSTATE_UNKNOWN
                    && slotStatus.cardState != telux::tel::CardState::CARDSTATE_ABSENT) {
@@ -589,9 +619,11 @@ void tafPaAuthenticationResponseCallback:: ChangeCardPinResponseCb
 {
     auto& pa = PlatformAdaptor::GetInstance();
     PA_INFO("ChangeCardPinResponseCb");
-    taf_pa_sim_info_t* simPtr = pa.GetSimContext((taf_pa_sim_Id_t)pa.slot);
+    // read pa.slot under simSlotMutex_ (shared lock).
+    int currentSlot = pa.GetCurrentSlot();
+    taf_pa_sim_info_t* simPtr = pa.GetSimContext((taf_pa_sim_Id_t)currentSlot);
     telaf_pa_sim_pa_response_event_t simResponsePtr;
-    simResponsePtr.simId = (taf_pa_sim_Id_t) pa.slot;
+    simResponsePtr.simId = (taf_pa_sim_Id_t) currentSlot;
     simResponsePtr.responseType = TAF_PA_CHANGE_PIN;
     if(error != telux::common::ErrorCode::SUCCESS)
     {
@@ -611,10 +643,15 @@ void tafPaAuthenticationResponseCallback:: ChangeCardPinResponseCb
     simReponseData->responseType = simResponsePtr.responseType;
     simReponseData->result = simResponsePtr.result;
 
-    if(pa.eventListener_ && pa.eventListener_->ChangeCardPinResponseCb)
+    taf_pa_sim_EventListener* listener3 = nullptr;
+    {
+        std::lock_guard<std::mutex> elLock(pa.eventListenerMutex_);
+        listener3 = pa.eventListener_;
+    }
+    if(listener3 && listener3->ChangeCardPinResponseCb)
     {
         PA_INFO("ChangeCardPinResponseCb->ChangeCardPinResponseCb");
-        pa.eventListener_->ChangeCardPinResponseCb(simReponseData);
+        listener3->ChangeCardPinResponseCb(simReponseData);
     }
     else
     {
@@ -630,9 +667,11 @@ void tafPaAuthenticationResponseCallback:: unlockCardByPinResponseCb
 {
     auto& pa = PlatformAdaptor::GetInstance();
     PA_INFO("unlockCardByPinResponseCb");
-    taf_pa_sim_info_t* simPtr = pa.GetSimContext((taf_pa_sim_Id_t)pa.slot);
+    // read pa.slot under simSlotMutex_ (shared lock).
+    int currentSlot = pa.GetCurrentSlot();
+    taf_pa_sim_info_t* simPtr = pa.GetSimContext((taf_pa_sim_Id_t)currentSlot);
     telaf_pa_sim_pa_response_event_t simResponsePtr;
-    simResponsePtr.simId = (taf_pa_sim_Id_t) pa.slot;
+    simResponsePtr.simId = (taf_pa_sim_Id_t) currentSlot;
     simResponsePtr.responseType = TAF_PA_UNLOCK_BY_PIN;
     if(error != telux::common::ErrorCode::SUCCESS)
     {
@@ -652,10 +691,15 @@ void tafPaAuthenticationResponseCallback:: unlockCardByPinResponseCb
     simReponseData->responseType = simResponsePtr.responseType;
     simReponseData->result = simResponsePtr.result;
 
-    if(pa.eventListener_ && pa.eventListener_->unlockCardByPinResponseCb)
+    taf_pa_sim_EventListener* listener4 = nullptr;
+    {
+        std::lock_guard<std::mutex> elLock(pa.eventListenerMutex_);
+        listener4 = pa.eventListener_;
+    }
+    if(listener4 && listener4->unlockCardByPinResponseCb)
     {
         PA_INFO("unlockCardByPinResponseCb is triggered");
-        pa.eventListener_->unlockCardByPinResponseCb(simReponseData);
+        listener4->unlockCardByPinResponseCb(simReponseData);
     }
     else
     {
@@ -671,9 +715,11 @@ void tafPaAuthenticationResponseCallback:: unlockCardByPukResponseCb
 {
     auto& pa = PlatformAdaptor::GetInstance();
     PA_INFO("unlockCardByPukResponseCb");
-    taf_pa_sim_info_t* simPtr = pa.GetSimContext((taf_pa_sim_Id_t)pa.slot);
+    // read pa.slot under simSlotMutex_ (shared lock).
+    int currentSlot = pa.GetCurrentSlot();
+    taf_pa_sim_info_t* simPtr = pa.GetSimContext((taf_pa_sim_Id_t)currentSlot);
     telaf_pa_sim_pa_response_event_t simResponsePtr;
-    simResponsePtr.simId = (taf_pa_sim_Id_t) pa.slot;
+    simResponsePtr.simId = (taf_pa_sim_Id_t) currentSlot;
     simResponsePtr.responseType = TAF_PA_UNLOCK_BY_PUK;
 
     if(error != telux::common::ErrorCode::SUCCESS)
@@ -695,10 +741,15 @@ void tafPaAuthenticationResponseCallback:: unlockCardByPukResponseCb
     simReponseData->responseType = simResponsePtr.responseType;
     simReponseData->result = simResponsePtr.result;
 
-    if(pa.eventListener_ && pa.eventListener_->unlockCardByPukResponseCb)
+    taf_pa_sim_EventListener* listener5 = nullptr;
+    {
+        std::lock_guard<std::mutex> elLock(pa.eventListenerMutex_);
+        listener5 = pa.eventListener_;
+    }
+    if(listener5 && listener5->unlockCardByPukResponseCb)
     {
         PA_INFO("unlockCardByPukResponseCb is triggered");
-        pa.eventListener_->unlockCardByPukResponseCb(simReponseData);
+        listener5->unlockCardByPukResponseCb(simReponseData);
     }
     else
     {
@@ -714,10 +765,12 @@ void tafPaAuthenticationResponseCallback::setCardLockResponseCb
 {
     auto& pa = PlatformAdaptor::GetInstance();
     PA_INFO("setCardLockResponseCb");
+    // read pa.slot under simSlotMutex_ (shared lock).
+    int currentSlot = pa.GetCurrentSlot();
     telaf_pa_sim_pa_response_event_t simResponsePtr;
-    simResponsePtr.simId = (taf_pa_sim_Id_t) pa.slot;
+    simResponsePtr.simId = (taf_pa_sim_Id_t) currentSlot;
     simResponsePtr.responseType = TAF_PA_SET_LOCK;
-    taf_pa_sim_info_t* simPtr = pa.GetSimContext((taf_pa_sim_Id_t)pa.slot);
+    taf_pa_sim_info_t* simPtr = pa.GetSimContext((taf_pa_sim_Id_t)currentSlot);
     if(error != telux::common::ErrorCode::SUCCESS)
     {
         PA_INFO("Set card lock Request failed with errorCode: %d ",(int)error);
@@ -736,10 +789,15 @@ void tafPaAuthenticationResponseCallback::setCardLockResponseCb
     simReponseData->responseType = simResponsePtr.responseType;
     simReponseData->result = simResponsePtr.result;
 
-    if(pa.eventListener_ && pa.eventListener_->setCardLockResponseCb)
+    taf_pa_sim_EventListener* listener6 = nullptr;
+    {
+        std::lock_guard<std::mutex> elLock(pa.eventListenerMutex_);
+        listener6 = pa.eventListener_;
+    }
+    if(listener6 && listener6->setCardLockResponseCb)
     {
         PA_INFO("setCardLockResponseCb is triggered");
-        pa.eventListener_->setCardLockResponseCb(simReponseData);
+        listener6->setCardLockResponseCb(simReponseData);
     }
     else
     {
@@ -951,10 +1009,16 @@ taf_pa_sim_RefreshStage_t Utility::Convert::RefreshStage
 static void RefreshSvcStatusHandler(taf_prop_sim_RefreshChangeInd_t indication, void* contextPtr)
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    if (pa.indicators.refreshSvcStatus.handlerFuncPtr != nullptr)
+    taf_pa_sim_RefreshChangeHandlerFunc_t handler;
+    void* ctx;
     {
-        auto handler = (taf_pa_sim_RefreshChangeHandlerFunc_t)
-                        pa.indicators.refreshSvcStatus.handlerFuncPtr;
+        std::lock_guard<std::mutex> lock(pa.refreshHandlerMutex_);
+        handler = (taf_pa_sim_RefreshChangeHandlerFunc_t)
+                    pa.indicators.refreshSvcStatus.handlerFuncPtr;
+        ctx = pa.indicators.refreshSvcStatus.contextPtr;
+    }
+    if (handler != nullptr)
+    {
         // Convert prop types to PA types and call the registered handler
         taf_pa_sim_RefreshChangeInd_t paInd;
 
@@ -963,7 +1027,7 @@ static void RefreshSvcStatusHandler(taf_prop_sim_RefreshChangeInd_t indication, 
         paInd.refreshMode = Utility::Convert::RefreshMode(indication.refreshMode);
         paInd.refreshStage = Utility::Convert::RefreshStage(indication.refreshStage);
 
-        handler(paInd, pa.indicators.refreshSvcStatus.contextPtr);
+        handler(paInd, ctx);
     }
 }
 
@@ -1242,10 +1306,15 @@ pa_result_t taf_pa_sim_Deinit()
     pa_result_t overallResult = TAF_PA_SIM_RESULT_OK;
 
     // Step 1: Clear the refresh change handler so no further refresh indications
-    // are dispatched after this point.
+    // are dispatched after this point.  Hold refreshHandlerMutex_ so the clear
+    // is mutually exclusive with RefreshSvcStatusHandler which reads the same
+    // pointer under the same mutex.
     PA_INFO("Clearing refreshSvcStatus handler and context");
-    pa.indicators.refreshSvcStatus.handlerFuncPtr = nullptr;
-    pa.indicators.refreshSvcStatus.contextPtr     = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(pa.refreshHandlerMutex_);
+        pa.indicators.refreshSvcStatus.handlerFuncPtr = nullptr;
+        pa.indicators.refreshSvcStatus.contextPtr     = nullptr;
+    }
 
     // Step 2: Deregister subscription, card and multi-sim listeners from their
     // respective SDK managers.
@@ -1259,9 +1328,14 @@ pa_result_t taf_pa_sim_Deinit()
     }
 
     // Step 3: Clear the PA-level event listener pointer so no further event
-    // callbacks are dispatched.
+    // callbacks are dispatched.  Hold eventListenerMutex_ so the clear is
+    // mutually exclusive with any SB callback that reads eventListener_ under
+    // the same mutex.
     PA_INFO("Clearing eventListener_");
-    pa.eventListener_ = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(pa.eventListenerMutex_);
+        pa.eventListener_ = nullptr;
+    }
 
     // Step 4: Reset all listener shared pointers so the listener objects are
     // released once no other owners remain.
@@ -1345,6 +1419,7 @@ pa_result_t taf_pa_sim_AddRefreshChangeHandler
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
+    std::lock_guard<std::mutex> lock(pa.refreshHandlerMutex_);
     pa.indicators.refreshSvcStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.refreshSvcStatus.contextPtr = contextPtr;
     if (handlerRefPtr) *handlerRefPtr = (taf_pa_sim_RefreshChangeHandlerRef_t)&pa.indicators.refreshSvcStatus;
@@ -1358,6 +1433,7 @@ pa_result_t taf_pa_sim_RemoveRefreshChangeHandler
 {
   PA_INFO("taf_pa_sim_RemoveRefreshChangeHandler");
   auto& pa = PlatformAdaptor::GetInstance();
+  std::lock_guard<std::mutex> lock(pa.refreshHandlerMutex_);
   // Reset the stored handler details
   pa.indicators.refreshSvcStatus.handlerFuncPtr = nullptr;
   pa.indicators.refreshSvcStatus.contextPtr = nullptr;
@@ -1489,7 +1565,7 @@ pa_result_t taf_pa_sim_RegisterListeners
     auto& pa = PlatformAdaptor::GetInstance();
     auto& phoneFactory = tel::PhoneFactory::getInstance();
 
-    std::shared_lock<std::shared_mutex> lock(pa.regListenerMutex_);
+    std::lock_guard<std::mutex> lock(pa.listenerRegistrationMutex_);
 
     //Register subscription listener
     if (!pa.subMgr)
@@ -1598,7 +1674,7 @@ pa_result_t taf_pa_sim_DeregisterListeners
 {
     auto& pa = PlatformAdaptor::GetInstance();
     PA_INFO("taf_pa_sim_DeregisterListeners");
-    std::shared_lock<std::shared_mutex> lock(pa.deRegListenerMutex_);
+    std::lock_guard<std::mutex> lock(pa.listenerRegistrationMutex_);
 
     //deregister subscription listener
     if (!pa.subMgr)
@@ -2060,9 +2136,9 @@ taf_pa_sim_info_t* PlatformAdaptor::GetSimContext
 
 taf_pa_sim_Id_t PlatformAdaptor::GetSelectedCard(void)
 {
-    auto& pa = PlatformAdaptor::GetInstance();
     PA_INFO("GetSelectedCard");
-    return (taf_pa_sim_Id_t)pa.slot;
+    // read pa.slot under simSlotMutex_ (shared lock).
+    return (taf_pa_sim_Id_t)GetCurrentSlot();
 }
 
 void PlatformAdaptor::requestsSlotsStatusResponse(
@@ -2106,7 +2182,8 @@ void PlatformAdaptor::requestsSlotsStatusResponse(
         {
             if (slotStatus.slotState == telux::tel::SlotState::ACTIVE)
             {
-                slot = slotId;
+                // write pa.slot under simSlotMutex_ (unique lock).
+                SetCurrentSlot(slotId);
             }
             if (slotStatus.cardState != telux::tel::CardState::CARDSTATE_UNKNOWN
                 && slotStatus.cardState != telux::tel::CardState::CARDSTATE_ABSENT)
@@ -2315,6 +2392,24 @@ std::shared_ptr<telux::tel::ICard> PlatformAdaptor::GetCard
     return nullptr;
 }
 
+// thread-safe slot accessors.
+int PlatformAdaptor::GetCurrentSlot()
+{
+    std::shared_lock<std::shared_mutex> lock(simSlotMutex_);
+    return slot;
+}
+
+void PlatformAdaptor::SetCurrentSlot(int newSlot)
+{
+    std::unique_lock<std::shared_mutex> lock(simSlotMutex_);
+    slot = newSlot;
+}
+
+std::shared_ptr<telux::tel::ICard> PlatformAdaptor::GetCurrentCard()
+{
+    return GetCard(slot);
+}
+
 pa_result_t taf_pa_sim_GetState
 (
     taf_pa_sim_Id_t simId,
@@ -2513,14 +2608,17 @@ pa_result_t taf_pa_sim_selectSimSlot
 {
     PA_INFO("taf_pa_sim_selectSimSlot");
     auto& pa = PlatformAdaptor::GetInstance();
-    std::shared_lock<std::shared_mutex> lock(pa.simSlotMutex_);
-    if (simId == TAF_PA_SIM_UNSPECIFIED || simId == pa.slot)
+
+    // read pa.slot under shared lock via GetCurrentSlot() instead of
+    // holding a shared lock for the entire function (which was wrong for writes anyway).
+    int currentSlot = pa.GetCurrentSlot();
+    if (simId == TAF_PA_SIM_UNSPECIFIED || simId == currentSlot)
     {
-        PA_INFO("No slot switch needed. Requested: %d, Current: %d", (int)simId, (int)pa.slot);
+        PA_INFO("No slot switch needed. Requested: %d, Current: %d", (int)simId, currentSlot);
         return TAF_PA_SIM_RESULT_OK;
     }
 
-    PA_INFO("Switch slot to %d, current slot: %d", (int)simId, (int)pa.slot);
+    PA_INFO("Switch slot to %d, current slot: %d", (int)simId, currentSlot);
     if (pa.isSingleActive)
     {
         auto cbPromise = std::make_shared<std::promise<telux::common::ErrorCode>>();
@@ -2547,7 +2645,8 @@ pa_result_t taf_pa_sim_selectSimSlot
                         errorStatus == telux::common::ErrorCode::NO_EFFECT)
                     {
                             PA_INFO("Select slot: %d successfully", (int)simId);
-                            pa.slot = simId;
+                            // write pa.slot under unique lock.
+                            pa.SetCurrentSlot(simId);
                             return TAF_PA_SIM_RESULT_OK;
                     }
                     else
@@ -2576,7 +2675,8 @@ pa_result_t taf_pa_sim_selectSimSlot
     }
     else
     {
-        pa.slot = simId;
+        // write pa.slot under unique lock.
+        pa.SetCurrentSlot(simId);
         return TAF_PA_SIM_RESULT_OK;
     }
 }

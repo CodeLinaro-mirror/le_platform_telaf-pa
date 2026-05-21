@@ -15,15 +15,21 @@
 #include "taf_ns_pa_pms.hpp"
 
 static SendEventFunc_t SendEvent;
+static std::mutex pmsSendEventMutex;
 
 static inline void RaiseEvent
 (
     taf_pa_pms_Event_t * ev
 )
 {
-    if (SendEvent != NULL)
+    SendEventFunc_t handler = nullptr;
     {
-        SendEvent(ev);
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        handler = SendEvent;
+    }
+    if (handler != NULL)
+    {
+        handler(ev);
     }
 }
 
@@ -586,7 +592,10 @@ pa_result_t taf_pa_pms_Init
     }
 
     // Loaded the Event-Reporter for the PA layer
-    SendEvent = fnSendEvent;
+    {
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        SendEvent = fnSendEvent;
+    }
 
     PA_INFO("Loading PMS [ACTUAL] PA ...");
 
@@ -827,7 +836,10 @@ pa_result_t taf_pa_pms_Deinit
 
     // Step 7: Clear the event-reporter callback so no further events are raised.
     PA_INFO("Clearing SendEvent callback");
-    SendEvent = NULL;
+    {
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        SendEvent = NULL;
+    }
 
     *paRefPtr = NULL; // Reset caller reference pointer
 

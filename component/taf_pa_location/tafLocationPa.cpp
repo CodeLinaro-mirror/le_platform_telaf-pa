@@ -218,12 +218,15 @@ private:
 };
 
 pa_result_t LocationPAController::PALocationClient::RegisterEventListener(
-    taf_pa_location_LocationId locationId,
+taf_pa_location_LocationId locationId,
     taf_pa_location_EventListener* listener,
     std::any context) {
 
     locationId_ = locationId;
     if (listener != nullptr) {
+        // write eventListener_ under mtx_ so that concurrent SB callbacks
+        // cannot observe a partially-written pointer.
+        std::lock_guard<std::mutex> lock(mtx_);
         eventListener_ = listener;
     } else {
         PA_ERROR("Listener is NULL for location ID %llu", locationId);
@@ -2048,8 +2051,14 @@ void LocationPAController::PALocationClient::onGnssNmeaInfo(uint64_t timestamp, 
     nmeaEvent->timestamp = timestamp;
     nmeaEvent->nmeaMask = nmea;
 
-    if(eventListener_ && eventListener_->onGnssNmeaInfo){
-        eventListener_->onGnssNmeaInfo(locationId_,nmeaEvent,eventListenerContext_);
+    // snapshot eventListener_ under mtx_ before invoking outside the lock.
+    taf_pa_location_EventListener* locListener1 = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        locListener1 = eventListener_;
+    }
+    if(locListener1 && locListener1->onGnssNmeaInfo){
+        locListener1->onGnssNmeaInfo(locationId_,nmeaEvent,eventListenerContext_);
     }
     else{
         PA_ERROR("unable to find event Listener for onGnssNmeaInfo");
@@ -2522,8 +2531,14 @@ void LocationPAController::PALocationClient::onCapabilitiesInfo(const telux::loc
 
     capabilityEvent->locCapability = (taf_pa_location_LocCapabilityType_t) capabilityInfo;
 
-    if(eventListener_ && eventListener_->onCapabilitiesInfo){
-        eventListener_->onCapabilitiesInfo(locationId_,capabilityEvent,eventListenerContext_);
+    // snapshot eventListener_ under mtx_ before invoking outside the lock.
+    taf_pa_location_EventListener* locListener2 = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        locListener2 = eventListener_;
+    }
+    if(locListener2 && locListener2->onCapabilitiesInfo){
+        locListener2->onCapabilitiesInfo(locationId_,capabilityEvent,eventListenerContext_);
     }
     else{
         PA_ERROR("unable to find event Listener for onCapabilitiesInfo");
@@ -2553,8 +2568,14 @@ void LocationPAController::PALocationClient::onGnssSVInfo(const std::shared_ptr<
         GnssSVInfo.push_back(svInfodata);
     }
 
-    if(eventListener_ && eventListener_->onGnssSVInfo){
-        eventListener_->onGnssSVInfo(locationId_,GnssSVInfo,eventListenerContext_);
+    // snapshot eventListener_ under mtx_ before invoking outside the lock.
+    taf_pa_location_EventListener* locListener3 = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        locListener3 = eventListener_;
+    }
+    if(locListener3 && locListener3->onGnssSVInfo){
+        locListener3->onGnssSVInfo(locationId_,GnssSVInfo,eventListenerContext_);
     }
     else{
         PA_ERROR("unable to find event Listener for onGnssSVInfo");
@@ -2573,8 +2594,14 @@ void LocationPAController::PALocationClient::onGnssSignalInfo(const std::shared_
         GnssDatainfo->agc[i] = gnssDatainfo->getGnssData().agc[i];
     }
 
-    if(eventListener_ && eventListener_->onGnssSignalInfo){
-        eventListener_->onGnssSignalInfo(locationId_,GnssDatainfo,eventListenerContext_);
+    // snapshot eventListener_ under mtx_ before invoking outside the lock.
+    taf_pa_location_EventListener* locListener4 = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        locListener4 = eventListener_;
+    }
+    if(locListener4 && locListener4->onGnssSignalInfo){
+        locListener4->onGnssSignalInfo(locationId_,GnssDatainfo,eventListenerContext_);
     }
     else{
         PA_ERROR("unable to find event Listener for onGnssSignalInfo");
@@ -2591,8 +2618,14 @@ void LocationPAController::PALocationClient::onXtraStatusUpdate(const telux::loc
     onXtraStatusUpdateData->xtraValidForHours = xtraStatus.xtraValidForHours;
     onXtraStatusUpdateData->xtraDataStatus = (taf_pa_location_XtraDataStatus_t) xtraStatus.xtraDataStatus;
 
-    if(eventListener_ && eventListener_->onXtraStatusUpdate){
-        eventListener_->onXtraStatusUpdate(locationId_,onXtraStatusUpdateData,eventListenerContext_);
+    // snapshot eventListener_ under mtx_ before invoking outside the lock.
+    taf_pa_location_EventListener* locListener5 = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        locListener5 = eventListener_;
+    }
+    if(locListener5 && locListener5->onXtraStatusUpdate){
+        locListener5->onXtraStatusUpdate(locationId_,onXtraStatusUpdateData,eventListenerContext_);
     }
     else{
         PA_ERROR("unable to find event Listener for onXtraStatusUpdate");
@@ -2701,8 +2734,14 @@ void LocationPAController::PALocationClient::onLocationSystemInfo(const telux::l
     locSysInfoEvent->timeinfo.refFCount = timeInfo.refFCount;
     locSysInfoEvent->timeinfo.numClockResets = timeInfo.numClockResets;
 
-    if(eventListener_ && eventListener_->onLocationSystemInfo){
-        eventListener_->onLocationSystemInfo(locationId_,locSysInfoEvent,eventListenerContext_);
+    // snapshot eventListener_ under mtx_ before invoking outside the lock.
+    taf_pa_location_EventListener* locListener6 = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        locListener6 = eventListener_;
+    }
+    if(locListener6 && locListener6->onLocationSystemInfo){
+        locListener6->onLocationSystemInfo(locationId_,locSysInfoEvent,eventListenerContext_);
     }
     else{
         PA_ERROR("unable to find event Listener for onLocationSystemInfo");
@@ -2905,8 +2944,14 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
         LocationEngineInfo.push_back(LocationEngineInfodata);
     }
 
-    if(eventListener_ && eventListener_->onDetailedEngineLocationUpdate){
-        eventListener_->onDetailedEngineLocationUpdate(locationId_, LocationEngineInfo, eventListenerContext_);
+    // snapshot eventListener_ under mtx_ before invoking outside the lock.
+    taf_pa_location_EventListener* locListener7 = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        locListener7 = eventListener_;
+    }
+    if(locListener7 && locListener7->onDetailedEngineLocationUpdate){
+        locListener7->onDetailedEngineLocationUpdate(locationId_, LocationEngineInfo, eventListenerContext_);
     }
     else{
         PA_ERROR("unable to find event Listener for onEvent");
@@ -3052,8 +3097,14 @@ void LocationPAController::PALocationClient::onGnssMeasurementsInfo(const telux:
     }
 
 
-    if(eventListener_ && eventListener_->onGnssMeasurementsInfo){
-        eventListener_->onGnssMeasurementsInfo(locationId_,measurementsInfo,eventListenerContext_);
+    // snapshot eventListener_ under mtx_ before invoking outside the lock.
+    taf_pa_location_EventListener* locListener8 = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        locListener8 = eventListener_;
+    }
+    if(locListener8 && locListener8->onGnssMeasurementsInfo){
+        locListener8->onGnssMeasurementsInfo(locationId_,measurementsInfo,eventListenerContext_);
     }
     else{
         PA_ERROR("unable to find event Listener for onGnssMeasurementsInfo");

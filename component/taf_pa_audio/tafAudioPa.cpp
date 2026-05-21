@@ -358,8 +358,13 @@ private:
     std::shared_ptr<tafPaPromptsStatusListener> repeatedTxPlayerStatusListener;
     std::shared_ptr<tafPaDtmfListener> dtmfListener;
     std::shared_ptr<CommandCallback> dtmfCb = nullptr;
+    // Protects dtmfCb against concurrent writes from
+    // playSignallingDtmfOnTx() and stopSignallingDtmfOnTx().
+    std::mutex dtmfCbMutex_;
     std::shared_ptr<tafPaServiceStatusListener> paServiceStatusChangeListener;
     std::queue<std::shared_ptr<telux::audio::IStreamBuffer>> mRecFreeBuffers, mRxRecFreeBuffers;
+    std::mutex callManagerMutex_;
+    std::mutex streamMutex_;
     std::mutex subsystemEventsCbksMtx_;
     // The callback entry vector for subsystem events
     std::vector<SubsystemEventsCallbackEntry_t> subsystemEventsCallbacks_;
@@ -423,7 +428,10 @@ pa_result_t AudioPAController::initialize()
 
     if (isReady) {
         PA_INFO("Audio subsystem is ready");
-        audioMngrInitState_ = SubsystemState_e::AVAILABLE;
+        {
+            std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
+            audioMngrInitState_ = SubsystemState_e::AVAILABLE;
+        }
         paServiceStatusChangeListener = std::make_shared<tafPaServiceStatusListener>();
         auto status = audioManager_->registerListener(paServiceStatusChangeListener);
         if (status != telux::common::Status::SUCCESS)
@@ -456,22 +464,30 @@ pa_result_t AudioPAController::deinitialize()
         paServiceStatusChangeListener.reset();
     }
 
-    // Step 2: Reset all audio stream shared pointers
-    PA_INFO("Resetting audio stream shared pointers");
-    mAudioVoiceStream.reset();
-    mAudioPlaybackStream.reset();
-    mAudioCaptureStream.reset();
-    mAudioRxCaptureStream.reset();
-    mAudioLoopbackStream.reset();
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        // Step 2: Reset all audio stream shared pointers
+        PA_INFO("Resetting audio stream shared pointers");
+        mAudioVoiceStream.reset();
+        mAudioPlaybackStream.reset();
+        mAudioCaptureStream.reset();
+        mAudioRxCaptureStream.reset();
+        mAudioLoopbackStream.reset();
 
-    // Step 3: Reset audio player shared pointers
-    PA_INFO("Resetting audio player shared pointers");
-    mAudioPlayer.reset();
-    mTxAudioPlayer.reset();
+        // Step 3: Reset audio player shared pointers
+        PA_INFO("Resetting audio player shared pointers");
+        mAudioPlayer.reset();
+        mTxAudioPlayer.reset();
+    }
 
     // Step 4: Reset call manager shared pointer
+    // Protect callManager against concurrent reads in
+    // playSignallingDtmfOnTx()/stopSignallingDtmfOnTx().
     PA_INFO("Resetting callManager");
-    callManager.reset();
+    {
+        std::lock_guard<std::mutex> lock(callManagerMutex_);
+        callManager.reset();
+    }
 
     // Step 5: Reset playback listener, capture stream wrapper, and DTMF shared pointers
     PA_INFO("Resetting listener and callback shared pointers");
@@ -480,7 +496,11 @@ pa_result_t AudioPAController::deinitialize()
     paCaptureStream.reset();
     paRxCaptureStream.reset();
     dtmfListener.reset();
-    dtmfCb.reset();
+
+    {
+        std::lock_guard<std::mutex> lock(dtmfCbMutex_);
+        dtmfCb.reset();
+    }
 
     // Step 6: Drain the IStreamBuffer queues
     PA_INFO("Draining mRecFreeBuffers and mRxRecFreeBuffers queues");
@@ -639,6 +659,9 @@ pa_result_t AudioPAController::createStream
     }
 
     if (p->get_future().get()) {
+        // Protect stream pointer writes under streamMutex_.
+        std::lock_guard<std::mutex> lock(streamMutex_);
+
         if(paAudioStream->getType() == StreamType::VOICE_CALL) {
             if (streamConfig.slotId == SlotId::SLOT_ID_1) {
                 mAudioVoiceStream = std::dynamic_pointer_cast<
@@ -676,63 +699,99 @@ pa_result_t AudioPAController::createStream
 pa_result_t AudioPAController::deleteStream(PaStreamConfig streamConfig, taf_pa_audio_cb callback,
     std::any context)
 {
-        telux::common::Status status;
-        telux::common::ErrorCode ec;
-        CALLBACK_TO_SET_RESULT;
-    if((streamConfig.type == PaStreamType::VOICE_CALL) && mAudioVoiceStream)
+    telux::common::Status status = Status::FAILED;
+    telux::common::ErrorCode ec;
+    CALLBACK_TO_SET_RESULT;
+
+    if (streamConfig.type == PaStreamType::VOICE_CALL)
     {
-        status = audioManager_->deleteStream(mAudioVoiceStream, cb);
-        if (status == Status::SUCCESS)
+        // Take a local copy and reset the member under the lock so that
+        // concurrent readers (startAudio, stopAudio, playDtmf, stopDtmf) can never
+        // dereference a pointer that is being reset here.
+        std::shared_ptr<telux::audio::IAudioVoiceStream> localStream;
         {
+            std::lock_guard<std::mutex> lock(streamMutex_);
+            localStream = mAudioVoiceStream;
             mAudioVoiceStream.reset();
-            mAudioVoiceStream = nullptr;
         }
-        else{
-            PA_ERROR("Failed to delete voice stream");
+        if (localStream)
+        {
+            status = audioManager_->deleteStream(localStream, cb);
+            if (status != Status::SUCCESS)
+            {
+                // Restore the pointer so the stream is not silently lost on failure.
+                std::lock_guard<std::mutex> lock(streamMutex_);
+                mAudioVoiceStream = localStream;
+                PA_ERROR("Failed to delete voice stream");
+            }
         }
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
-        for(PaStreamDirection dir : streamConfig.streamDir) {
-            if(dir == PaStreamDirection::RX && mAudioRxCaptureStream) {
-                PA_DEBUG("Delete stream for incall downlink recording");
-                status = audioManager_->deleteStream(mAudioRxCaptureStream, cb);
-                if (status == Status::SUCCESS)
-                {
-                    mAudioRxCaptureStream.reset();
-                    mAudioRxCaptureStream = nullptr;
-                }
-                else{
-                    PA_ERROR("Failed to delete remote record stream");
-                }
-            }
-        }
-        if ((streamConfig.streamDir.size() == 0) && mAudioCaptureStream)
+        for (PaStreamDirection dir : streamConfig.streamDir)
         {
-            status = audioManager_->deleteStream(mAudioCaptureStream, cb);
-            if (status == Status::SUCCESS)
+            if (dir == PaStreamDirection::RX)
             {
-                mAudioCaptureStream.reset();
-                mAudioCaptureStream = nullptr;
-            }
-            else{
-                PA_ERROR("Failed to delete record stream");
+                std::shared_ptr<telux::audio::IAudioCaptureStream> localStream;
+                {
+                    std::lock_guard<std::mutex> lock(streamMutex_);
+                    localStream = mAudioRxCaptureStream;
+                    mAudioRxCaptureStream.reset();
+                }
+                if (localStream)
+                {
+                    PA_DEBUG("Delete stream for incall downlink recording");
+                    status = audioManager_->deleteStream(localStream, cb);
+                    if (status != Status::SUCCESS)
+                    {
+                        std::lock_guard<std::mutex> lock(streamMutex_);
+                        mAudioRxCaptureStream = localStream;
+                        PA_ERROR("Failed to delete remote record stream");
+                    }
+                }
             }
         }
-    }
-    else if ((streamConfig.type == PaStreamType::LOOPBACK) && mAudioLoopbackStream)
-    {
-        status = audioManager_->deleteStream(mAudioLoopbackStream, cb);
-        if (status == Status::SUCCESS)
+        if (streamConfig.streamDir.size() == 0)
         {
-            mAudioLoopbackStream.reset();
-            mAudioLoopbackStream = nullptr;
-        }
-        else{
-            PA_ERROR("Failed to delete loopback stream");
+            std::shared_ptr<telux::audio::IAudioCaptureStream> localStream;
+            {
+                std::lock_guard<std::mutex> lock(streamMutex_);
+                localStream = mAudioCaptureStream;
+                mAudioCaptureStream.reset();
+            }
+            if (localStream)
+            {
+                status = audioManager_->deleteStream(localStream, cb);
+                if (status != Status::SUCCESS)
+                {
+                    std::lock_guard<std::mutex> lock(streamMutex_);
+                    mAudioCaptureStream = localStream;
+                    PA_ERROR("Failed to delete record stream");
+                }
+            }
         }
     }
-    if(status != Status::SUCCESS)
+    else if (streamConfig.type == PaStreamType::LOOPBACK)
+    {
+        std::shared_ptr<telux::audio::IAudioLoopbackStream> localStream;
+        {
+            std::lock_guard<std::mutex> lock(streamMutex_);
+            localStream = mAudioLoopbackStream;
+            mAudioLoopbackStream.reset();
+        }
+        if (localStream)
+        {
+            status = audioManager_->deleteStream(localStream, cb);
+            if (status != Status::SUCCESS)
+            {
+                std::lock_guard<std::mutex> lock(streamMutex_);
+                mAudioLoopbackStream = localStream;
+                PA_ERROR("Failed to delete loopback stream");
+            }
+        }
+    }
+
+    if (status != Status::SUCCESS)
     {
         return PA_FAULT;
     }
@@ -750,8 +809,15 @@ pa_result_t AudioPAController::startAudio(PaStreamConfig streamconfig, taf_pa_au
     CALLBACK_TO_SET_RESULT;
 
     if(streamconfig.type == PaStreamType::VOICE_CALL) {
-        if(mAudioVoiceStream) {
-            status = mAudioVoiceStream->startAudio(cb);
+        // Snapshot the shared_ptr under the lock so that a concurrent
+        // deleteStream() reset cannot null the pointer between our null-check and use.
+        std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+        {
+            std::lock_guard<std::mutex> lock(streamMutex_);
+            localVoiceStream = mAudioVoiceStream;
+        }
+        if(localVoiceStream) {
+            status = localVoiceStream->startAudio(cb);
             if (status != telux::common::Status::SUCCESS) {
                 PA_ERROR("Request to start voice call audio failed.\n");
                 return PA_FAULT;
@@ -759,10 +825,17 @@ pa_result_t AudioPAController::startAudio(PaStreamConfig streamconfig, taf_pa_au
         }
     }
     else if(streamconfig.type == PaStreamType::LOOPBACK) {
-        status = mAudioLoopbackStream->startLoopback(cb);
-        if (status != telux::common::Status::SUCCESS) {
-            PA_ERROR("Request to start loopback failed.\n");
-            return PA_FAULT;
+        std::shared_ptr<telux::audio::IAudioLoopbackStream> localLoopbackStream;
+        {
+            std::lock_guard<std::mutex> lock(streamMutex_);
+            localLoopbackStream = mAudioLoopbackStream;
+        }
+        if(localLoopbackStream) {
+            status = localLoopbackStream->startLoopback(cb);
+            if (status != telux::common::Status::SUCCESS) {
+                PA_ERROR("Request to start loopback failed.\n");
+                return PA_FAULT;
+            }
         }
     }
     PA_DEBUG("Successfully started audio in PA");
@@ -775,10 +848,16 @@ pa_result_t AudioPAController::stopAudio(PaStreamConfig streamconfig, taf_pa_aud
     auto pACtrl = AudioPAController::getInstance();
     auto status = Status::FAILED;
     CALLBACK_TO_SET_RESULT;
-   PA_DEBUG("stopAudio");
+    PA_DEBUG("stopAudio");
     if(streamconfig.type == PaStreamType::VOICE_CALL) {
-        if(mAudioVoiceStream) {
-            status = mAudioVoiceStream->stopAudio(cb);
+        // Snapshot the shared_ptr under the lock.
+        std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+        {
+            std::lock_guard<std::mutex> lock(streamMutex_);
+            localVoiceStream = mAudioVoiceStream;
+        }
+        if(localVoiceStream) {
+            status = localVoiceStream->stopAudio(cb);
             if (status != telux::common::Status::SUCCESS) {
                 PA_ERROR("Request to stop voice call audio failed.");
                 return PA_FAULT;
@@ -786,10 +865,17 @@ pa_result_t AudioPAController::stopAudio(PaStreamConfig streamconfig, taf_pa_aud
         }
     }
     else if(streamconfig.type == PaStreamType::LOOPBACK) {
-        status = mAudioLoopbackStream->stopLoopback(cb);
-        if (status != telux::common::Status::SUCCESS) {
-            PA_ERROR("Request to stop loopback failed.");
-            return PA_FAULT;
+        std::shared_ptr<telux::audio::IAudioLoopbackStream> localLoopbackStream;
+        {
+            std::lock_guard<std::mutex> lock(streamMutex_);
+            localLoopbackStream = mAudioLoopbackStream;
+        }
+        if(localLoopbackStream) {
+            status = localLoopbackStream->stopLoopback(cb);
+            if (status != telux::common::Status::SUCCESS) {
+                PA_ERROR("Request to stop loopback failed.");
+                return PA_FAULT;
+            }
         }
     }
     PA_DEBUG("Successfully stopped audio in PA");
@@ -815,9 +901,26 @@ pa_result_t AudioPAController::setVolume(
     streamVol.volume.emplace_back(leftChannelVol);
     streamVol.volume.emplace_back(rightChannelVol);
 
+    // Snapshot required pointers under streamMutex_.
+    std::shared_ptr<telux::audio::IAudioPlayer> localPlayer;
+    std::shared_ptr<telux::audio::IAudioCaptureStream> localCaptureStream;
+    std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localPlayer = mAudioPlayer;
+        localCaptureStream = mAudioCaptureStream;
+        localVoiceStream = mAudioVoiceStream;
+    }
+
     if (streamConfig.type == PaStreamType::PLAY)
     {
-         ErrorCode err = mAudioPlayer->setVolume(volLevel);
+        if (!localPlayer)
+        {
+            PA_ERROR("Audio player is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
+        ErrorCode err = localPlayer->setVolume(volLevel);
         if (ErrorCode::SUCCESS != err) {
             PA_ERROR("Request to set volume failed err: %d", int (err));
             callback(PA_FAULT, context);
@@ -828,13 +931,25 @@ pa_result_t AudioPAController::setVolume(
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
+        if (!localCaptureStream)
+        {
+            PA_ERROR("Capture stream is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
         streamVol.dir = StreamDirection::TX;
-        status = mAudioCaptureStream->setVolume(streamVol, cb);
+        status = localCaptureStream->setVolume(streamVol, cb);
     }
     else if (streamConfig.type == PaStreamType::VOICE_CALL)
     {
+        if (!localVoiceStream)
+        {
+            PA_ERROR("Voice stream is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
         streamVol.dir = StreamDirection::RX;
-        status = mAudioVoiceStream->setVolume(streamVol, cb);
+        status = localVoiceStream->setVolume(streamVol, cb);
     }
     else
     {
@@ -872,10 +987,28 @@ pa_result_t AudioPAController::getVolume(
                 callback(PA_FAULT, context);
             }
     };
+    // Snapshot required pointers under streamMutex_.
+    std::shared_ptr<telux::audio::IAudioPlayer> localPlayer;
+    std::shared_ptr<telux::audio::IAudioCaptureStream> localCaptureStream;
+    std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localPlayer = mAudioPlayer;
+        localCaptureStream = mAudioCaptureStream;
+        localVoiceStream = mAudioVoiceStream;
+    }
+
     if (streamConfig.type == PaStreamType::PLAY)
     {
+        if (!localPlayer)
+        {
+            PA_ERROR("Audio player is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
+
         float volume;
-        ErrorCode err = mAudioPlayer->getVolume(volume);
+        ErrorCode err = localPlayer->getVolume(volume);
         if (ErrorCode::SUCCESS != err) {
             PA_ERROR("Request to get volume failed err: %d", int (err));
             callback(PA_FAULT, context);
@@ -889,12 +1022,24 @@ pa_result_t AudioPAController::getVolume(
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
+        if (!localCaptureStream)
+        {
+            PA_ERROR("Capture stream is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
         StreamDirection dir = StreamDirection::TX;;
-        status = mAudioCaptureStream->getVolume(dir, cb);
+        status = localCaptureStream->getVolume(dir, cb);
     }
     else if (streamConfig.type == PaStreamType::VOICE_CALL)
     {
-        status = mAudioVoiceStream->getVolume(StreamDirection::RX, cb);
+        if (!localVoiceStream)
+        {
+            PA_ERROR("Voice stream is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
+        status = localVoiceStream->getVolume(StreamDirection::RX, cb);
     }
     else
     {
@@ -920,9 +1065,26 @@ pa_result_t AudioPAController::setMute(
     StreamMute muteObj = {};
     muteObj.enable = isMute;
     CALLBACK_TO_SET_RESULT;
+
+    // Snapshot required pointers under streamMutex_.
+    std::shared_ptr<telux::audio::IAudioPlayer> localPlayer;
+    std::shared_ptr<telux::audio::IAudioCaptureStream> localCaptureStream;
+    std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localPlayer = mAudioPlayer;
+        localCaptureStream = mAudioCaptureStream;
+        localVoiceStream = mAudioVoiceStream;
+    }
+
     if (streamConfig.type == PaStreamType::PLAY)
     {
-        ErrorCode err = mAudioPlayer->setMute(isMute);
+        if (!localPlayer)
+        {
+            PA_ERROR("Audio player is null");
+            return PA_FAULT;
+        }
+        ErrorCode err = localPlayer->setMute(isMute);
         if (ErrorCode::SUCCESS != err) {
             PA_ERROR("Request to set mute failed err: %d", int (err));
             return PA_FAULT;
@@ -932,21 +1094,31 @@ pa_result_t AudioPAController::setMute(
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
+        if (!localCaptureStream)
+        {
+            PA_ERROR("Capture stream is null");
+            return PA_FAULT;
+        }
         muteObj.dir = StreamDirection::TX;
-        status = mAudioCaptureStream->setMute(muteObj, cb);
+        status = localCaptureStream->setMute(muteObj, cb);
     }
     else if (streamConfig.type == PaStreamType::VOICE_CALL)
     {
+        if (!localVoiceStream)
+        {
+            PA_ERROR("Voice stream is null");
+            return PA_FAULT;
+        }
         for(PaStreamDirection dir : streamConfig.streamDir){
             if (dir == PaStreamDirection::RX)
             {
-        muteObj.dir = StreamDirection::RX;
-        status = mAudioVoiceStream->setMute(muteObj, cb);
+                muteObj.dir = StreamDirection::RX;
+                status = localVoiceStream->setMute(muteObj, cb);
             }
             else if (dir == PaStreamDirection::TX)
             {
-        muteObj.dir = StreamDirection::TX;
-        status = mAudioVoiceStream->setMute(muteObj, cb);
+                muteObj.dir = StreamDirection::TX;
+                status = localVoiceStream->setMute(muteObj, cb);
             }
         }
     }
@@ -986,9 +1158,27 @@ pa_result_t AudioPAController::getMute(
 
     };
 
+    // Snapshot required pointers under streamMutex_.
+    std::shared_ptr<telux::audio::IAudioPlayer> localPlayer;
+    std::shared_ptr<telux::audio::IAudioCaptureStream> localCaptureStream;
+    std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localPlayer = mAudioPlayer;
+        localCaptureStream = mAudioCaptureStream;
+        localVoiceStream = mAudioVoiceStream;
+    }
+
     if (streamConfig.type == PaStreamType::PLAY)
     {
-        ErrorCode err = mAudioPlayer->getMute(*isMute);
+        if (!localPlayer)
+        {
+            PA_ERROR("Audio player is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
+
+        ErrorCode err = localPlayer->getMute(*isMute);
         if (ErrorCode::SUCCESS != err) {
             PA_ERROR("Request to get Mute status failed err: %d", int (err));
             callback(PA_FAULT, context);
@@ -1001,20 +1191,32 @@ pa_result_t AudioPAController::getMute(
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
-        status = mAudioCaptureStream->getMute(StreamDirection::TX, cb);
+        if (!localCaptureStream)
+        {
+            PA_ERROR("Capture stream is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
+        status = localCaptureStream->getMute(StreamDirection::TX, cb);
     }
     else if (streamConfig.type == PaStreamType::VOICE_CALL)
     {
+        if (!localVoiceStream)
+        {
+            PA_ERROR("Voice stream is null");
+            callback(PA_FAULT, context);
+            return PA_FAULT;
+        }
         for(PaStreamDirection dir : streamConfig.streamDir){
             if (dir == PaStreamDirection::RX)
             {
                 muteObj.dir = StreamDirection::RX;
-                status = mAudioVoiceStream->getMute(StreamDirection::RX, cb);
+                status = localVoiceStream->getMute(StreamDirection::RX, cb);
             }
             else if (dir == PaStreamDirection::TX)
             {
                 muteObj.dir = StreamDirection::TX;
-                status = mAudioVoiceStream->getMute(StreamDirection::TX, cb);
+                status = localVoiceStream->getMute(StreamDirection::TX, cb);
             }
         }
     }
@@ -1158,19 +1360,29 @@ std::shared_ptr<PaAudioCaptureStream> AudioPAController::GetCaptureStream(
 )
 {
     PA_DEBUG("GetCaptureStream");
+
+    // Snapshot stream pointers under streamMutex_.
+    std::shared_ptr<telux::audio::IAudioCaptureStream> localTx;
+    std::shared_ptr<telux::audio::IAudioCaptureStream> localRx;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localTx = mAudioCaptureStream;
+        localRx = mAudioRxCaptureStream;
+    }
+
     if (streamDir == PaStreamDirection::TX)
     {
-        if(mAudioCaptureStream)
+        if(localTx)
         {
-            paCaptureStream = std::make_shared<tafPaAudioCaptureStream>(mAudioCaptureStream);
+            paCaptureStream = std::make_shared<tafPaAudioCaptureStream>(localTx);
             return paCaptureStream;
         }
     }
     else if (streamDir == PaStreamDirection::RX)
     {
-       if(mAudioRxCaptureStream)
+       if(localRx)
         {
-            paRxCaptureStream = std::make_shared<tafPaAudioCaptureStream>(mAudioRxCaptureStream);
+            paRxCaptureStream = std::make_shared<tafPaAudioCaptureStream>(localRx);
             return paRxCaptureStream;
         }
     }
@@ -1189,31 +1401,48 @@ pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const ch
     std::shared_ptr<telux::tel::ICall> spCall = nullptr;
     std::vector<std::shared_ptr<telux::tel::ICall>> inProgressCalls;
 
-    if(!callManager) {
-        auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
-
-        //  Get the PhoneFactory and CallManager instances.
-        callManager = phoneFactory.getCallManager([&](ServiceStatus status) {
-            callMgrprom.set_value(status);
-        });
+    {
+        std::lock_guard<std::mutex> lock(callManagerMutex_);
         if(!callManager) {
-            PA_ERROR(" Failed to get CallManager instance");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
-        }
-        PA_DEBUG("CallManager subsystem is not ready, Please wait ");
+            auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
 
-        ServiceStatus callMgrsubSystemStatus = callMgrprom.get_future().get();
-        if(callMgrsubSystemStatus == ServiceStatus::SERVICE_AVAILABLE) {
-            PA_DEBUG("CallManager subsystem is ready ");
-        } else {
-            PA_ERROR("Unable to initialise CallManager subsystem ");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            //  Get the PhoneFactory and CallManager instances.
+            callManager = phoneFactory.getCallManager([&](ServiceStatus status) {
+                callMgrprom.set_value(status);
+            });
+            if(!callManager) {
+                PA_ERROR(" Failed to get CallManager instance");
+                callback(PA_FAULT, context);
+                return PA_FAULT;
+            }
+            PA_DEBUG("CallManager subsystem is not ready, Please wait ");
+
+            ServiceStatus callMgrsubSystemStatus = callMgrprom.get_future().get();
+            if(callMgrsubSystemStatus == ServiceStatus::SERVICE_AVAILABLE) {
+                PA_DEBUG("CallManager subsystem is ready ");
+            } else {
+                PA_ERROR("Unable to initialise CallManager subsystem ");
+                callback(PA_FAULT, context);
+                return PA_FAULT;
+            }
         }
     }
 
-    inProgressCalls = callManager->getInProgressCalls();
+    // Snapshot callManager under callManagerMutex_ in case deinitialize()
+    // resets it concurrently.
+    std::shared_ptr<telux::tel::ICallManager> localCallManager;
+    {
+        std::lock_guard<std::mutex> lock(callManagerMutex_);
+        localCallManager = callManager;
+    }
+    if (!localCallManager)
+    {
+        PA_ERROR("CallManager is null");
+        callback(PA_FAULT, context);
+        return PA_FAULT;
+    }
+
+    inProgressCalls = localCallManager->getInProgressCalls();
 
     // Fetch the list of in progress calls from CallManager and if there is atleast one in
     // progress calls on user provided slot, send DTMF request
@@ -1231,9 +1460,16 @@ pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const ch
         return PA_UNSUPPORTED;
     }
 
-    dtmfCb = std::make_shared<AudioPAController::CommandCallback>(
-            callback, context);
-    auto ret = spCall->startDtmfTone(dtmf, dtmfCb);
+    // Create the callback in a local variable, assign it to dtmfCb under
+    // dtmfCbMutex_, then pass the local variable to the SDK.  This prevents a concurrent
+    // stopSignallingDtmfOnTx() from overwriting dtmfCb between our assignment and the SDK
+    // call, which would cause the SDK to invoke the wrong callback context.
+    auto localDtmfCb = std::make_shared<AudioPAController::CommandCallback>(callback, context);
+    {
+        std::lock_guard<std::mutex> lock(dtmfCbMutex_);
+        dtmfCb = localDtmfCb;
+    }
+    auto ret = spCall->startDtmfTone(dtmf, localDtmfCb);
     if (ret != telux::common::Status::SUCCESS) {
         PA_ERROR("Play tone request failed, err %d", (int)ret);
         return PA_FAULT;
@@ -1250,7 +1486,20 @@ pa_result_t AudioPAController::stopSignallingDtmfOnTx( uint32_t slotId, taf_pa_a
     std::shared_ptr<telux::tel::ICall> spCall = nullptr;
     std::vector<std::shared_ptr<telux::tel::ICall>> inProgressCalls;
 
-    inProgressCalls = callManager->getInProgressCalls();
+    // Snapshot callManager under callManagerMutex_ in case deinitialize()
+    // resets it concurrently.
+    std::shared_ptr<telux::tel::ICallManager> localCallManager;
+    {
+        std::lock_guard<std::mutex> lock(callManagerMutex_);
+        localCallManager = callManager;
+    }
+    if (!localCallManager)
+    {
+        PA_ERROR("CallManager is null");
+        return PA_FAULT;
+    }
+
+    inProgressCalls = localCallManager->getInProgressCalls();
     // Fetch the list of in progress calls from CallManager and if there is atleast one
     // in progress calls on user provided slot, send DTMF request
     for(auto callIterator = std::begin(inProgressCalls);
@@ -1264,9 +1513,16 @@ pa_result_t AudioPAController::stopSignallingDtmfOnTx( uint32_t slotId, taf_pa_a
         PA_ERROR("No call found on slot Id %d", slotId);
         return PA_UNSUPPORTED;
     }
-    dtmfCb = std::make_shared<AudioPAController::CommandCallback>(
-            callback, context);
-    status = spCall->stopDtmfTone(dtmfCb);
+    // Same local-variable pattern as playSignallingDtmfOnTx() — create
+    // the callback locally, assign to dtmfCb under dtmfCbMutex_, then pass the local
+    // variable to the SDK so a concurrent playSignallingDtmfOnTx() cannot overwrite
+    // dtmfCb between our assignment and the SDK call.
+    auto localDtmfCb = std::make_shared<AudioPAController::CommandCallback>(callback, context);
+    {
+        std::lock_guard<std::mutex> lock(dtmfCbMutex_);
+        dtmfCb = localDtmfCb;
+    }
+    status = spCall->stopDtmfTone(localDtmfCb);
     if(status != Status::SUCCESS) {
         PA_ERROR("Request to stop Dtmf Tone failed");
         return PA_FAULT;
@@ -1289,7 +1545,18 @@ pa_result_t AudioPAController::playDtmf( PaDtmfTone paDtmfTone, uint16_t duratio
     PA_DEBUG("Playing frequencies low: %d, high: %d\n", dtmfTone.lowFreq,
     dtmfTone.highFreq);
     CALLBACK_TO_SET_RESULT;
-    status = mAudioVoiceStream->playDtmfTone( dtmfTone, duration, gain, cb);
+    // Snapshot the shared_ptr under the lock.
+    std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localVoiceStream = mAudioVoiceStream;
+    }
+    if (!localVoiceStream)
+    {
+        PA_ERROR("Voice stream is not active!");
+        return PA_FAULT;
+    }
+    status = localVoiceStream->playDtmfTone( dtmfTone, duration, gain, cb);
     if (status != Status::SUCCESS)
     {
         PA_ERROR("Failed to send request to start dtmf tone, err : %d", (int)status);
@@ -1303,9 +1570,20 @@ pa_result_t AudioPAController::stopDtmf(PaStreamDirection direction, taf_pa_audi
 {
     CALLBACK_TO_SET_RESULT;
     auto status = Status::FAILED;
-    status = mAudioVoiceStream->stopDtmfTone(static_cast<StreamDirection>(direction), cb);
+    // Snapshot the shared_ptr under the lock.
+    std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localVoiceStream = mAudioVoiceStream;
+    }
+    if (!localVoiceStream)
+    {
+        PA_ERROR("Voice stream is not active!");
+        return PA_FAULT;
+    }
+    status = localVoiceStream->stopDtmfTone(static_cast<StreamDirection>(direction), cb);
     if(status == Status::SUCCESS) {
-        PA_DEBUG("Stop Dtmf Tone requedt sent successfully");
+        PA_DEBUG("Stop Dtmf Tone request sent successfully");
     }else {
         PA_ERROR("Request to stop Dtmf Tone failed");
         return PA_FAULT;
@@ -1317,10 +1595,18 @@ pa_result_t AudioPAController::registerDtmfListener(
     std::weak_ptr<IPaDtmfListener> listener
 )
 {
-    if(mAudioVoiceStream) {
+    // Snapshot the voice stream pointer under streamMutex_ so deinitialize()
+    // or deleteStream() cannot reset it between the null-check and use.
+    std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localVoiceStream = mAudioVoiceStream;
+    }
+
+    if(localVoiceStream) {
         dtmfListener = std::make_shared<tafPaDtmfListener>();
         dtmfListener->paDtmfListener = listener;
-        telux::common::Status st = mAudioVoiceStream->registerListener(dtmfListener);
+        telux::common::Status st = localVoiceStream->registerListener(dtmfListener);
         if(st!=telux::common::Status::SUCCESS) {
             PA_ERROR("Request to register for DTMF detection failed error : %d", (int)st);
             return PA_FAULT;
@@ -1338,8 +1624,16 @@ pa_result_t AudioPAController::deregisterDtmfListener(
     std::weak_ptr<IPaDtmfListener> listener
 )
 {
-    if(mAudioVoiceStream) {
-        telux::common::Status st = mAudioVoiceStream->deRegisterListener(dtmfListener);
+    // Snapshot the voice stream pointer under streamMutex_ so deinitialize()
+    // or deleteStream() cannot reset it between the null-check and use.
+    std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
+    {
+        std::lock_guard<std::mutex> lock(streamMutex_);
+        localVoiceStream = mAudioVoiceStream;
+    }
+
+    if(localVoiceStream) {
+        telux::common::Status st = localVoiceStream->deRegisterListener(dtmfListener);
         if(st!=telux::common::Status::SUCCESS) {
             PA_ERROR("Request to register for DTMF detection failed error : %d", (int)st);
             return PA_FAULT;
@@ -1364,10 +1658,10 @@ pa_result_t AudioPAController::registerAudioSubsystemChangeListener
 {
     TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
 
+    // Lock before checking audioMngrInitState_ to avoid TOCTOU race
+    std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != audioMngrInitState_, PA_FAULT,
                                                               "PA audio manager not initialized.");
-    // Lock
-    std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
     // Add the callback
     SubsystemEventsCallbackEntry_t entry = {
         subsystemEventsCallbackId_,
@@ -1391,10 +1685,10 @@ pa_result_t AudioPAController::deregisterAudioSubsystemChangeListener
     uint16_t id
 )
 {
+    // Lock before checking audioMngrInitState_ to avoid TOCTOU race
+    std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != audioMngrInitState_, PA_FAULT,
                                                               "PA audio manager not initialized.");
-    // Lock
-    std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
     // Iterate over the vector and remove the one with the provided id.
     for (auto cbk = subsystemEventsCallbacks_.begin();cbk != subsystemEventsCallbacks_.end(); ++cbk)
     {
