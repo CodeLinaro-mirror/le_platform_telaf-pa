@@ -11,6 +11,7 @@
 #include <sstream>
 #include <algorithm>
 #include <memory>
+#include <atomic>
 
 #include <telux/platform/PlatformFactory.hpp>
 #include <condition_variable>
@@ -33,6 +34,7 @@ using namespace std;
 static taf_pa_health_ModemStatusUpdateHandler_t ModemStatusUpdateHandlerPtr = nullptr;
 static taf_pa_health_ModemOperatingModeUpdateHandler_t ModemOperationModeUpdateHandlerPtr = nullptr;
 std::shared_ptr<telux::platform::ISubsystemManager> subsystemMgr;
+static std::atomic<bool> g_health_initialized{false};
 
 class tafHmsListenerPA : public telux::platform::ISubsystemListener {
         public:
@@ -111,6 +113,7 @@ pa_result_t taf_pa_health_PhoneInit(void)
             }
             PA_INFO("Phone Manager subsystem is ready.");
             modemStatus->phoneManager_ = tempManager;
+            g_health_initialized.store(true, std::memory_order_release);
         }
         else
         {
@@ -348,6 +351,13 @@ pa_result_t taf_pa_health_Deinit(void)
 {
     PA_INFO("Starting health PA deinitialization...");
 
+    // Check if initialization was successful before proceeding with deinitialization
+    if (!g_health_initialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     // Step 1: Deregister modem listener from subsystem manager
     pa_result_t result = taf_pa_health_DeregModemListener();
     if (result != PA_OK)
@@ -377,5 +387,6 @@ pa_result_t taf_pa_health_Deinit(void)
     ModemOperationModeUpdateHandlerPtr = nullptr;
 
     PA_INFO("Health PA deinitialization complete.");
+    g_health_initialized.store(false, std::memory_order_release);
     return PA_OK;
 }

@@ -6,6 +6,7 @@
 #include "tafPmsPa.hpp"
 
 #include <assert.h>
+#include <atomic>
 #include <telux/power/PowerFactory.hpp>
 #include <telux/power/TcuActivityDefines.hpp>
 #include <telux/power/TcuActivityListener.hpp>
@@ -29,6 +30,9 @@ static inline void RaiseEvent
 using namespace telux::power;
 using namespace telux::common;
 using namespace std;
+
+// Thread-safe initialization flag
+static std::atomic<bool> gPmsPaInitialized(false);
 
 #define TAF_MODEM_WMS_SVC_ID                          (0x05)
 #define TAF_MODEM_VOICE_CALL_SVC_ID                   (0x09)
@@ -572,6 +576,15 @@ pa_result_t taf_pa_pms_Init
     uint32_t                 timeoutMs
 )
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if already initialized (idempotent pattern)
+    if (gPmsPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("PMS platform adaptor already initialized");
+        return PA_OK;  // Idempotent - safe to call multiple times
+    }
+
     // Loaded the Event-Reporter for the PA layer
     SendEvent = fnSendEvent;
 
@@ -726,6 +739,8 @@ pa_result_t taf_pa_pms_Init
 
     *paRefPtr = &pa;
 
+    gPmsPaInitialized.store(true, std::memory_order_release);
+    PA_INFO("PMS platform adaptor initialization flag set to true.");
     PA_INFO("PMS [ACTUAL] PA loaded");
     return PA_OK;
 }
@@ -735,6 +750,15 @@ void taf_pa_pms_Deinit
     taf_pa_pms_Reference_t *paRefPtr
 )
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if initialized before attempting deinit
+    if (!gPmsPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return;
+    }
+
     if (paRefPtr == NULL || *paRefPtr != &pa)
     {
         PA_ERROR("Bad paRefPtr");
@@ -807,6 +831,8 @@ void taf_pa_pms_Deinit
 
     *paRefPtr = NULL; // Reset caller reference pointer
 
+    gPmsPaInitialized.store(false, std::memory_order_release);
+    PA_INFO("PMS platform adaptor initialization flag reset to false.");
     PA_INFO("PMS PA deinitialization complete.");
 }
 

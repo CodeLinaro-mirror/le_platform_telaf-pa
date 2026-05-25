@@ -7,7 +7,7 @@
 #include <errno.h>
 #include <semaphore.h>
 #include <shared_mutex>
-
+#include <atomic>
 #include <telux/common/DeviceConfig.hpp>
 #include <telux/common/Utils.hpp>
 #include <telux/tel/PhoneDefines.hpp>
@@ -29,6 +29,7 @@ using namespace telux;
 static bool subListenerRegistered = {false};
 static bool cardListenerRegistered = {false};
 static bool multiSimListenerRegistered = {false};
+static std::atomic<bool> g_simPaInitialized(false);
 
 #define SERVICE_PROMISE_AND_CALLBACK(name)                                \
     auto name##Promise = make_shared<promise<common::ServiceStatus>>();   \
@@ -182,6 +183,7 @@ class PlatformAdaptor
         std::shared_mutex regListenerMutex_;
         std::shared_mutex deRegListenerMutex_;
         std::shared_mutex powerMutex_;
+        std::shared_mutex cardsMutex_;
         std::shared_mutex simSlotMutex_;
         std::mutex eventMutex;
         std::mutex subscriptionMutex;
@@ -411,12 +413,18 @@ void tafPaSubscriptionListener::onSubscriptionInfoChanged
         PA_INFO("ICCID: %s", subscription->getIccId().c_str());
         PA_INFO("IMSI: %s", subscription->getImsi().c_str());
         PA_INFO("Phone Number: %s", subscription->getPhoneNumber().c_str());
-        if(pa.managers.cards[slotId] == nullptr && slotId == TAF_PA_DEFAULT_SLOT_ID)
         {
-            slotId = TAF_PA_SIM_SLOT_ID_2;
-            auto card = pa.cardManager->getCard(TAF_PA_DEFAULT_SLOT_ID, &status);
-            PA_INFO("Update cards[%d] as %s", slotId, card == nullptr ? "null" : "non-null");
-            pa.managers.cards[slotId] = card;
+            // Acquire write lock on cardsMutex_ before modifying managers.cards
+            std::unique_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+            auto it = pa.managers.cards.find(slotId);
+            if((it == pa.managers.cards.end() || it->second == nullptr)
+               && slotId == TAF_PA_DEFAULT_SLOT_ID)
+            {
+                slotId = TAF_PA_SIM_SLOT_ID_2;
+                auto card = pa.cardManager->getCard(TAF_PA_DEFAULT_SLOT_ID, &status);
+                PA_INFO("Update cards[%d] as %s", slotId, card == nullptr ? "null" : "non-null");
+                pa.managers.cards[slotId] = card;
+            }
         }
         pa.InitializeSimInfo(subscription,(taf_pa_sim_Id_t)slotId);
         simPtr = pa.GetSimContext((taf_pa_sim_Id_t)slotId);
@@ -451,10 +459,16 @@ void tafPaCardListener::onCardInfoChanged(int slotId)
     taf_pa_sim_pa_event_t simEvent;
     auto slotWithCard = slotId;
     PA_INFO("Input sim Id: %d, cards size: %zu", (int)slotId, pa.managers.cards.size());
-    if(pa.managers.cards[slotWithCard] == nullptr && slotWithCard == TAF_PA_DEFAULT_SLOT_ID)
     {
-        // Map sdk logical slot to physical slot.
-        slotWithCard = TAF_PA_SIM_SLOT_ID_2;
+        // Acquire read lock to safely read managers.cards
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(slotWithCard);
+        if(it != pa.managers.cards.end() && it->second == nullptr
+           && slotWithCard == TAF_PA_DEFAULT_SLOT_ID)
+        {
+            // Map sdk logical slot to physical slot.
+            slotWithCard = TAF_PA_SIM_SLOT_ID_2;
+        }
     }
     simEvent.simId = (taf_pa_sim_Id_t)slotWithCard;
     taf_pa_sim_States_t state;
@@ -521,6 +535,10 @@ void tafPaMultiSimListener::onSlotStatusChanged
         pa.isSingleActive = true;
     }
     PA_INFO("activeSlotCount: %d, isSingleActive: %d", activeSlots, (int) pa.isSingleActive);
+
+    // Acquire write lock before modifying managers.cards
+    std::unique_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+
     for(auto it = slotStatus.begin(); it != slotStatus.end(); ++it)
     {
         auto slotId = it->first;
@@ -1203,14 +1221,22 @@ pa_result_t taf_pa_sim_Init()
         PA_INFO("Sim proprietary platform adaptor is not Initialized.");
         return paResult;
     }
-        taf_prop_sim_AddRefreshChangeHandler(RefreshSvcStatusHandler,nullptr);
-        PA_INFO("Sim proprietary platform adaptor initialization is done.");
+            taf_prop_sim_AddRefreshChangeHandler(RefreshSvcStatusHandler,nullptr);
+    PA_INFO("Sim proprietary platform adaptor initialization is done.");
+    g_simPaInitialized.store(true, std::memory_order_release);
     return TAF_PA_SIM_RESULT_OK;
 }
 
 pa_result_t taf_pa_sim_Deinit()
 {
     PA_INFO("Starting SIM platform adaptor deinitialization...");
+
+    // Step 0: Check if Init() was called successfully
+    if (!g_simPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
 
     auto& pa = PlatformAdaptor::GetInstance();
     pa_result_t overallResult = TAF_PA_SIM_RESULT_OK;
@@ -1258,6 +1284,10 @@ pa_result_t taf_pa_sim_Deinit()
     pa.cardManager.reset();
     pa.multiSimMgr.reset();
     pa.managers.phone.reset();
+
+    // Step 7: Reset the initialization flag
+    PA_INFO("Resetting initialization flag");
+    g_simPaInitialized.store(false, std::memory_order_release);
 
     PA_INFO("SIM platform adaptor deinitialization complete.");
     return overallResult;  // Return aggregated status;
@@ -2057,6 +2087,10 @@ void PlatformAdaptor::requestsSlotsStatusResponse(
         pa.isSingleActive = true;
     }
     PA_INFO("activeSlotCount: %d, isSingleActive: %d", activeSlots, (int)pa.isSingleActive);
+
+    // Acquire write lock before modifying managers.cards
+    std::unique_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+
     for(auto it = slotStatus.begin(); it != slotStatus.end(); ++it)
     {
         auto slotId = it->first;
@@ -2265,6 +2299,8 @@ std::shared_ptr<telux::tel::ICard> PlatformAdaptor::GetCard
     int slotId
 )
 {
+    // Acquire read lock to safely read managers.cards
+    std::shared_lock<std::shared_mutex> cardsLock(cardsMutex_);
     auto it = managers.cards.find(slotId);
     PA_INFO("GetCard");
     if (it != managers.cards.end())
@@ -2309,7 +2345,13 @@ pa_result_t taf_pa_sim_GetState
         PA_INFO("Sim Id as Unknown");
         simId = pa.GetSelectedCard();
     }
-    auto card = pa.managers.cards[simId];
+
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(simId);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     telux::tel::CardState cardState = telux::tel::CardState::CARDSTATE_UNKNOWN;
     if(card != nullptr)
     {
@@ -2363,14 +2405,19 @@ pa_result_t taf_pa_sim_SetPower
     auto& pa = PlatformAdaptor::GetInstance();
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
     std::shared_lock<std::shared_mutex> lock(pa.powerMutex_);
-    auto ICard = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     PA_UNUSED(simId);
-    if (ICard == nullptr) {
+    if (card == nullptr) {
         PA_ERROR("Card not found so set power failed!");
         return TAF_PA_SIM_RESULT_FAULT;
     }
 
-    SlotId slotId_for_card = SlotId(ICard->getSlotId());
+    SlotId slotId_for_card = SlotId(card->getSlotId());
 
     //Sdk Callback
     auto setPowerResponseCb = [promisePtr,&pa](telux::common::ErrorCode error)
@@ -2540,7 +2587,12 @@ pa_result_t taf_pa_sim_ChangeCardPin
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     telux::tel::CardLockType cardLockType;
     PA_INFO("taf_pa_sim_ChangeCardPin");
     PA_UNUSED(callback);
@@ -2602,7 +2654,12 @@ pa_result_t taf_pa_sim_UnlockCardByPin
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     string newPin = (string) pinPtr;
     telux::tel::CardLockType cardLockType;
     PA_INFO("taf_pa_sim_UnlockCardByPin");
@@ -2665,7 +2722,12 @@ pa_result_t taf_pa_sim_UnlockCardByPuk
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     telux::tel::CardLockType cardLockType;
     PA_INFO("taf_pa_sim_UnlockCardByPuk");
     PA_UNUSED(callback);
@@ -2733,7 +2795,12 @@ pa_result_t taf_pa_sim_SetCardLock
 {
     auto& pa = PlatformAdaptor::GetInstance();
     bool lockEnable = true; //for locking sim card
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     telux::tel::CardLockType cardLockType;
     PA_UNUSED(callback);
     PA_UNUSED(context);
@@ -2792,7 +2859,12 @@ pa_result_t taf_pa_sim_SetCardUnLock
 {
     auto& pa = PlatformAdaptor::GetInstance();
     bool lockEnable = false; //for unlocking sim card
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     telux::tel::CardLockType cardLockType;
     PA_INFO("taf_pa_sim_SetCardUnLock");
     PA_UNUSED(callback);
@@ -2847,7 +2919,12 @@ pa_result_t taf_pa_sim_GetAppTypes
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     PA_INFO("taf_pa_sim_GetAppTypes");
 
     if(card)
@@ -2884,7 +2961,12 @@ pa_result_t taf_pa_sim_OpenLogicalChannel
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     std::vector<std::shared_ptr<telux::tel::ICardApp>> applications;
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
     auto futResult  = promisePtr->get_future();
@@ -2948,7 +3030,12 @@ pa_result_t taf_pa_sim_OpenLogicalChannelByAid
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
     auto futResult  = promisePtr->get_future();
     auto openLogicalCb = std::make_shared<tafPaOpenLogicalChannelCallback>(promisePtr);
@@ -2998,7 +3085,12 @@ pa_result_t taf_pa_sim_CloseLogicalChannel
     auto futResult  = promisePtr->get_future();
     auto closeLogicalChannelCb = std::make_shared<tafPaCloseLogicalChannelCallback>(promisePtr);
 
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     PA_INFO("taf_pa_sim_CloseLogicalChannel");
     if(card)
     {
@@ -3053,7 +3145,12 @@ pa_result_t taf_pa_sim_SendApduOnLogicalChannel
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
     auto futResult  = promisePtr->get_future();
     auto tafTransmitApduCb = std::make_shared<tafPaTransmitApduResponseCallback>(promisePtr);
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     PA_INFO("taf_pa_sim_SendApduOnLogicalChannel");
     if (card == nullptr)
     {
@@ -3125,7 +3222,12 @@ pa_result_t taf_pa_sim_SendApdu
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
     auto futResult  = promisePtr->get_future();
     auto tafTransmitApduCb = std::make_shared<tafPaTransmitApduResponseCallback>(promisePtr);
@@ -3202,7 +3304,12 @@ pa_result_t taf_pa_sim_ExchangeSimIO
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    auto card = pa.managers.cards[pa.slot];
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
+        auto it = pa.managers.cards.find(pa.slot);
+        card = (it != pa.managers.cards.end()) ? it->second : nullptr;
+    }
     std::string aid;
     auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
     auto futResult  = promisePtr->get_future();
@@ -3353,4 +3460,103 @@ pa_result_t taf_pa_sim_GetRemainingPukTries
     *remainingPukTries = simPtr->pukTryCount;
     PA_INFO("taf_pa_sim_GetRemainingPukTries *remainingPukTries : %d",*remainingPukTries);
     return TAF_PA_SIM_RESULT_OK;
+}
+pa_result_t taf_pa_sim_GetEID
+(
+    taf_pa_sim_Id_t simId,
+    std::string&  eidStr
+)
+{
+    if (simId != TAF_PA_SIM_UNSPECIFIED &&
+       (simId <= 0 || simId >= TAF_PA_SIM_ID_MAX))
+    {
+        PA_ERROR("Invalid simId: %d", (int)simId);
+        return TAF_PA_SIM_RESULT_BAD_PARAMETER;
+    }
+    auto& pa = PlatformAdaptor::GetInstance();
+    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto eidResultPtr = std::make_shared<std::string>();
+
+    std::shared_ptr<telux::tel::ICard> card;
+    {
+        // Use cardsMutex_ (shared read lock) - same mutex used by all writers
+        std::shared_lock<std::shared_mutex> lock(pa.cardsMutex_);
+        int effectiveSlot = (simId == TAF_PA_SIM_UNSPECIFIED) ? pa.slot : (int)simId;
+        auto it = pa.managers.cards.find(effectiveSlot);
+        if (it == pa.managers.cards.end() || !it->second)
+        {
+            PA_ERROR("ERROR: card is not found");
+            return TAF_PA_SIM_RESULT_UNSUPPORTED;
+        }
+        PA_INFO("effectiveSlot  :%d",effectiveSlot );
+        card = it->second;
+    }
+
+    // SDK Callback
+    auto callback = [promisePtr, eidResultPtr](const std::string& eid,
+                     telux::common::ErrorCode errorCode) {
+        try {
+            if (errorCode == telux::common::ErrorCode::SUCCESS) {
+                *eidResultPtr = eid;
+                promisePtr->set_value(PA_OK);
+            } else {
+                PA_ERROR("requestEid failed with errorCode: %d", static_cast<int>(errorCode));
+
+                // Map specific error codes
+                pa_result_t result = PA_FAULT;
+                switch(errorCode) {
+                    case telux::common::ErrorCode::INFO_UNAVAILABLE:
+                        PA_ERROR("EID information is not available");
+                        result = TAF_PA_SIM_RESULT_UNSUPPORTED;
+                        break;
+                    case telux::common::ErrorCode::INVALID_ARGUMENTS:
+                        PA_ERROR("EID information->invalid arguments");
+                        result = TAF_PA_SIM_RESULT_BAD_PARAMETER;
+                        break;
+                    case telux::common::ErrorCode::TIMEOUT_ERROR:
+                        PA_ERROR("EID information->time out error");
+                        result = TAF_PA_SIM_RESULT_TIMEOUT;
+                        break;
+                    case telux::common::ErrorCode::REQUEST_NOT_SUPPORTED:
+                        PA_ERROR("EID information->request not supported");
+                        result = TAF_PA_SIM_RESULT_UNSUPPORTED;
+                        break;
+                    default:
+                        PA_ERROR("EID information->Fault");
+                        result = TAF_PA_SIM_RESULT_FAULT;
+                        break;
+                }
+                 promisePtr->set_value(result);
+            }
+        }
+        catch (const std::future_error& e) {
+            PA_ERROR("Future error in callback: %s", e.what());
+        }
+        catch (const std::exception& e) {
+            PA_ERROR("Exception in callback: %s", e.what());
+        }
+        catch (...) {
+            PA_ERROR("Unknown error in callback");
+        }
+    };
+
+    telux::common::Status status = card->requestEid(callback);
+    if (status != telux::common::Status::SUCCESS) {
+        PA_ERROR("requestEid API call failed with status: %d", static_cast<int>(status));
+        return TAF_PA_SIM_RESULT_FAULT;
+    }
+
+    // Wait for the callback result
+    auto futResult = promisePtr->get_future();
+    if (futResult.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::ready) {
+        pa_result_t result = futResult.get();
+        if (result == PA_OK) {
+            eidStr = *eidResultPtr;
+            PA_INFO("EID retrieved successfully: %s", eidStr.c_str());
+        }
+        return result;
+    } else {
+        PA_ERROR("Timeout waiting for EID response");
+        return TAF_PA_SIM_RESULT_TIMEOUT;
+    }
 }

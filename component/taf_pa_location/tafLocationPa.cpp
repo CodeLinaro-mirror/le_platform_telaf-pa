@@ -11,6 +11,7 @@
 #include <thread>
 #include <bitset>
 #include <unistd.h>
+#include <atomic>
 
 #include <telux/loc/LocationConfigurator.hpp>
 #include <telux/loc/LocationDefines.hpp>
@@ -30,6 +31,9 @@
 using namespace telux::loc;
 using namespace telux::common;
 using namespace tafpa::location;
+
+// Thread-safe initialization flag
+static std::atomic<bool> gLocationPaInitialized(false);
 
 class ReusableIdGenerator {
 public:
@@ -841,9 +845,20 @@ telux::common::Status LocationPAController::RegisterDgnssManager()
 }
 
 pa_result_t tafpa::location::taf_pa_location_Init() {
+    PA_DEBUG("PA implementation.");
+
+    // Check if already initialized (idempotent pattern)
+    if (gLocationPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Location platform adaptor already initialized");
+        return PA_OK;  // Idempotent - safe to call multiple times
+    }
+
     auto paCtrl = LocationPAController::getInstance();
     pa_result_t res = paCtrl->initialize();
     if (res == PA_OK) {
+        gLocationPaInitialized.store(true, std::memory_order_release);
+        PA_INFO("Location platform adaptor initialization flag set to true.");
         PA_INFO("Location Platform adapter initialization done.");
     } else {
         PA_CRIT("Location Platform adapter initialization failed.");
@@ -2939,10 +2954,21 @@ pa_result_t LocationPAController::deinitialize()
 
 pa_result_t tafpa::location::taf_pa_location_Deinit()
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if initialized before attempting deinit
+    if (!gLocationPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     auto paCtrl = LocationPAController::getInstance();
     pa_result_t res = paCtrl->deinitialize();
     if (res == PA_OK)
     {
+        gLocationPaInitialized.store(false, std::memory_order_release);
+        PA_INFO("Location platform adaptor initialization flag reset to false.");
         PA_INFO("Location Platform adapter deinitialization done.");
     }
     else

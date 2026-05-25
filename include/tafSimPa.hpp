@@ -818,6 +818,21 @@ PA_SHARED pa_result_t taf_pa_sim_GetRemainingPukTries
     taf_pa_sim_Id_t simId,
     uint32_t*  remainingPukTries
 );
+
+//----------------------------------------------------------------------------------------------
+/**
+ * Get EID string.
+ * @return
+ *  - PA_OK on success
+ *  - PA_FAULT on failure
+ *
+ */
+//----------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetEID
+(
+    taf_pa_sim_Id_t simId,
+    std::string&  eidStr
+);
 #ifdef __cplusplus
 }
 #endif

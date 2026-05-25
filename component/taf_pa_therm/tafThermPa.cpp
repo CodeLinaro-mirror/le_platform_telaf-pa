@@ -17,6 +17,7 @@
 #include <future>
 #include <chrono>
 #include <map>
+#include <atomic>
 
 #define TAF_PA_THERM_MANAGER_TIMEOUT 30
 
@@ -26,6 +27,7 @@ static taf_pa_therm_TripEventHandler_t g_tripEventHandler = nullptr;
 static taf_pa_therm_CoolingLevelChangeHandler_t g_coolingLevelChangeHandler = nullptr;
 static std::map<std::string, uint32_t> g_zoneNameToIdMap;
 static std::map<std::string, uint32_t> g_deviceNameToIdMap;
+static std::atomic<bool> g_thermPaInitialized(false);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -207,6 +209,7 @@ pa_result_t taf_pa_therm_Init(void)
         BuildDeviceNameToIdMap();
 
         PA_INFO("Thermal PA layer initialized successfully");
+        g_thermPaInitialized.store(true, std::memory_order_release);
         return PA_OK;
     }
     catch (const std::exception& e)
@@ -619,6 +622,13 @@ pa_result_t taf_pa_therm_Deinit(void)
 {
     PA_INFO("Starting Thermal PA layer deinitialization...");
 
+    // Step 0: Check if Init() was called successfully
+    if (!g_thermPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     // Step 1: Clear the trip event and cooling level change handler function pointers
     // so no further thermal event callbacks are dispatched after this point.
     PA_INFO("Clearing g_tripEventHandler and g_coolingLevelChangeHandler");
@@ -653,6 +663,10 @@ pa_result_t taf_pa_therm_Deinit(void)
     PA_INFO("Clearing g_zoneNameToIdMap and g_deviceNameToIdMap");
     g_zoneNameToIdMap.clear();
     g_deviceNameToIdMap.clear();
+
+    // Step 6: Reset the initialization flag
+    PA_INFO("Resetting initialization flag");
+    g_thermPaInitialized.store(false, std::memory_order_release);
 
     PA_INFO("Thermal PA layer deinitialization complete.");
     return PA_OK;

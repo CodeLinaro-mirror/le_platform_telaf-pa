@@ -5,6 +5,11 @@
 
 #include "tafFscryptPa.h"
 #include "taf_prop_fscrypt.h"
+#include <stdatomic.h>
+#include <stdbool.h>
+
+// Thread-safe initialization flag
+static _Atomic(bool) g_fscrypt_initialized = false;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -18,6 +23,7 @@ void taf_pa_fsc_Init
 {
     taf_prop_fsc_Component_Init();
     taf_prop_fsc_Init(cryptoFunc);
+    atomic_store(&g_fscrypt_initialized, true);
     PA_INFO("Telaf fscrypt PA initialized.");
 }
 
@@ -31,10 +37,18 @@ void taf_pa_fsc_Deinit
     void
 )
 {
+    // Check if initialization was successful before proceeding with deinitialization
+    if (!atomic_load(&g_fscrypt_initialized))
+    {
+        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return;
+    }
+
     // The fscrypt PA is a stateless pass-through wrapper: it holds no shared pointers,
     // maps, or open handles of its own. The underlying taf_prop_fscrypt layer does not
     // expose a Deinit API. This function provides the symmetric counterpart to
     // taf_pa_fsc_Init() so callers can follow a consistent Init/Deinit lifecycle.
+    atomic_store(&g_fscrypt_initialized, false);
     PA_INFO("Telaf fscrypt PA deinitialized.");
 }
 

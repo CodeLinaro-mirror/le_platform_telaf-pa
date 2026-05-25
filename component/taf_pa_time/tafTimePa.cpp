@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <atomic>
 
 #include "tafTimePa.hpp"
 
@@ -41,6 +42,8 @@ std::shared_ptr<ITimeManager> timeManager = nullptr;
 
 //For c++ standard
 using namespace std;
+
+static std::atomic<bool> g_timePaInitialized(false);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -165,6 +168,7 @@ pa_result_t taf_pa_gnss_Init(void)
     }
 
     SupportTimeMask.set(SupportedTimeType::GNSS_UTC_TIME);
+    g_timePaInitialized.store(true, std::memory_order_release);
     return PA_OK;
 }
 
@@ -651,6 +655,13 @@ pa_result_t taf_pa_time_Deinit(void)
 {
     PA_INFO("Starting time PA layer deinitialization...");
 
+    // Step 0: Check if Init() was called successfully
+    if (!g_timePaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     // Step 1: Clear all handler function pointers so no further time-related
     // callbacks are dispatched after this point.
     PA_INFO("Clearing GnssUtcTimeUpdateHandlerPtr, NetworkChangeHandlerPtr and "
@@ -693,6 +704,10 @@ pa_result_t taf_pa_time_Deinit(void)
     // Step 6: Reset the phone manager shared pointer.
     PA_INFO("Resetting phoneManager");
     phoneManager.reset();
+
+    // Step 7: Reset the initialization flag
+    PA_INFO("Resetting initialization flag");
+    g_timePaInitialized.store(false, std::memory_order_release);
 
     PA_INFO("Time PA layer deinitialization complete.");
     return PA_OK;

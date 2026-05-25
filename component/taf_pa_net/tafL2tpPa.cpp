@@ -11,6 +11,7 @@
 
 #include <arpa/inet.h> // Required for inet_pton
 #include <string.h> // Required for memset
+#include <atomic>
 
 #define L2TP_TIMEOUT 30
 
@@ -28,6 +29,8 @@ class taf_L2tpAdaptor
 
         pa_result_t ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTunnel_t& paL2tpTunnelConfig,
                                          telux::data::net::L2tpTunnelConfig& teluxL2tpTunnelConfig);
+
+        std::atomic<bool> isInitialized{false};
 
 
         // Distinct callbacks and contexts per async operation
@@ -79,10 +82,12 @@ bool taf_pa_l2tp_Init()
     if (result)
     {
         PA_INFO("L2tp platform adapter initialization is done");
+        pL2tpAdaptor.isInitialized = true;
     }
     else
     {
         PA_CRIT("Failed to initialize L2tp platform adapter, ret: %d", result);
+        pL2tpAdaptor.isInitialized = false;
     }
 
     return result;
@@ -824,8 +829,17 @@ bool taf_pa_l2tp_Deinit()
 {
     PA_DEBUG("Starting L2TP platform adaptor deinitialization...");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
+
+    // Check if Init() was successfully called
+    if (!pL2tpAdaptor.isInitialized)
+    {
+        PA_WARN("L2TP Deinit() called before Init() was successfully called");
+        return false;
+    }
+
     PA_DEBUG("Resetting l2tpManager");
     pL2tpAdaptor.l2tpManager.reset();
+    pL2tpAdaptor.isInitialized = false;
     PA_DEBUG("L2TP platform adaptor deinitialization complete.");
     return true;
 }

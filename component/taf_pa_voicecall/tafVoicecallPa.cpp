@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <any>
 #include <glib.h>
+#include <atomic>
 
 #include "telux/tel/PhoneFactory.hpp"
 #include "telux/tel/PhoneManager.hpp"
@@ -22,6 +23,8 @@
 #define VoiceCallInfoConfFile "/tmp/.VoiceCallInfo"
 
 using namespace tafpa::voicecall;
+
+static std::atomic<bool> g_voicecallPaInitialized(false);
 
 std::map<telux::common::ErrorCode, std::string> paErrorCodeToStringMap =
 {
@@ -1368,6 +1371,7 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Init()
     if (result == PA_OK)
     {
         PA_INFO("Voice call platform adapter initialization is done");
+        g_voicecallPaInitialized.store(true, std::memory_order_release);
     }
     else
     {
@@ -1421,12 +1425,20 @@ pa_result_t VoiceCallPAController::deinitialize()
 
 pa_result_t tafpa::voicecall::taf_pa_voicecall_Deinit()
 {
+    // Step 0: Check if Init() was called successfully
+    if (!g_voicecallPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     auto pACtrl = VoiceCallPAController::getInstance();
 
     pa_result_t result = pACtrl->deinitialize();
     if (result == PA_OK)
     {
         PA_INFO("Voice call platform adapter deinitialization done.");
+        g_voicecallPaInitialized.store(false, std::memory_order_release);
     }
     else
     {
