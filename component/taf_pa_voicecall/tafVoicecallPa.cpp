@@ -501,6 +501,7 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
     taf_pa_voicecall_termination_t termination = TAF_PA_VOICECALL_TERM_UNDEFINED;
 
     switch(endCause) {
+        // UNOBTAINABLE_NUMBER: Invalid/unreachable numbers
         case telux::tel::CallEndCause::UNOBTAINABLE_NUMBER:
         case telux::tel::CallEndCause::NUMBER_CHANGED:
         case telux::tel::CallEndCause::DESTINATION_OUT_OF_ORDER:
@@ -508,9 +509,13 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::INCOMPATIBLE_DESTINATION:
         case telux::tel::CallEndCause::SIP_BAD_ADDRESS:
         case telux::tel::CallEndCause::NOT_REACHABLE:
+        case telux::tel::CallEndCause::SIP_NOT_REACHABLE:
+        case telux::tel::CallEndCause::SIP_NOT_FOUND:
+        case telux::tel::CallEndCause::SIP_UNSUPPORTED_URI_SCHEME:
             termination = TAF_PA_VOICECALL_TERM_UNOBTAINABLE_NUMBER;
         break;
 
+        // NETWORK_FAIL: Network/system errors, service unavailable, authentication failures
         case telux::tel::CallEndCause::NO_ROUTE_TO_DESTINATION:
         case telux::tel::CallEndCause::CHANNEL_UNACCEPTABLE:
         case telux::tel::CallEndCause::RESP_TO_STATUS_ENQUIRY:
@@ -532,35 +537,6 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::DIAL_MODIFIED_TO_DIAL:
         case telux::tel::CallEndCause::OPERATOR_DETERMINED_BARRING:
         case telux::tel::CallEndCause::NETWORK_OUT_OF_ORDER:
-            termination = TAF_PA_VOICECALL_TERM_NETWORK_FAIL;
-        break;
-
-        case telux::tel::CallEndCause::NORMAL:
-        case telux::tel::CallEndCause::NORMAL_UNSPECIFIED:
-        case telux::tel::CallEndCause::CLIENT_END:
-            termination = TAF_PA_VOICECALL_TERM_NORMAL;
-        break;
-
-        case telux::tel::CallEndCause::BUSY:
-        case telux::tel::CallEndCause::NO_ANSWER_FROM_USER:
-        case telux::tel::CallEndCause::PREEMPTION:
-        case telux::tel::CallEndCause::FACILITY_REJECTED:
-        case telux::tel::CallEndCause::CONGESTION:
-        case telux::tel::CallEndCause::SWITCHING_EQUIPMENT_CONGESTION:
-        case telux::tel::CallEndCause::REQUESTED_CIRCUIT_OR_CHANNEL_NOT_AVAILABLE:
-        case telux::tel::CallEndCause::RESOURCES_UNAVAILABLE_OR_UNSPECIFIED:
-            termination = TAF_PA_VOICECALL_TERM_BUSY;
-        break;
-
-        case telux::tel::CallEndCause::CALL_REJECTED:
-        case telux::tel::CallEndCause::SIP_REQUEST_CANCELLED:
-            termination = TAF_PA_VOICECALL_TERM_REJECTED;
-        break;
-
-        case telux::tel::CallEndCause::NO_USER_RESPONDING:
-            termination = TAF_PA_VOICECALL_TERM_NORESPONSE;
-        break;
-
         case telux::tel::CallEndCause::TEMPORARY_FAILURE:
         case telux::tel::CallEndCause::ACCESS_INFORMATION_DISCARDED:
         case telux::tel::CallEndCause::QOS_UNAVAILABLE:
@@ -589,7 +565,167 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::CDMA_NOT_EMERGENCY:
         case telux::tel::CallEndCause::CDMA_ACCESS_BLOCKED:
         case telux::tel::CallEndCause::ERROR_UNSPECIFIED:
+        case telux::tel::CallEndCause::RADIO_OFF:
+        case telux::tel::CallEndCause::OUT_OF_SERVICE:
+        case telux::tel::CallEndCause::NO_VALID_SIM:
+        case telux::tel::CallEndCause::RADIO_INTERNAL_ERROR:
+        case telux::tel::CallEndCause::NETWORK_RESP_TIMEOUT:
+        case telux::tel::CallEndCause::NETWORK_REJECT:
+        case telux::tel::CallEndCause::RADIO_ACCESS_FAILURE:
+        case telux::tel::CallEndCause::RADIO_LINK_FAILURE:
+        case telux::tel::CallEndCause::RADIO_LINK_LOST:
+        case telux::tel::CallEndCause::RADIO_UPLINK_FAILURE:
+        case telux::tel::CallEndCause::RADIO_SETUP_FAILURE:
+        case telux::tel::CallEndCause::RADIO_RELEASE_NORMAL:
+        case telux::tel::CallEndCause::RADIO_RELEASE_ABNORMAL:
+        case telux::tel::CallEndCause::ACCESS_CLASS_BLOCKED:
+        case telux::tel::CallEndCause::NETWORK_DETACH:
+        case telux::tel::CallEndCause::EMERGENCY_TEMP_FAILURE:
+        case telux::tel::CallEndCause::EMERGENCY_PERM_FAILURE:
+        case telux::tel::CallEndCause::HO_NOT_FEASIBLE:
+        case telux::tel::CallEndCause::CS_RETRY_REQUIRED:
+        case telux::tel::CallEndCause::NETWORK_UNAVAILABLE:
+        case telux::tel::CallEndCause::FEATURE_UNAVAILABLE:
+        case telux::tel::CallEndCause::SIP_ERROR:
+        case telux::tel::CallEndCause::MISC:
+        case telux::tel::CallEndCause::SIP_REDIRECTED:
+        case telux::tel::CallEndCause::SIP_BAD_REQUEST:
+        case telux::tel::CallEndCause::SIP_FORBIDDEN:
+        case telux::tel::CallEndCause::SIP_NOT_SUPPORTED:
+        case telux::tel::CallEndCause::SIP_REQUEST_TIMEOUT:
+        case telux::tel::CallEndCause::SIP_TEMPORARILY_UNAVAILABLE:
+        case telux::tel::CallEndCause::SIP_NOT_ACCEPTABLE:
+        case telux::tel::CallEndCause::SIP_SERVER_INTERNAL_ERROR:
+        case telux::tel::CallEndCause::SIP_SERVER_NOT_IMPLEMENTED:
+        case telux::tel::CallEndCause::SIP_SERVER_BAD_GATEWAY:
+        case telux::tel::CallEndCause::SIP_SERVICE_UNAVAILABLE:
+        case telux::tel::CallEndCause::SIP_SERVER_TIMEOUT:
+        case telux::tel::CallEndCause::SIP_SERVER_VERSION_UNSUPPORTED:
+        case telux::tel::CallEndCause::SIP_SERVER_MESSAGE_TOOLARGE:
+        case telux::tel::CallEndCause::SIP_SERVER_PRECONDITION_FAILURE:
+        case telux::tel::CallEndCause::SIP_GLOBAL_ERROR:
+        case telux::tel::CallEndCause::MEDIA_INIT_FAILED:
+        case telux::tel::CallEndCause::MEDIA_NO_DATA:
+        case telux::tel::CallEndCause::MEDIA_NOT_ACCEPTABLE:
+        case telux::tel::CallEndCause::MEDIA_UNSPECIFIED_ERROR:
+        case telux::tel::CallEndCause::HOLD_RESUME_FAILED:
+        case telux::tel::CallEndCause::HOLD_RESUME_CANCELED:
+        case telux::tel::CallEndCause::HOLD_REINVITE_COLLISION:
+        case telux::tel::CallEndCause::SIP_ALTERNATE_EMERGENCY_CALL:
+        case telux::tel::CallEndCause::NO_CSFB_IN_CS_ROAM:
+        case telux::tel::CallEndCause::SRV_NOT_REGISTERED:
+        case telux::tel::CallEndCause::CALL_TYPE_NOT_ALLOWED:
+        case telux::tel::CallEndCause::EMRG_CALL_ONGOING:
+        case telux::tel::CallEndCause::CALL_SETUP_ONGOING:
+        case telux::tel::CallEndCause::MAX_CALL_LIMIT_REACHED:
+        case telux::tel::CallEndCause::UNSUPPORTED_SIP_HDRS:
+        case telux::tel::CallEndCause::CALL_TRANSFER_ONGOING:
+        case telux::tel::CallEndCause::PRACK_TIMEOUT:
+        case telux::tel::CallEndCause::QOS_FAILURE:
+        case telux::tel::CallEndCause::ONGOING_HANDOVER:
+        case telux::tel::CallEndCause::VT_WITH_TTY_NOT_ALLOWED:
+        case telux::tel::CallEndCause::CALL_UPGRADE_ONGOING:
+        case telux::tel::CallEndCause::CONFERENCE_WITH_TTY_NOT_ALLOWED:
+        case telux::tel::CallEndCause::CALL_CONFERENCE_ONGOING:
+        case telux::tel::CallEndCause::VT_WITH_AVPF_NOT_ALLOWED:
+        case telux::tel::CallEndCause::ENCRYPTION_CALL_ONGOING:
+        case telux::tel::CallEndCause::CALL_ONGOING_CW_DISABLED:
+        case telux::tel::CallEndCause::CALL_ON_OTHER_SUB:
+        case telux::tel::CallEndCause::ONE_X_COLLISION:
+        case telux::tel::CallEndCause::UI_NOT_READY:
+        case telux::tel::CallEndCause::CS_CALL_ONGOING:
+        case telux::tel::CallEndCause::SESSION_MODIFICATION_FAILED:
+        case telux::tel::CallEndCause::SIP_UNAUTHORIZED:
+        case telux::tel::CallEndCause::SIP_PAYMENT_REQUIRED:
+        case telux::tel::CallEndCause::SIP_METHOD_NOT_ALLOWED:
+        case telux::tel::CallEndCause::SIP_PROXY_AUTHENTICATION_REQUIRED:
+        case telux::tel::CallEndCause::SIP_REQUEST_ENTITY_TOO_LARGE:
+        case telux::tel::CallEndCause::SIP_REQUEST_URI_TOO_LARGE:
+        case telux::tel::CallEndCause::SIP_EXTENSION_REQUIRED:
+        case telux::tel::CallEndCause::SIP_INTERVAL_TOO_BRIEF:
+        case telux::tel::CallEndCause::SIP_CALL_OR_TRANS_DOES_NOT_EXIST:
+        case telux::tel::CallEndCause::SIP_LOOP_DETECTED:
+        case telux::tel::CallEndCause::SIP_TOO_MANY_HOPS:
+        case telux::tel::CallEndCause::SIP_AMBIGUOUS:
+        case telux::tel::CallEndCause::SIP_REQUEST_PENDING:
+        case telux::tel::CallEndCause::SIP_UNDECIPHERABLE:
+        case telux::tel::CallEndCause::RETRY_ON_IMS_WITHOUT_RTT:
+        case telux::tel::CallEndCause::MAX_PS_CALLS:
+        case telux::tel::CallEndCause::SIP_MULTIPLE_CHOICES:
+        case telux::tel::CallEndCause::SIP_MOVED_PERMANENTLY:
+        case telux::tel::CallEndCause::SIP_MOVED_TEMPORARILY:
+        case telux::tel::CallEndCause::SIP_USE_PROXY:
+        case telux::tel::CallEndCause::SIP_ALTERNATE_SERVICE:
+        case telux::tel::CallEndCause::SIP_REMOTE_UNSUPP_MEDIA_TYPE:
+        case telux::tel::CallEndCause::SIP_BAD_EXTENSION:
+        case telux::tel::CallEndCause::DSDA_CONCURRENT_CALL_NOT_POSSIBLE:
+        case telux::tel::CallEndCause::EPSFB_FAILURE:
+        case telux::tel::CallEndCause::TWAIT_EXPIRED:
+        case telux::tel::CallEndCause::TCP_CONNECTION_REQ:
+        case telux::tel::CallEndCause::THERMAL_EMERGENCY:
             termination = TAF_PA_VOICECALL_TERM_NETWORK_FAIL;
+        break;
+
+        // NORMAL: Normal call clearing
+        case telux::tel::CallEndCause::NORMAL:
+        case telux::tel::CallEndCause::NORMAL_UNSPECIFIED:
+        case telux::tel::CallEndCause::CLIENT_END:
+        case telux::tel::CallEndCause::NORMAL_CALL_CLEARING:
+            termination = TAF_PA_VOICECALL_TERM_NORMAL;
+        break;
+
+        // BUSY: User busy, congestion, resource unavailable
+        case telux::tel::CallEndCause::BUSY:
+        case telux::tel::CallEndCause::NO_ANSWER_FROM_USER:
+        case telux::tel::CallEndCause::PREEMPTION:
+        case telux::tel::CallEndCause::FACILITY_REJECTED:
+        case telux::tel::CallEndCause::CONGESTION:
+        case telux::tel::CallEndCause::SWITCHING_EQUIPMENT_CONGESTION:
+        case telux::tel::CallEndCause::REQUESTED_CIRCUIT_OR_CHANNEL_NOT_AVAILABLE:
+        case telux::tel::CallEndCause::RESOURCES_UNAVAILABLE_OR_UNSPECIFIED:
+        case telux::tel::CallEndCause::USER_BUSY:
+        case telux::tel::CallEndCause::SIP_BUSY:
+        case telux::tel::CallEndCause::BUSY_EVERYWHERE:
+        case telux::tel::CallEndCause::NORMAL_CALL_RINGBACK_TIMEOUT:
+            termination = TAF_PA_VOICECALL_TERM_BUSY;
+        break;
+
+        // REJECTED: Call rejected by user or system
+        case telux::tel::CallEndCause::CALL_REJECTED:
+        case telux::tel::CallEndCause::SIP_REQUEST_CANCELLED:
+        case telux::tel::CallEndCause::SIP_USER_REJECTED:
+        case telux::tel::CallEndCause::USER_REJECT:
+        case telux::tel::CallEndCause::REJECTED_BY_USER:
+        case telux::tel::CallEndCause::INCOM_REJ:
+        case telux::tel::CallEndCause::USER_REJECTED_SESSION_MODIFICATION:
+        case telux::tel::CallEndCause::REJECTED_ELSEWHERE:
+        case telux::tel::CallEndCause::UPGRADE_DOWNGRADE_REJ:
+        case telux::tel::CallEndCause::CALL_DEFLECTED:
+            termination = TAF_PA_VOICECALL_TERM_REJECTED;
+        break;
+
+        // NORESPONSE: No response from user
+        case telux::tel::CallEndCause::NO_USER_RESPONDING:
+            termination = TAF_PA_VOICECALL_TERM_NORESPONSE;
+        break;
+
+        // LOCAL: User initiated termination
+        case telux::tel::CallEndCause::LOW_BATTERY:
+        case telux::tel::CallEndCause::BLACKLISTED_CALL_ID:
+        case telux::tel::CallEndCause::USER_CANCELLED_SESSION_MODIFICATION:
+        case telux::tel::CallEndCause::UPGRADE_DOWNGRADE_CANCELLED:
+            termination = TAF_PA_VOICECALL_TERM_LOCAL;
+        break;
+
+        // REMOTE: Remote party actions
+        case telux::tel::CallEndCause::ANSWERED_ELSEWHERE:
+        case telux::tel::CallEndCause::PULL_OUT_OF_SYNC:
+        case telux::tel::CallEndCause::CAUSE_CALL_PULLED:
+        case telux::tel::CallEndCause::CALL_COMPLETED_ELSEWHERE:
+        case telux::tel::CallEndCause::CALL_PULLED:
+        case telux::tel::CallEndCause::CALL_PULL_OUT_OF_SYNC:
+        case telux::tel::CallEndCause::MERGED_TO_CONFERENCE:
+            termination = TAF_PA_VOICECALL_TERM_REMOTE;
         break;
 
         default:
