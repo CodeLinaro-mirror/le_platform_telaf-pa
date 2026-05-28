@@ -434,6 +434,7 @@ class RequestCallback :
         tel::ImsServiceInfo imsServiceInfo;
         tel::ImsPdpStatusInfo imsPdpStatusInfo;
         tel::ImsServiceConfig imsServiceConfig;
+        common::ErrorCode imsServiceConfigError;
         bool isVoNREnabled;
         string imsSipUserAgent;
         tel::CellularCapabilityInfo cellularCapabilityInfo;
@@ -3358,6 +3359,7 @@ void RequestCallback::ImsServiceConfigResponse
     common::ErrorCode error
 )
 {
+    imsServiceConfigError = error;
     if (error != common::ErrorCode::SUCCESS)
     {
         PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
@@ -5736,8 +5738,13 @@ pa_result_t taf_pa_radio_ToggleImsService
             return request->result;
     }
 
+    taf_pa_radio_ImsServiceSettingBitMask_t nonVonrBitmask =
+        bitmask & ~TAF_PA_RADIO_BITMASK_IMS_SERVICE_SETTING_VONR;
+    if (nonVonrBitmask == 0)
+        return 0;
+
     tel::ImsServiceConfig config;
-    Utility::Convert::ImsServiceConfig(bitmask, enable, &config);
+    Utility::Convert::ImsServiceConfig(nonVonrBitmask, enable, &config);
     auto result2 = pa.managers.imsSetting->setServiceConfig(slotId, config, callback);
     if (result2 != common::Status::SUCCESS)
     {
@@ -5746,9 +5753,6 @@ pa_result_t taf_pa_radio_ToggleImsService
     }
 
     Utility::WaitCallback::Request();
-
-    if (request->result != 0)
-        return request->result;
 
     return request->result;
 }
@@ -5804,7 +5808,20 @@ pa_result_t taf_pa_radio_GetEnabledImsService
 
     Utility::WaitCallback::Request();
     if (request->result != 0)
+    {
+        // QMI_IMS_SETTINGS_GET_IMS_SERVICE_ENABLE_CONFIG_REQ_V01 does not support VoNR TLVs
+        // and returns NOT_SUPPORTED on some modems. In that case the VoNR status obtained
+        // above via requestVonrStatus() is still valid, so return it as-is.
+        // For any other actual QMI failure, propagate the error to the caller.
+        if (request->imsServiceConfigError == common::ErrorCode::NOT_SUPPORTED)
+        {
+            PA_ERROR("IMS service config not supported; returning VoNR status only.");
+            *bitmaskPtr = bitmask;
+            return 0;
+        }
+
         return request->result;
+    }
 
     Utility::Convert::ImsService(request->imsServiceConfig, &bitmask);
 
