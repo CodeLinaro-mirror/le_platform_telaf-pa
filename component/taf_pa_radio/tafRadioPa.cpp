@@ -6335,11 +6335,12 @@ pa_result_t taf_pa_radio_GetNrIcon
     return 0;
 }
 
-taf_pa_radio_NetworkRejectHandlerRef_t taf_pa_radio_AddNetworkRejectHandler
+pa_result_t taf_pa_radio_AddNetworkRejectHandler
 (
     uint32_t instance,
     taf_pa_radio_NetworkRejectHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_NetworkRejectHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6347,14 +6348,17 @@ taf_pa_radio_NetworkRejectHandlerRef_t taf_pa_radio_AddNetworkRejectHandler
     pa.indicators.networkReject.instance = instance;
     pa.indicators.networkReject.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.networkReject.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_RatChangeHandlerRef_t taf_pa_radio_AddRatChangeHandler
+pa_result_t taf_pa_radio_AddRatChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_RatChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_RatChangeHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6362,14 +6366,17 @@ taf_pa_radio_RatChangeHandlerRef_t taf_pa_radio_AddRatChangeHandler
     pa.indicators.ratChange.instance = instance;
     pa.indicators.ratChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.ratChange.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_VoiceServiceInfoHandlerRef_t taf_pa_radio_AddVoiceServiceInfoHandler
+pa_result_t taf_pa_radio_AddVoiceServiceInfoHandler
 (
     uint32_t instance,
     taf_pa_radio_VoiceServiceInfoHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_VoiceServiceInfoHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6377,14 +6384,17 @@ taf_pa_radio_VoiceServiceInfoHandlerRef_t taf_pa_radio_AddVoiceServiceInfoHandle
     pa.indicators.voiceServiceInfo.instance = instance;
     pa.indicators.voiceServiceInfo.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.voiceServiceInfo.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_DataServiceStatusHandlerRef_t taf_pa_radio_AddDataServiceStatusHandler
+pa_result_t taf_pa_radio_AddDataServiceStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataServiceStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_DataServiceStatusHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6392,14 +6402,17 @@ taf_pa_radio_DataServiceStatusHandlerRef_t taf_pa_radio_AddDataServiceStatusHand
     pa.indicators.dataServiceStatus.instance = instance;
     pa.indicators.dataServiceStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.dataServiceStatus.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_DataRoamingStatusHandlerRef_t taf_pa_radio_AddDataRoamingStatusHandler
+pa_result_t taf_pa_radio_AddDataRoamingStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataRoamingStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_DataRoamingStatusHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6407,14 +6420,17 @@ taf_pa_radio_DataRoamingStatusHandlerRef_t taf_pa_radio_AddDataRoamingStatusHand
     pa.indicators.dataRoamingStatus.instance = instance;
     pa.indicators.dataRoamingStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.dataRoamingStatus.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_SignalStrengthInfoChangeHandlerRef_t taf_pa_radio_AddSignalStrengthInfoChangeHandler
+pa_result_t taf_pa_radio_AddSignalStrengthInfoChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_SignalStrengthInfoChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_SignalStrengthInfoChangeHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6422,14 +6438,17 @@ taf_pa_radio_SignalStrengthInfoChangeHandlerRef_t taf_pa_radio_AddSignalStrength
     pa.indicators.signalStrengthInfoChange.instance = instance;
     pa.indicators.signalStrengthInfoChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.signalStrengthInfoChange.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_ImsRegStatusChangeHandlerRef_t taf_pa_radio_AddImsRegStatusChangeHandler
+pa_result_t taf_pa_radio_AddImsRegStatusChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsRegStatusChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_ImsRegStatusChangeHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6437,14 +6456,17 @@ taf_pa_radio_ImsRegStatusChangeHandlerRef_t taf_pa_radio_AddImsRegStatusChangeHa
     pa.indicators.imsRegStatusChange.instance = instance;
     pa.indicators.imsRegStatusChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.imsRegStatusChange.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_OperatingModeChangeHandlerRef_t taf_pa_radio_AddOperatingModeChangeHandler
+pa_result_t taf_pa_radio_AddOperatingModeChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_OperatingModeChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_OperatingModeChangeHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6452,14 +6474,17 @@ taf_pa_radio_OperatingModeChangeHandlerRef_t taf_pa_radio_AddOperatingModeChange
     pa.indicators.operatingModeChange.instance = instance;
     pa.indicators.operatingModeChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.operatingModeChange.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_ServiceDomainHandlerRef_t taf_pa_radio_AddServiceDomainHandler
+pa_result_t taf_pa_radio_AddServiceDomainHandler
 (
     uint32_t instance,
     taf_pa_radio_ServiceDomainHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_ServiceDomainHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6467,14 +6492,17 @@ taf_pa_radio_ServiceDomainHandlerRef_t taf_pa_radio_AddServiceDomainHandler
     pa.indicators.serviceDomain.instance = instance;
     pa.indicators.serviceDomain.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.serviceDomain.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_LteCsCapabilityHandlerRef_t taf_pa_radio_AddLteCsCapabilityHandler
+pa_result_t taf_pa_radio_AddLteCsCapabilityHandler
 (
     uint32_t instance,
     taf_pa_radio_LteCsCapabilityHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_LteCsCapabilityHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6482,14 +6510,17 @@ taf_pa_radio_LteCsCapabilityHandlerRef_t taf_pa_radio_AddLteCsCapabilityHandler
     pa.indicators.lteCsCapability.instance = instance;
     pa.indicators.lteCsCapability.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.lteCsCapability.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_ImsServiceInfoHandlerRef_t taf_pa_radio_AddImsServiceInfoHandler
+pa_result_t taf_pa_radio_AddImsServiceInfoHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsServiceInfoHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_ImsServiceInfoHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6497,14 +6528,17 @@ taf_pa_radio_ImsServiceInfoHandlerRef_t taf_pa_radio_AddImsServiceInfoHandler
     pa.indicators.imsServiceInfo.instance = instance;
     pa.indicators.imsServiceInfo.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.imsServiceInfo.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_ImsPdpErrorHandlerRef_t taf_pa_radio_AddImsPdpErrorHandler
+pa_result_t taf_pa_radio_AddImsPdpErrorHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsPdpErrorHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_ImsPdpErrorHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6512,14 +6546,17 @@ taf_pa_radio_ImsPdpErrorHandlerRef_t taf_pa_radio_AddImsPdpErrorHandler
     pa.indicators.imsPdpError.instance = instance;
     pa.indicators.imsPdpError.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.imsPdpError.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_CellInfoChangeHandlerRef_t taf_pa_radio_AddCellInfoChangeHandler
+pa_result_t taf_pa_radio_AddCellInfoChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_CellInfoChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_CellInfoChangeHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6527,14 +6564,17 @@ taf_pa_radio_CellInfoChangeHandlerRef_t taf_pa_radio_AddCellInfoChangeHandler
     pa.indicators.cellInfoChange.instance = instance;
     pa.indicators.cellInfoChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.cellInfoChange.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_NrIconChangeHandlerRef_t taf_pa_radio_AddNrIconChangeHandler
+pa_result_t taf_pa_radio_AddNrIconChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_NrIconChangeHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_NrIconChangeHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6542,7 +6582,9 @@ taf_pa_radio_NrIconChangeHandlerRef_t taf_pa_radio_AddNrIconChangeHandler
     pa.indicators.nrIconChange.instance = instance;
     pa.indicators.nrIconChange.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.nrIconChange.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_radio_RegisterIndication
@@ -6846,11 +6888,12 @@ pa_result_t taf_pa_radio_GetLteCphyCaInfo
     return result;
 }
 
-taf_pa_radio_RatSvcStatusHandlerRef_t taf_pa_radio_AddRatSvcStatusHandler
+pa_result_t taf_pa_radio_AddRatSvcStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_RatSvcStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_RatSvcStatusHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6858,14 +6901,17 @@ taf_pa_radio_RatSvcStatusHandlerRef_t taf_pa_radio_AddRatSvcStatusHandler
     pa.indicators.ratSvcStatus.instance = instance;
     pa.indicators.ratSvcStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.ratSvcStatus.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_LteCphyCaHandlerRef_t taf_pa_radio_AddLteCphyCaHandler
+pa_result_t taf_pa_radio_AddLteCphyCaHandler
 (
     uint32_t instance,
     taf_pa_radio_LteCphyCaHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_LteCphyCaHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6873,14 +6919,17 @@ taf_pa_radio_LteCphyCaHandlerRef_t taf_pa_radio_AddLteCphyCaHandler
     pa.indicators.lteCphyCa.instance = instance;
     pa.indicators.lteCphyCa.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.lteCphyCa.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
-taf_pa_radio_DataAvailSysStatusHandlerRef_t taf_pa_radio_AddDataAvailSysStatusHandler
+pa_result_t taf_pa_radio_AddDataAvailSysStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataAvailSysStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_radio_DataAvailSysStatusHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
@@ -6888,7 +6937,9 @@ taf_pa_radio_DataAvailSysStatusHandlerRef_t taf_pa_radio_AddDataAvailSysStatusHa
     pa.indicators.dataAvailSysStatus.instance = instance;
     pa.indicators.dataAvailSysStatus.handlerFuncPtr = (void*)handlerFuncPtr;
     pa.indicators.dataAvailSysStatus.contextPtr = contextPtr;
-    return nullptr;
+    if (handlerRefPtr != nullptr)
+        *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
