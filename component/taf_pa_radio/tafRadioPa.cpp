@@ -794,6 +794,8 @@ class PlatformAdaptor
         // Thread-safe initialization state management. This flag is set to true only after
         // taf_pa_radio_Init() has completed successfully and reset to false after cleanup.
         std::atomic<bool> gRadioPaInitialized{false};
+        std::atomic<bool> propRadioInitialized{false};
+        std::atomic<bool> isShuttingDown{false};
         std::mutex initMutex;
 
         static PlatformAdaptor& GetInstance
@@ -2979,6 +2981,11 @@ void Utility::WaitCallback::Request
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
+    if (pa.callbacks.request == nullptr || pa.isShuttingDown.load(std::memory_order_acquire))
+    {
+        PA_WARN("Skipping wait for request callback during radio PA shutdown.");
+        return;
+    }
 
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -3007,6 +3014,12 @@ void Utility::WaitCallback::Scan
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
+    if (instance >= MAX_INSTANCE || pa.listeners.networkSelections[instance] == nullptr ||
+        pa.isShuttingDown.load(std::memory_order_acquire))
+    {
+        PA_WARN("Skipping wait for scan callback during radio PA shutdown.");
+        return;
+    }
 
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -4018,6 +4031,7 @@ pa_result_t taf_pa_radio_Init()
         PA_WARN("Radio platform adaptor is already initialized.");
         return PA_OK;
     }
+    pa.isShuttingDown.store(false, std::memory_order_release);
 
     auto& phoneFactory = tel::PhoneFactory::getInstance();
     auto& dataFactory = data::DataFactory::getInstance();
@@ -4095,6 +4109,7 @@ pa_result_t taf_pa_radio_Init()
         taf_prop_radio_AddDataAvailSysStatusHandler(0, DataAvailSysStatusHandler, nullptr);
 
         PA_INFO("Radio private platform adaptor initialization is done.");
+        pa.propRadioInitialized.store(true, std::memory_order_release);
     }
 
         pa.gRadioPaInitialized.store(true, std::memory_order_release);
@@ -4114,6 +4129,13 @@ pa_result_t taf_pa_radio_Deinit()
         PA_WARN("Radio platform adaptor Deinit() invoked before successful Init().");
         return PA_FAULT;
     }
+
+    // Mark shutdown before tearing down managers/listeners so late public API calls and callbacks
+    // can stop using PA-owned resources while cleanup is in progress.
+    // NOTE: gRadioPaInitialized is NOT cleared here. It remains true during cleanup to ensure
+    // that any in-flight callbacks or API calls can safely access resources. It will be cleared
+    // after all cleanup is complete (Step 6 below).
+    pa.isShuttingDown.store(true, std::memory_order_release);
 
     // Step 1: Clear all indicator handler function pointers and context pointers
     // so no further indication callbacks are dispatched after this point.
@@ -4254,11 +4276,33 @@ pa_result_t taf_pa_radio_Deinit()
         pa.managers.dataServingSystems[i].reset();
     }
 
-    // Step 5: Reset the request callback object.
-    PA_INFO("Resetting request callback");
-    pa.callbacks.request.reset();
+    // Step 5: Deinitialize the private/proprietary radio platform adaptor only if its init
+    // completed successfully.
+    if (pa.propRadioInitialized.load(std::memory_order_acquire))
+    {
+        int32_t result = taf_prop_radio_Deinit();
+        pa.propRadioInitialized.store(false, std::memory_order_release);
 
+        if (result == -ENOSYS)
+            PA_INFO("Radio private platform adaptor is not implemented.");
+        else if (result != 0)
+            PA_ERROR("Failed to deinitialize radio private platform adaptor, result = %d.", result);
+        else
+            PA_INFO("Radio private platform adaptor deinitialization is done.");
+    }
+
+    // Step 6: NOW clear the initialization flag after all cleanup is complete.
+    // This signals that the PA is truly uninitialized and all resources are destroyed.
+    // IMPORTANT: This must be done AFTER all cleanup steps to prevent race conditions
+    // where in-flight callbacks or API calls see the flag as false but resources are
+    // still being destroyed.
+    PA_INFO("Clearing initialization flag after cleanup complete");
     pa.gRadioPaInitialized.store(false, std::memory_order_release);
+
+    // Step 7: Keep the request callback object alive until process termination.  TelSDK may still
+    // deliver a late async response after manager/listener cleanup; destroying the callback here can
+    // leave those late deliveries with a dangling callback target.
+    PA_INFO("Keeping request callback object until process termination to avoid late callback race");
     PA_INFO("Radio platform adaptor deinitialization complete.");
     return PA_OK;
 }

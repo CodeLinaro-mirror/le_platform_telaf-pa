@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+#include <errno.h>
+
 #include "taf_prop_sim.hpp"
 
 //--------------------------------------------------------------------------------------------------
@@ -110,4 +112,18 @@ taf_prop_sim_Result_t taf_prop_sim_Init
 {
     PROP_INFO("Function is not implemented in stub PA.");
     return TAF_PROP_SIM_RESULT_NOT_SUPPORTED;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * SIM prop deinitialization.
+ */
+//--------------------------------------------------------------------------------------------------
+int32_t taf_prop_sim_Deinit
+(
+    void
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+    return -ENOSYS;
 }
