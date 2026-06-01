@@ -213,6 +213,11 @@ PROP_SHARED int32_t taf_prop_radio_Init
     void
 );
 
+PROP_SHARED int32_t taf_prop_radio_Deinit
+(
+    void
+);
+
 PROP_SHARED int32_t taf_prop_radio_InitInstance
 (
     uint32_t instance

@@ -17,6 +17,16 @@ int32_t taf_prop_radio_Init
     return -ENOSYS;
 }
 
+int32_t taf_prop_radio_Deinit
+(
+    void
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+
+    return -ENOSYS;
+}
+
 int32_t taf_prop_radio_InitInstance
 (
     uint32_t instance
