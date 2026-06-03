@@ -883,6 +883,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
 
     teluxParams.profileId = static_cast<int>(params.profileId);
     teluxParams.ipFamilyType = taf::pa::data::Utils::ConvertIpType(params.ipType);
+    teluxParams.interfaceName = params.interfaceName;
+
+    PA_DEBUG("PaStartDataSessionAsync - teluxParams (after): profileId=%d, ipFamilyType=%d, "
+            "interfaceName='%s', operationType=%d",
+            teluxParams.profileId, TO_INT(teluxParams.ipFamilyType),
+            teluxParams.interfaceName.c_str(), TO_INT(teluxParams.operationType));
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
