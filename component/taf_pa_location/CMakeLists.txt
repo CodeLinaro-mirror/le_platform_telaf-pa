@@ -23,7 +23,7 @@ endif()
 if(TELUX_LOCATION_SUPPORTED)
     # common headers
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
-    add_library(${TARGET_NAME} SHARED taf_pa_location.cpp)
+    add_library(${TARGET_NAME} SHARED tafLocationPa.cpp)
 
     # link glib-2.0
     find_package(PkgConfig REQUIRED)

@@ -11,7 +11,7 @@ set(OUTPUT_NAME Component_${TARGET_NAME})
 
 add_subdirectory(stub)
 
-add_library(${TARGET_NAME} SHARED taf_pa_mrc.cpp)
+add_library(${TARGET_NAME} SHARED tafMrcPa.cpp)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     VERSION ${LIBRARY_VERSION}

@@ -23,3 +23,7 @@ void taf_prop_common_LogMessage
 )
 {
 }
+
+void taf_prop_common_LogBind(const taf_prop_common_LogVtable_t* vt)
+{
+}

@@ -11,7 +11,7 @@ add_subdirectory(stub)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/keyStore)
 
-add_library(${TARGET_NAME} SHARED taf_pa_keystore.c)
+add_library(${TARGET_NAME} SHARED tafKeystorePa.c)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     VERSION ${LIBRARY_VERSION}
