@@ -17,6 +17,7 @@
 #include <future>
 #include <chrono>
 #include <map>
+#include <atomic>
 
 #define TAF_PA_THERM_MANAGER_TIMEOUT 30
 
@@ -24,8 +25,10 @@
 static std::shared_ptr<telux::therm::IThermalManager> g_thermalManager = nullptr;
 static taf_pa_therm_TripEventHandler_t g_tripEventHandler = nullptr;
 static taf_pa_therm_CoolingLevelChangeHandler_t g_coolingLevelChangeHandler = nullptr;
+static std::mutex thermHandlerMutex;
 static std::map<std::string, uint32_t> g_zoneNameToIdMap;
 static std::map<std::string, uint32_t> g_deviceNameToIdMap;
+static std::atomic<bool> g_thermPaInitialized(false);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -43,7 +46,12 @@ public:
     void onTripEvent(std::shared_ptr<telux::therm::ITripPoint> tripPoint,
                      telux::therm::TripEvent tripEvent) override
     {
-        if (g_tripEventHandler && tripPoint)
+        taf_pa_therm_TripEventHandler_t handler = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(thermHandlerMutex);
+            handler = g_tripEventHandler;
+        }
+        if (handler && tripPoint)
         {
             taf_pa_therm_TripEventInfo eventInfo;
 
@@ -91,13 +99,18 @@ public:
                     eventInfo.tripEvent = taf_pa_therm_TripEvent::NONE;
                     break;
             }
-            g_tripEventHandler(eventInfo);
+            handler(eventInfo);
         }
     }
 
     void onCoolingDeviceLevelChange(std::shared_ptr<telux::therm::ICoolingDevice> coolingDevice) override
     {
-        if (g_coolingLevelChangeHandler && coolingDevice)
+        taf_pa_therm_CoolingLevelChangeHandler_t coolHandler = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(thermHandlerMutex);
+            coolHandler = g_coolingLevelChangeHandler;
+        }
+        if (coolHandler && coolingDevice)
         {
             taf_pa_therm_CoolingLevelChangeInfo changeInfo;
             changeInfo.coolingDevice.deviceId = coolingDevice->getId();
@@ -105,7 +118,7 @@ public:
             changeInfo.coolingDevice.currentCoolingLevel = coolingDevice->getCurrentCoolingLevel();
             changeInfo.coolingDevice.description = coolingDevice->getDescription();
 
-            g_coolingLevelChangeHandler(changeInfo);
+            coolHandler(changeInfo);
         }
     }
 };
@@ -207,6 +220,7 @@ pa_result_t taf_pa_therm_Init(void)
         BuildDeviceNameToIdMap();
 
         PA_INFO("Thermal PA layer initialized successfully");
+        g_thermPaInitialized.store(true, std::memory_order_release);
         return PA_OK;
     }
     catch (const std::exception& e)
@@ -560,7 +574,10 @@ pa_result_t taf_pa_therm_RegisterTripEventHandler(
         return PA_FAULT;
     }
 
-    g_tripEventHandler = handler;
+    {
+        std::lock_guard<std::mutex> lock(thermHandlerMutex);
+        g_tripEventHandler = handler;
+    }
     PA_INFO("Trip event handler registered");
     return PA_OK;
 }
@@ -572,6 +589,7 @@ pa_result_t taf_pa_therm_RegisterTripEventHandler(
 //--------------------------------------------------------------------------------------------------
 pa_result_t taf_pa_therm_DeregisterTripEventHandler(void)
 {
+    std::lock_guard<std::mutex> lock(thermHandlerMutex);
     g_tripEventHandler = nullptr;
     PA_INFO("Trip event handler deregistered");
     return PA_OK;
@@ -593,7 +611,10 @@ pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
         return PA_FAULT;
     }
 
-    g_coolingLevelChangeHandler = handler;
+    {
+        std::lock_guard<std::mutex> lock(thermHandlerMutex);
+        g_coolingLevelChangeHandler = handler;
+    }
     PA_INFO("Cooling level change handler registered");
     return PA_OK;
 }
@@ -605,6 +626,7 @@ pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
 //--------------------------------------------------------------------------------------------------
 pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void)
 {
+    std::lock_guard<std::mutex> lock(thermHandlerMutex);
     g_coolingLevelChangeHandler = nullptr;
     PA_INFO("Cooling level change handler deregistered");
     return PA_OK;
@@ -618,6 +640,13 @@ pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void)
 pa_result_t taf_pa_therm_Deinit(void)
 {
     PA_INFO("Starting Thermal PA layer deinitialization...");
+
+    // Step 0: Check if Init() was called successfully
+    if (!g_thermPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
 
     // Step 1: Clear the trip event and cooling level change handler function pointers
     // so no further thermal event callbacks are dispatched after this point.
@@ -653,6 +682,10 @@ pa_result_t taf_pa_therm_Deinit(void)
     PA_INFO("Clearing g_zoneNameToIdMap and g_deviceNameToIdMap");
     g_zoneNameToIdMap.clear();
     g_deviceNameToIdMap.clear();
+
+    // Step 6: Reset the initialization flag
+    PA_INFO("Resetting initialization flag");
+    g_thermPaInitialized.store(false, std::memory_order_release);
 
     PA_INFO("Thermal PA layer deinitialization complete.");
     return PA_OK;

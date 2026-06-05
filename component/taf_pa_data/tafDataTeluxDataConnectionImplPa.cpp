@@ -32,9 +32,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetSubsysState
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
                                                              "PA phone manager not initialized.");
-    PA_INFO("Conn init state for slot id[%d]: %d", slotId,
-                                                dataConnectionManagersSubsysStateMap_[slotId]);
-    sState = dataConnectionManagersSubsysStateMap_[slotId];
+    {
+        std::shared_lock<std::shared_mutex> lock(dataConnSubsysStateMapMtx_);
+        sState = dataConnectionManagersSubsysStateMap_[slotId];
+    }
+    PA_INFO("Conn init state for slot id[%d]: %d", slotId, TO_INT(sState));
     return PA_OK;
 }
 
@@ -49,9 +51,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::SetSubsysState
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
                                                              "PA phone manager not initialized.");
-    dataConnectionManagersSubsysStateMap_[slotId] = sState;
-    PA_INFO("Conn init state for slot id[%d]: %d", slotId,
-                                                    dataConnectionManagersSubsysStateMap_[slotId]);
+    {
+        std::unique_lock<std::shared_mutex> lock(dataConnSubsysStateMapMtx_);
+        dataConnectionManagersSubsysStateMap_[slotId] = sState;
+    }
+    PA_INFO("Conn init state for slot id[%d]: %d", slotId, TO_INT(sState));
 
     // Send the state change event to clients.
     if (bSendEvent)
@@ -418,8 +422,12 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
         taf::pa::data::SlotId_e paSlotId = static_cast<taf::pa::data::SlotId_e>(slotId);
 
         // Check if already initialized
-        if (taf::pa::data::SubsystemState_e::AVAILABLE ==
-                                                    dataConnectionManagersSubsysStateMap_[paSlotId])
+        SubsystemState_e connInitCheckState;
+        {
+            std::shared_lock<std::shared_mutex> lock(dataConnSubsysStateMapMtx_);
+            connInitCheckState = dataConnectionManagersSubsysStateMap_[paSlotId];
+        }
+        if (taf::pa::data::SubsystemState_e::AVAILABLE == connInitCheckState)
         {
             PA_INFO("Data connection manager already initialized for slot id: %d.", TO_INT(slotId));
             successfulSlots.push_back(slotId);
@@ -501,8 +509,12 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
                             std::make_shared<TafPaTeluxDataConnectionListener>((SlotId)slotId));
             dataConnectionListenersMap_[(SlotId)slotId] =
                                         tafPaTeluxDataConnectionListenersMap_[(SlotId)slotId];
-            // Mark listener as not registered.
-            bDataConnectionListenersRegistered_[slotId-1] = false;
+            // Mark listener as not registered (under lock for consistency with
+            // PaRegisterDataConnCallbacks / PaDeregisterDataConnCallbacks).
+            {
+                std::unique_lock lock(dataConnectionCbksMtx_);
+                bDataConnectionListenersRegistered_[slotId-1] = false;
+            }
             // Update that the data connection manager is initialized.
             SetSubsysState(paSlotId, SubsystemState_e::AVAILABLE);
             successfulSlots.push_back(slotId);
@@ -620,13 +632,19 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManager
     dataConnectionManagersMap_.clear();
 
     // Update subsystem states to reflect deinitialized state
-    dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
-    dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
+    {
+        std::unique_lock<std::shared_mutex> lock(dataConnSubsysStateMapMtx_);
+        dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
+        dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
+    }
 
     // Reset request call list state: release the stored context shared_ptr and
     // clear the in-progress flag so a subsequent Init()/Deinit() cycle starts clean.
     PA_INFO("Reset requestCallListClientEntry_ and bRequestCallListInProgress_");
-    requestCallListClientEntry_ = {nullptr, nullptr};
+    {
+        std::lock_guard<std::mutex> lock(requestCallListMutex_);
+        requestCallListClientEntry_ = {nullptr, nullptr};
+    }
     bRequestCallListInProgress_.store(false);
 
     PA_INFO("Data connection managers deinitialization complete");
@@ -1084,9 +1102,16 @@ void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
 
     PA_INFO("Number of active calls: %zu", iDataCalls.size());
 
+    // read the entry under the mutex so we always see the fully-written
+    // callback/context pair that was stored atomically in PaRequestDataCallsListAsync.
     std::vector<DataCallEventInfo_t> callList;
-    auto callback = teluxPaDataConn.requestCallListClientEntry_.callback;
-    auto context  = teluxPaDataConn.requestCallListClientEntry_.context;
+    RequestDataCallListCallbackEntry_t entry;
+    {
+        std::lock_guard<std::mutex> lock(teluxPaDataConn.requestCallListMutex_);
+        entry = teluxPaDataConn.requestCallListClientEntry_;
+    }
+    auto callback = entry.callback;
+    auto context  = entry.context;
 
     // Verify callback is not null before proceeding
     if (!callback)
@@ -1138,6 +1163,8 @@ void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
 
 void taf::pa::data::TafPaTeluxDataConnection::resetCallListClientEntry()
 {
+    // reset the entry under the mutex.
+    std::lock_guard<std::mutex> lock(requestCallListMutex_);
     requestCallListClientEntry_ = {nullptr, nullptr};
 }
 
@@ -1155,18 +1182,19 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
                                                              "PA phone manager not initialized.");
 
-    // Atomically check and set the flag to prevent race condition.
-    // compare_exchange_strong will:
-    // 1. Check if bRequestCallListInProgress_ is false
-    // 2. If false, set it to true and return true
-    // 3. If true, leave it unchanged and return false
-    // This is atomic, so only one thread can successfully transition from false to true.
-    bool expected = false;
-    if (!bRequestCallListInProgress_.compare_exchange_strong(expected, true))
+    // acquire the mutex, set the flag, and write the entry atomically
+    // so the SB callback (onRequestDataCallList) can never read a null/stale entry.
     {
-        // Another thread already set the flag, return PA_BUSY
-        PA_ERROR("Request call list already in progress for phone id: %d", TO_INT(phoneId));
-        return PA_BUSY;
+        std::lock_guard<std::mutex> lock(requestCallListMutex_);
+        bool expected = false;
+        if (!bRequestCallListInProgress_.compare_exchange_strong(expected, true))
+        {
+            // Another thread already set the flag, return PA_BUSY
+            PA_ERROR("Request call list already in progress for phone id: %d", TO_INT(phoneId));
+            return PA_BUSY;
+        }
+        // Write the entry under the lock, before the flag is visible to the SB thread.
+        requestCallListClientEntry_ = {callback, context};
     }
 
     taf::pa::data::SlotId_e slotIdPa;
@@ -1177,7 +1205,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
     if (PA_OK != result)
     {
         PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
-        // Reset the flag since we're returning early
+        // Reset the entry and flag since we're returning early.
+        {
+            std::lock_guard<std::mutex> lock(requestCallListMutex_);
+            requestCallListClientEntry_ = {nullptr, nullptr};
+        }
         bRequestCallListInProgress_.store(false);
         return result;
     }
@@ -1186,7 +1218,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
     if (INVALID_SLOT_ID == slotId)
     {
         PA_ERROR("Invalid Slot ID");
-        // Reset the flag since we're returning early
+        // Reset the entry and flag since we're returning early.
+        {
+            std::lock_guard<std::mutex> lock(requestCallListMutex_);
+            requestCallListClientEntry_ = {nullptr, nullptr};
+        }
         bRequestCallListInProgress_.store(false);
         return PA_BAD_PARAMETER;
     }
@@ -1195,22 +1231,25 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
         PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        // Reset the flag since we're returning early
+        // Reset the entry and flag since we're returning early.
+        {
+            std::lock_guard<std::mutex> lock(requestCallListMutex_);
+            requestCallListClientEntry_ = {nullptr, nullptr};
+        }
         bRequestCallListInProgress_.store(false);
         return PA_FAULT;
     }
-
-    // Store the callback entry - the flag is already set atomically above
-    requestCallListClientEntry_ = {callback, context};
 
     status = dataConnectionManagersMap_[slotId]->requestDataCallList(
                             telux::data::OperationType::DATA_LOCAL, onRequestDataCallList);
     if (telux::common::Status::SUCCESS != status)
     {
         PA_ERROR("requestDataCallList failed for phone id[%d]: %d",TO_INT(phoneId), TO_INT(status));
-        // Reset the callback info.
-        requestCallListClientEntry_ = {nullptr, nullptr};
-        // Reset the flag since we're returning early
+        // Reset the entry and flag since we're returning early.
+        {
+            std::lock_guard<std::mutex> lock(requestCallListMutex_);
+            requestCallListClientEntry_ = {nullptr, nullptr};
+        }
         bRequestCallListInProgress_.store(false);
         return PA_FAULT;
     }

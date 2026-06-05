@@ -8,6 +8,7 @@
 #include <cstring>
 #include <future>
 #include <condition_variable>
+#include <atomic>
 
 #include <telux/common/CommonDefines.hpp>
 #include <telux/platform/PlatformFactory.hpp>
@@ -23,6 +24,9 @@
 using namespace std;
 using namespace telux::common;
 using namespace telux::platform;
+
+// Thread-safe initialization flag
+static std::atomic<bool> gMrcPaInitialized(false);
 
 #define SERVICE_PROMISE_AND_CALLBACK(name)                                \
     auto name##Promise = make_shared<promise<ServiceStatus>>();           \
@@ -84,6 +88,15 @@ class PlatformAdaptor
     public:
         Indicator_t indicators;
         Manager_t managers;
+        std::mutex indicatorMutex;
+        // protects the shared_ptr itself against concurrent read/write
+        // (Init/Deinit write vs NB read). Do not hold this while waiting on SDK callbacks.
+        std::mutex fsMutex;
+
+        // Serializes IFsManager operations (OTA/ABSync) without blocking Init/Deinit
+        // on long SDK waits. Each operation takes a local shared_ptr under fsMutex,
+        // then waits using the local manager reference.
+        std::mutex fsOperationMutex;
 
         static PlatformAdaptor& GetInstance
         (
@@ -266,8 +279,14 @@ static void ProcessStatusHandler
 {
     auto& pa = PlatformAdaptor::GetInstance();
 
-    taf_pa_mrc_ProcessStatusHdlrFunc_t handlerFunc =
-        (taf_pa_mrc_ProcessStatusHdlrFunc_t)pa.indicators.processStatus.handlerFuncPtr;
+    taf_pa_mrc_ProcessStatusHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_mrc_ProcessStatusHdlrFunc_t)pa.indicators.processStatus.handlerFuncPtr;
+        ctx = pa.indicators.processStatus.contextPtr;
+    }
+
     if (handlerFunc != nullptr)
     {
         taf_pa_mrc_ProcessStatusIndication_t paIndication;
@@ -284,7 +303,7 @@ static void ProcessStatusHandler
         if (paIndication.resultValid)
             paIndication.result = Utility::Convert::Result(indication.result);
 
-        handlerFunc(paIndication, pa.indicators.processStatus.contextPtr);
+        handlerFunc(paIndication, ctx);
     }
 }
 
@@ -297,23 +316,43 @@ static void ScrubStatusHandler
     PA_INFO("Scrub GPIO toggle requested");
     auto& pa = PlatformAdaptor::GetInstance();
 
-    taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFunc =
-        (taf_pa_mrc_ScrubStatusHdlrFunc_t)pa.indicators.scrubStatus.handlerFuncPtr;
+    taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFunc;
+    void* ctx;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        handlerFunc = (taf_pa_mrc_ScrubStatusHdlrFunc_t)pa.indicators.scrubStatus.handlerFuncPtr;
+        ctx = pa.indicators.scrubStatus.contextPtr;
+    }
+
     if (handlerFunc != nullptr)
     {
         taf_pa_mrc_ScrubStatusIndication_t paIndication;
         paIndication.slotToggleRequested = indication.slotToggleRequested;
-        handlerFunc(paIndication, pa.indicators.scrubStatus.contextPtr);
+        handlerFunc(paIndication, ctx);
     }
 }
 
 pa_result_t taf_pa_mrc_Init()
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if already initialized (idempotent pattern)
+    if (gMrcPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("MRC platform adaptor already initialized");
+        return PA_OK;  // Idempotent - safe to call multiple times
+    }
+
     auto& pa = PlatformAdaptor::GetInstance();
     auto& platformFactory = PlatformFactory::getInstance();
 
     SERVICE_PROMISE_AND_CALLBACK(fs)
-    pa.managers.fs = platformFactory.getFsManager(fsCallback);
+    // assign pa.managers.fs under fsMutex so that a concurrent NB call
+    // that reads pa.managers.fs cannot observe a null or partially-constructed shared_ptr.
+    {
+        std::lock_guard<std::mutex> lock(pa.fsMutex);
+        pa.managers.fs = platformFactory.getFsManager(fsCallback);
+    }
     SERVICE_READY(fs)
 
     PA_INFO("MRC platform adaptor initialization is done.");
@@ -327,6 +366,8 @@ pa_result_t taf_pa_mrc_Init()
         PA_INFO("MRC proprietary platform adaptor initialization is done.");
     }
 
+    gMrcPaInitialized.store(true, std::memory_order_release);
+    PA_INFO("MRC platform adaptor initialization flag set to true.");
     return 0;
 }
 
@@ -379,31 +420,50 @@ pa_result_t taf_pa_mrc_SetProcessStatus
 
             auto& pa = PlatformAdaptor::GetInstance();
 
-            switch (status)
+            // serialize IFsManager operations, but do not hold fsMutex
+            // across the blocking wait. fsMutex only protects pa.managers.fs itself.
+            // The local shared_ptr keeps IFsManager alive even if Deinit resets the
+            // global pointer while this asynchronous operation is in flight.
+            std::shared_ptr<IFsManager> fsManager;
             {
-                case TAF_PA_MRC_STATUS_INITIATED:
-                    paStatus = pa.managers.fs->prepareForOta(OtaOperation::START, callback);
-                    break;
-                case TAF_PA_MRC_STATUS_RESUMED:
-                    paStatus = pa.managers.fs->prepareForOta(OtaOperation::RESUME, callback);
-                    break;
-                case TAF_PA_MRC_STATUS_SUCCEEDED:
-                    paStatus = pa.managers.fs->otaCompleted(OperationStatus::SUCCESS, callback);
-                    break;
-                case TAF_PA_MRC_STATUS_FAILED:
-                    paStatus = pa.managers.fs->otaCompleted(OperationStatus::FAILURE, callback);
-                    break;
-                default:
-                    PA_ERROR("Unknown status %d.", status);
-                    return -EINVAL;
-            }
+                std::lock_guard<std::mutex> operationLock(pa.fsOperationMutex);
+                {
+                    std::lock_guard<std::mutex> fsLock(pa.fsMutex);
+                    fsManager = pa.managers.fs;
+                }
 
-            ErrorCode error = promisePtr->get_future().get();
-            if (paStatus != Status::SUCCESS || error != ErrorCode::SUCCESS)
-            {
-                PA_ERROR("Failed to set OTA status %d, ret = %d, error = %d.", status,
-                    (int)paStatus, (int)error);
-                return -EFAULT;
+                if (!fsManager)
+                {
+                    PA_ERROR("FsManager not initialized — cannot set OTA status %d.", status);
+                    return PA_FAULT;
+                }
+
+                switch (status)
+                {
+                    case TAF_PA_MRC_STATUS_INITIATED:
+                        paStatus = fsManager->prepareForOta(OtaOperation::START, callback);
+                        break;
+                    case TAF_PA_MRC_STATUS_RESUMED:
+                        paStatus = fsManager->prepareForOta(OtaOperation::RESUME, callback);
+                        break;
+                    case TAF_PA_MRC_STATUS_SUCCEEDED:
+                        paStatus = fsManager->otaCompleted(OperationStatus::SUCCESS, callback);
+                        break;
+                    case TAF_PA_MRC_STATUS_FAILED:
+                        paStatus = fsManager->otaCompleted(OperationStatus::FAILURE, callback);
+                        break;
+                    default:
+                        PA_ERROR("Unknown status %d.", status);
+                        return -EINVAL;
+                }
+
+                ErrorCode error = promisePtr->get_future().get();
+                if (paStatus != Status::SUCCESS || error != ErrorCode::SUCCESS)
+                {
+                    PA_ERROR("Failed to set OTA status %d, ret = %d, error = %d.", status,
+                        (int)paStatus, (int)error);
+                    return -EFAULT;
+                }
             }
 
             result = 0;
@@ -444,8 +504,30 @@ pa_result_t taf_pa_mrc_PerformABSync
     };
 
     auto& pa = PlatformAdaptor::GetInstance();
-    auto status = pa.managers.fs->startAbSync(callback);
-    auto error = promisePtr->get_future().get();
+
+    // serialize IFsManager operations, but do not hold fsMutex
+    // across the blocking wait. fsMutex only protects pa.managers.fs itself.
+    // The local shared_ptr keeps IFsManager alive even if Deinit resets the
+    // global pointer while this asynchronous operation is in flight.
+    std::shared_ptr<IFsManager> fsManager;
+    telux::common::Status status = telux::common::Status::SUCCESS;
+    ErrorCode error = ErrorCode::SUCCESS;
+    {
+        std::lock_guard<std::mutex> operationLock(pa.fsOperationMutex);
+        {
+            std::lock_guard<std::mutex> fsLock(pa.fsMutex);
+            fsManager = pa.managers.fs;
+        }
+
+        if (!fsManager)
+        {
+            PA_ERROR("FsManager not initialized — cannot perform ABSync.");
+            return PA_FAULT;
+        }
+
+        status = fsManager->startAbSync(callback);
+        error = promisePtr->get_future().get();
+    }
     if (status != Status::SUCCESS || error != ErrorCode::SUCCESS)
     {
         PA_ERROR("Failed to set OTA status %d, ret = %d, error = %d.", status, (int)status,
@@ -456,18 +538,23 @@ pa_result_t taf_pa_mrc_PerformABSync
     return 0;
 }
 
-taf_pa_mrc_ProcessStatusHandlerRef_t taf_pa_mrc_AddProcessStatusHandler
+pa_result_t taf_pa_mrc_AddProcessStatusHandler
 (
     taf_pa_mrc_ProcessStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_mrc_ProcessStatusHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
 
-    pa.indicators.processStatus.handlerFuncPtr = (void*)handlerFuncPtr;
-    pa.indicators.processStatus.contextPtr = contextPtr;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        pa.indicators.processStatus.handlerFuncPtr = (void*)handlerFuncPtr;
+        pa.indicators.processStatus.contextPtr = contextPtr;
+    }
 
-    return nullptr;
+    if (handlerRefPtr) *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_mrc_GetEfsPeStatus
@@ -505,6 +592,7 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
     taf_pa_mrc_EfsUsageStats_t* statsPtr
 )
 {
+#if 0
     if (statsPtr == nullptr)
     {
         PA_ERROR("statsPtr is nullptr.");
@@ -512,13 +600,13 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
     }
 
     memset(statsPtr, 0, sizeof(*statsPtr));
-    PA_INFO("taf_pa_mrc_GetEfsUsageStats: statsPtr = %p", (void *)statsPtr);
+    PA_INFO("statsPtr = %p", (void *)statsPtr);
 
     taf_ns_mrc_EfsUsageStats_t stats;
     memset(&stats, 0, sizeof(stats));
 
     int32_t result = taf_ns_mrc_GetEfsUsageStats(&stats);
-    PA_INFO("taf_pa_mrc_GetEfsUsageStats: result from taf_ns_mrc_GetEfsUsageStats = %d", result);
+    PA_INFO("result from taf_ns_mrc_GetEfsUsageStats = %d", result);
     if (result != 0)
         return result;
 
@@ -553,10 +641,13 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
             statsPtr->clientList[i].taskName);
     }
     statsPtr->clientListLen = i;
-    PA_INFO("EFS clientListLen = %u", statsPtr->clientListLen);
-
-    PA_INFO("taf_pa_mrc_GetEfsUsageStats: returning result = %d", result);
+    PA_INFO("result = %d, EFS clientListLen = %u", result, statsPtr->clientListLen);
     return result;
+#else
+    (void)statsPtr;
+    PA_WARN("GetEfsUsageStats not supported");
+    return PA_UNSUPPORTED;
+#endif
 }
 
 pa_result_t taf_pa_mrc_SetTimerPeriod
@@ -569,16 +660,21 @@ pa_result_t taf_pa_mrc_SetTimerPeriod
     return taf_ns_mrc_SetTimerPeriod(nsTimer, period);
 }
 
-taf_pa_mrc_ScrubStatusHandlerRef_t taf_pa_mrc_AddScrubStatusHandler
+pa_result_t taf_pa_mrc_AddScrubStatusHandler
 (
     taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_mrc_ScrubStatusHandlerRef_t* handlerRefPtr
 )
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    pa.indicators.scrubStatus.handlerFuncPtr = (void*)handlerFuncPtr;
-    pa.indicators.scrubStatus.contextPtr = contextPtr;
-    return nullptr;
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        pa.indicators.scrubStatus.handlerFuncPtr = (void*)handlerFuncPtr;
+        pa.indicators.scrubStatus.contextPtr = contextPtr;
+    }
+    if (handlerRefPtr) *handlerRefPtr = nullptr;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_mrc_AckSlotToggle
@@ -591,6 +687,15 @@ pa_result_t taf_pa_mrc_AckSlotToggle
 
 pa_result_t taf_pa_mrc_Deinit()
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if initialized before attempting deinit
+    if (!gMrcPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     PA_INFO("Starting MRC platform adaptor deinitialization...");
 
     auto& pa = PlatformAdaptor::GetInstance();
@@ -598,19 +703,30 @@ pa_result_t taf_pa_mrc_Deinit()
     // Step 1: Clear the PA-level process status handler so no further callbacks
     // are dispatched. The ns layer has no remove-handler API, so nulling the
     // PA-level pointer is the only way to suppress further delivery.
-    PA_INFO("Clearing processStatus handler and context");
-    pa.indicators.processStatus.handlerFuncPtr = nullptr;
-    pa.indicators.processStatus.contextPtr = nullptr;
-
-    // Step 2: Clear the PA-level scrub status handler for the same reason.
-    PA_INFO("Clearing scrubStatus handler and context");
-    pa.indicators.scrubStatus.handlerFuncPtr = nullptr;
-    pa.indicators.scrubStatus.contextPtr = nullptr;
+    // Hold indicatorMutex so the clear is mutually exclusive with any in-flight
+    // SB callback (ProcessStatusHandler / ScrubStatusHandler) that reads the
+    // same pointers under the same mutex.
+    PA_INFO("Clearing processStatus and scrubStatus handlers and contexts");
+    {
+        std::lock_guard<std::mutex> lock(pa.indicatorMutex);
+        pa.indicators.processStatus.handlerFuncPtr = nullptr;
+        pa.indicators.processStatus.contextPtr = nullptr;
+        pa.indicators.scrubStatus.handlerFuncPtr = nullptr;
+        pa.indicators.scrubStatus.contextPtr = nullptr;
+    }
 
     // Step 3: Reset the IFsManager shared pointer.
+    // Take fsMutex so reset is mutually exclusive with NB calls copying pa.managers.fs.
+    // NB operations keep a local shared_ptr after releasing fsMutex, so Deinit does not
+    // block on long SDK operation waits and in-flight operations keep IFsManager alive.
     PA_INFO("Resetting managers.fs");
-    pa.managers.fs.reset();
+    {
+        std::lock_guard<std::mutex> lock(pa.fsMutex);
+        pa.managers.fs.reset();
+    }
 
+    gMrcPaInitialized.store(false, std::memory_order_release);
+    PA_INFO("MRC platform adaptor initialization flag reset to false.");
     PA_INFO("MRC platform adaptor deinitialization complete.");
     return 0;
 }

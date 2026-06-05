@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *  SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -11,6 +11,7 @@
 
 #include <arpa/inet.h> // Required for inet_pton
 #include <string.h> // Required for memset
+#include <atomic>
 
 #define L2TP_TIMEOUT 30
 
@@ -24,10 +25,12 @@ class taf_L2tpAdaptor
     public:
         static taf_L2tpAdaptor &getInstance();
 
-        bool initialize();
+        pa_result_t initialize();
 
         pa_result_t ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTunnel_t& paL2tpTunnelConfig,
                                          telux::data::net::L2tpTunnelConfig& teluxL2tpTunnelConfig);
+
+        std::atomic<bool> isInitialized{false};
 
 
         // Distinct callbacks and contexts per async operation
@@ -68,27 +71,29 @@ taf_L2tpAdaptor &taf_L2tpAdaptor::getInstance(void)
     return instance;
 }
 
-bool taf_pa_l2tp_Init()
+pa_result_t taf_pa_l2tp_Init()
 {
     PA_DEBUG("Enter taf_pa_l2tp_Init in PA");
     PA_INFO("Default platform adatper implementation");
 
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
 
-    bool result = pL2tpAdaptor.initialize();
-    if (result)
+    pa_result_t result = pL2tpAdaptor.initialize();
+    if (result == PA_OK)
     {
         PA_INFO("L2tp platform adapter initialization is done");
+        pL2tpAdaptor.isInitialized = true;
     }
     else
     {
         PA_CRIT("Failed to initialize L2tp platform adapter, ret: %d", result);
+        pL2tpAdaptor.isInitialized = false;
     }
 
     return result;
 }
 
-bool taf_L2tpAdaptor::initialize()
+pa_result_t taf_L2tpAdaptor::initialize()
 {
     PA_DEBUG("Enter initialize in PA");
 
@@ -102,7 +107,7 @@ bool taf_L2tpAdaptor::initialize()
     if (l2tpManager == nullptr)
     {
         PA_INFO("L2tp manager initialize error...");
-        return false;
+        return PA_FAULT;
     }
 
     telux::common::ServiceStatus subSystemStatus =
@@ -134,7 +139,7 @@ bool taf_L2tpAdaptor::initialize()
 
         if (l2tpManager == nullptr) {
             PA_ERROR("Failed to get L2TP manager with init callback");
-            return false;
+            return PA_FAULT;
         }
 
         std::future<telux::common::ServiceStatus> initFuture =
@@ -144,7 +149,7 @@ bool taf_L2tpAdaptor::initialize()
 
         if (std::future_status::timeout == waitStatus) {
             PA_ERROR("Timeout waiting for L2TP subsystem");
-            return false;
+            return PA_FAULT;
         } else {
             subSystemStatus = initFuture.get();
         }
@@ -152,12 +157,12 @@ bool taf_L2tpAdaptor::initialize()
 
     if (subSystemStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
         PA_INFO("L2tp manager service is available");
-        return true;
+        return PA_OK;
     } else {
         PA_ERROR("L2tp Manager initialization failed, status=%d",
                  static_cast<int>(subSystemStatus));
         l2tpManager = nullptr;
-        return false;
+        return PA_FAULT;
     }
 }
 
@@ -820,12 +825,21 @@ pa_result_t taf_pa_net_AddTunnelAsync(
 
 
 
-bool taf_pa_l2tp_Deinit()
+pa_result_t taf_pa_l2tp_Deinit()
 {
     PA_DEBUG("Starting L2TP platform adaptor deinitialization...");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
+
+    // Check if Init() was successfully called
+    if (!pL2tpAdaptor.isInitialized)
+    {
+        PA_WARN("L2TP Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     PA_DEBUG("Resetting l2tpManager");
     pL2tpAdaptor.l2tpManager.reset();
+    pL2tpAdaptor.isInitialized = false;
     PA_DEBUG("L2TP platform adaptor deinitialization complete.");
-    return true;
+    return PA_OK;
 }

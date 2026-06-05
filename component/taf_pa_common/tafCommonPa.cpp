@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -16,7 +16,11 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <stdbool.h>
+#include <atomic>
 #include <dlt/dlt.h>
+
+// Thread-safe initialization flag
+static std::atomic<bool> gCommonPaInitialized(false);
 
 DltContext* DltCtxPtr = NULL;
 
@@ -24,7 +28,6 @@ DltContext* DltCtxPtr = NULL;
 
 static taf_pa_common_LogLevel_t   gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
 static taf_pa_common_LogBackend_t gLogBackend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
-static bool gInited = false;
 
 static const char* LogLevelToStr
 (
@@ -225,9 +228,10 @@ static taf_pa_common_LogLevel_t PropLevelToPaLevel(taf_prop_common_LogLevel_t le
     }
 }
 
-void taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
+pa_result_t taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
 {
     gLogLevel = level;
+    return PA_OK;
 }
 
 pa_result_t taf_pa_common_LogSetBackend(taf_pa_common_LogBackend_t backend)
@@ -268,12 +272,12 @@ static void EmitLog(taf_pa_common_LogLevel_t level, const char* msg)
 }
 
 
-void taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
+pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
                               const char* file, const char* func, int line,
                               const char* fmt, ...)
 {
     if (level < GetLevel())
-        return;
+        return PA_OK;
 
     char buf[MAX_MSG_SIZE];
 
@@ -284,7 +288,7 @@ void taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
     va_end(ap);
 
     if (len < 0)
-        return;
+        return PA_OK;
 
     // If truncated, optionally append "..." to make truncation visible.
     if ((size_t)len >= sizeof(buf))
@@ -300,6 +304,7 @@ void taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
     }
 
     EmitLog(level, buf);
+    return PA_OK;
 }
 
 static void taf_pa_common_LogVMessage(taf_pa_common_LogLevel_t level,
@@ -393,9 +398,15 @@ pa_result_t taf_pa_common_LogInit(
     void* logCtxPtr
 )
 {
-    if (gInited)
+    // Atomically transition false->true; if already true, we are already initialized.
+    bool expected = false;
+    if (!gCommonPaInitialized.compare_exchange_strong(
+            expected, true,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire))
+    {
         return PA_OK;
-    gInited = true;
+    }
 
     if (backend == TAF_PA_COMMON_LOG_BACKEND_AUTO)
         backend = DetectBackendFromEnv();
@@ -413,13 +424,20 @@ pa_result_t taf_pa_common_LogInit(
 
     taf_prop_common_LogBind(&PropLogVt);
     taf_ns_common_LogBind(&NsLogVt);
+
+    PA_INFO("Common PA initialization flag set to true.");
+
     return PA_OK;
 }
 
 pa_result_t taf_pa_common_LogDeinit(void)
 {
-    if (!gInited)
-        return PA_OK;
+    // Check if Init() was called before Deinit()
+    if (!gCommonPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
 
     // Clear injected vtables to avoid dangling pointers in PA-prop and PA-noship
     taf_prop_common_LogBind(NULL);
@@ -435,6 +453,12 @@ pa_result_t taf_pa_common_LogDeinit(void)
     gLogBackend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
     gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
 
-    gInited = false;
+    // Log before resetting the flag so the message is emitted while the
+    // logging subsystem is still considered active.
+    PA_INFO("Common PA initialization flag reset to false.");
+
+    // Reset the atomic flag last, after all cleanup is complete.
+    gCommonPaInitialized.store(false, std::memory_order_release);
+
     return PA_OK;
 }

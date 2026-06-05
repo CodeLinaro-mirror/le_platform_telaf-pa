@@ -6,6 +6,7 @@
 #include <future>
 #include <string>
 #include <iomanip>
+#include <atomic>
 
 #include <telux/common/CommonDefines.hpp>
 #include <telux/common/DeviceConfig.hpp>
@@ -25,6 +26,8 @@ using namespace telux::platform;
 using namespace telux::tel;
 using namespace tafpa::sms;
 using namespace std;
+
+static std::atomic<bool> g_smsPaInitialized(false);
 
 std::map<telux::common::ErrorCode, std::string> errorCodeToStringMap_ = {
 
@@ -520,7 +523,7 @@ void SmsPAController::tafSmsListener::onIncomingSms
     }
 }
 
-void tafpa::sms::taf_pa_sms_RegisterIncomingSmsCallback
+pa_result_t tafpa::sms::taf_pa_sms_RegisterIncomingSmsCallback
 (
     IncomingSmsCallback cb
 )
@@ -528,9 +531,10 @@ void tafpa::sms::taf_pa_sms_RegisterIncomingSmsCallback
     PA_INFO("taf_pa_sms_RegisterIncomingSmsCallback");
     auto pACtrl = SmsPAController::getInstance();
     pACtrl->setIncomingSmsCallback(cb);
+  return PA_OK;
 }
 
-void tafpa::sms::taf_pa_sms_RegisterMemoryFullCallback
+pa_result_t tafpa::sms::taf_pa_sms_RegisterMemoryFullCallback
 (
     MemoryFullCallback cb
 )
@@ -538,6 +542,7 @@ void tafpa::sms::taf_pa_sms_RegisterMemoryFullCallback
     PA_INFO("taf_pa_sms_RegisterMemoryFullCallback");
     auto pACtrl = SmsPAController::getInstance();
     pACtrl->setMemoryFullCallback(cb);
+  return PA_OK;
 }
 
 pa_result_t tafpa::sms::taf_pa_sms_SetActivationStatus
@@ -610,13 +615,14 @@ pa_result_t tafpa::sms::taf_pa_sms_SetActivationStatus
     return futResult.get();
 }
 
-int32_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
+pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
 (
     uint32_t* idxArray,
     size_t idxArraySize,
     uint32_t timeout,
     taf_pa_sms_Tag tagType,
-    uint8_t phoneId
+    uint8_t phoneId,
+    int32_t* countPtr
 )
 {
     PA_INFO("taf_pa_sms_RequestSmsMessageList");
@@ -633,7 +639,7 @@ int32_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
     if (smsManager == nullptr)
     {
         PA_INFO("smsManager is NULL\n");
-        return -1;
+        return PA_FAULT;
     }
 
     telux::tel::SmsTagType smsTagType;
@@ -702,7 +708,7 @@ int32_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
     if (status != telux::common::Status::SUCCESS)
     {
         PA_INFO("requestSmsMessageList failed");
-        return -1;
+        return PA_FAULT;
     }
 
     std::future<std::vector<telux::tel::SmsMetaInfo>> futResult = prom->get_future();
@@ -710,7 +716,7 @@ int32_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
     if (std::future_status::timeout == waitStatus)
     {
         PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return -1;
+        return PA_FAULT;
     }
     else
     {
@@ -730,7 +736,8 @@ int32_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
         }
     }
 
-    return static_cast<int32_t>(numOfIdx);
+    if (countPtr) *countPtr = static_cast<int32_t>(numOfIdx);
+    return PA_OK;
 }
 
 pa_result_t tafpa::sms::taf_pa_sms_GetSmsCenterAddress
@@ -1640,7 +1647,7 @@ pa_result_t tafpa::sms::taf_pa_sms_SendRawSms
     return PA_OK;
 }
 
-void tafpa::sms::taf_pa_sms_SendPDUMessageAsync
+pa_result_t tafpa::sms::taf_pa_sms_SendPDUMessageAsync
 (
     uint8_t phoneId,
     const uint8_t* pduData,
@@ -1655,7 +1662,7 @@ void tafpa::sms::taf_pa_sms_SendPDUMessageAsync
         PA_ERROR("Invalid input: pduData is null or pduLength is 0");
         if (cb)
             cb(PA_FAULT);
-        return;
+        return PA_FAULT;
     }
 
     auto pACtrl = SmsPAController::getInstance();
@@ -1665,14 +1672,14 @@ void tafpa::sms::taf_pa_sms_SendPDUMessageAsync
     {
         PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
         cb(PA_FAULT);
-        return;
+        return PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
         cb(PA_FAULT);
-        return;
+        return PA_FAULT;
     }
 
     std::ostringstream oss;
@@ -1693,6 +1700,7 @@ void tafpa::sms::taf_pa_sms_SendPDUMessageAsync
             if (cb)
                 cb(result);
         });
+    return PA_OK;
 }
 
 pa_result_t tafpa::sms::taf_pa_sms_SetTag
@@ -2029,6 +2037,7 @@ pa_result_t tafpa::sms::taf_pa_sms_Init
     if (result == PA_OK)
     {
         PA_INFO("SMS platform adapter initialization is done");
+        g_smsPaInitialized.store(true, std::memory_order_release);
     }
     else
     {
@@ -2101,12 +2110,20 @@ pa_result_t tafpa::sms::taf_pa_sms_Deinit
     void
 )
 {
+    // Step 0: Check if Init() was called successfully
+    if (!g_smsPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     auto pACtrl = SmsPAController::getInstance();
 
     pa_result_t result = pACtrl->deinitialize();
     if (result == PA_OK)
     {
         PA_INFO("SMS platform adapter deinitialization done.");
+        g_smsPaInitialized.store(false, std::memory_order_release);
     }
     else
     {

@@ -114,7 +114,7 @@ PA_SHARED pa_result_t taf_pa_pms_Init
     uint32_t                  timeoutMs ///< Note: if we have 3 managers, the total is (3 * timeoutMs)
 );
 
-PA_SHARED void taf_pa_pms_Deinit
+PA_SHARED pa_result_t taf_pa_pms_Deinit
 (
     taf_pa_pms_Reference_t   *paRefPtr
 );

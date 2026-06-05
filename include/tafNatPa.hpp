@@ -100,4 +100,3 @@ PA_SHARED pa_result_t taf_pa_nat_QueryDestNatEntryList(
 );
 
 #endif /* TAF_NAT_PA_HPP */
-

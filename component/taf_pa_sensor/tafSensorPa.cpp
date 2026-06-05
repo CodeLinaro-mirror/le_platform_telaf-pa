@@ -19,12 +19,16 @@
 
 #include "tafSensorPa.hpp"
 
+#include <atomic>
+
 #define MAX_INIT_TIMEOUT 5
 #define SEC_TO_NANOS 1000000000
 
 using namespace telux::sensor;
 using namespace telux::common;
 using namespace tafpa::sensor;
+
+static std::atomic<bool> g_sensorPaInitialized(false);
 
 class ReusableIdGenerator {
 public:
@@ -432,9 +436,12 @@ telux::common::Status SensorPAController::PASensorClient::SelfTest(
     return status;
 }
 
-taf_pa_sensor_SensorId tafpa::sensor::taf_pa_sensor_GetSensorClient(const std::string& sensorName) {
+pa_result_t tafpa::sensor::taf_pa_sensor_GetSensorClient(const std::string& sensorName, taf_pa_sensor_SensorId& sensorId) {
     auto paCtrl = SensorPAController::getInstance();
-    return paCtrl->CreateSensorClient(sensorName);
+    sensorId = paCtrl->CreateSensorClient(sensorName);
+    if (sensorId == ReusableIdGenerator::INVALID_SENSOR_ID)
+        return PA_FAULT;
+    return PA_OK;
 }
 
 pa_result_t tafpa::sensor::taf_pa_sensor_ReleaseSensorClient(taf_pa_sensor_SensorId sensorId) {
@@ -658,6 +665,7 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Init(int8_t& listSize
     if (res == PA_OK) {
         PA_INFO("Sensor Platform adapter initialization done.");
         listSize = static_cast<int8_t>(paCtrl->getSensorListSize());
+        g_sensorPaInitialized.store(true, std::memory_order_release);
     } else {
         PA_CRIT("Sensor Platform adapter initialization failed.");
     }
@@ -665,10 +673,18 @@ PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Init(int8_t& listSize
 }
 
 PA_SHARED PA_WEAK pa_result_t tafpa::sensor::taf_pa_sensor_Deinit() {
+    // Step 0: Check if Init() was called successfully
+    if (!g_sensorPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     auto paCtrl = SensorPAController::getInstance();
     pa_result_t res = paCtrl->deinitialize();
     if (res == PA_OK) {
         PA_INFO("Sensor Platform adapter deinitialization done.");
+        g_sensorPaInitialized.store(false, std::memory_order_release);
     } else {
         PA_ERROR("Sensor Platform adapter deinitialization failed.");
     }

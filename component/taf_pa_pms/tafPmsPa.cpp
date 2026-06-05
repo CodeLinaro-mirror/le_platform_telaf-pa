@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -6,6 +6,7 @@
 #include "tafPmsPa.hpp"
 
 #include <assert.h>
+#include <atomic>
 #include <telux/power/PowerFactory.hpp>
 #include <telux/power/TcuActivityDefines.hpp>
 #include <telux/power/TcuActivityListener.hpp>
@@ -14,21 +15,30 @@
 #include "taf_ns_pa_pms.hpp"
 
 static SendEventFunc_t SendEvent;
+static std::mutex pmsSendEventMutex;
 
 static inline void RaiseEvent
 (
     taf_pa_pms_Event_t * ev
 )
 {
-    if (SendEvent != NULL)
+    SendEventFunc_t handler = nullptr;
     {
-        SendEvent(ev);
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        handler = SendEvent;
+    }
+    if (handler != NULL)
+    {
+        handler(ev);
     }
 }
 
 using namespace telux::power;
 using namespace telux::common;
 using namespace std;
+
+// Thread-safe initialization flag
+static std::atomic<bool> gPmsPaInitialized(false);
 
 #define TAF_MODEM_WMS_SVC_ID                          (0x05)
 #define TAF_MODEM_VOICE_CALL_SVC_ID                   (0x09)
@@ -572,8 +582,20 @@ pa_result_t taf_pa_pms_Init
     uint32_t                 timeoutMs
 )
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if already initialized (idempotent pattern)
+    if (gPmsPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("PMS platform adaptor already initialized");
+        return PA_OK;  // Idempotent - safe to call multiple times
+    }
+
     // Loaded the Event-Reporter for the PA layer
-    SendEvent = fnSendEvent;
+    {
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        SendEvent = fnSendEvent;
+    }
 
     PA_INFO("Loading PMS [ACTUAL] PA ...");
 
@@ -726,19 +748,30 @@ pa_result_t taf_pa_pms_Init
 
     *paRefPtr = &pa;
 
+    gPmsPaInitialized.store(true, std::memory_order_release);
+    PA_INFO("PMS platform adaptor initialization flag set to true.");
     PA_INFO("PMS [ACTUAL] PA loaded");
     return PA_OK;
 }
 
-void taf_pa_pms_Deinit
+pa_result_t taf_pa_pms_Deinit
 (
     taf_pa_pms_Reference_t *paRefPtr
 )
 {
+    PA_DEBUG("PA implementation.");
+
+    // Check if initialized before attempting deinit
+    if (!gPmsPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     if (paRefPtr == NULL || *paRefPtr != &pa)
     {
         PA_ERROR("Bad paRefPtr");
-        return;
+        return PA_FAULT;
     }
 
     PA_INFO("Starting PMS PA deinitialization...");
@@ -803,11 +836,17 @@ void taf_pa_pms_Deinit
 
     // Step 7: Clear the event-reporter callback so no further events are raised.
     PA_INFO("Clearing SendEvent callback");
-    SendEvent = NULL;
+    {
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        SendEvent = NULL;
+    }
 
     *paRefPtr = NULL; // Reset caller reference pointer
 
+    gPmsPaInitialized.store(false, std::memory_order_release);
+    PA_INFO("PMS platform adaptor initialization flag reset to false.");
     PA_INFO("PMS PA deinitialization complete.");
+    return PA_OK;
 }
 
 pa_result_t taf_pa_pms_SetPowerStateAsMaster

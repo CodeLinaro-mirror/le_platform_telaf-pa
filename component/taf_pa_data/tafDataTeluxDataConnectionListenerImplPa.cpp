@@ -97,9 +97,14 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
     std::future<bool> fut = promisePtr->get_future();
     std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
 
-    // requestDataCallBitRate callback lambda - captures promisePtr by value
-    auto respCb = [&bitRate, promisePtr](telux::data::BitRateInfo &cbkBitRate,
-                                          telux::common::ErrorCode errorCode)
+    // use a heap-allocated shared_ptr<BitRateInfo> captured by value so
+    // the callback can never write to a dangling reference if updateBitRate() returns
+    // early (e.g. on timeout) before the SDK fires the callback.
+    auto bitRatePtr = std::make_shared<telux::data::BitRateInfo>();
+
+    // requestDataCallBitRate callback lambda - captures bitRatePtr and promisePtr by value
+    auto respCb = [bitRatePtr, promisePtr](telux::data::BitRateInfo &cbkBitRate,
+                                            telux::common::ErrorCode errorCode)
     {
         SET_SDK_THREAD_NAME();
         bool bResult = false;
@@ -110,8 +115,8 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
                 // Success
                 PA_DEBUG("maxRxRate: %" PRIu64 "", cbkBitRate.maxRxRate);
                 PA_DEBUG("maxTxRate: %" PRIu64 "", cbkBitRate.maxTxRate);
-                bitRate.maxRxRate = cbkBitRate.maxRxRate;
-                bitRate.maxTxRate = cbkBitRate.maxTxRate;
+                bitRatePtr->maxRxRate = cbkBitRate.maxRxRate;
+                bitRatePtr->maxTxRate = cbkBitRate.maxTxRate;
                 bResult = true;
             }
             else
@@ -154,6 +159,8 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
         if (bFutResult)
         {
             PA_DEBUG("requestDataCallBitRate SUCCESS");
+            // Copy the result from the shared object back to the caller's output parameter.
+            bitRate = *bitRatePtr;
             return PA_OK;
         }
     }

@@ -72,12 +72,12 @@ PA_SHARED pa_result_t taf_pa_sms_ReadMessage
     uint32_t* pduMsgIndex
 );
 
-PA_SHARED void taf_pa_sms_RegisterIncomingSmsCallback
+PA_SHARED pa_result_t taf_pa_sms_RegisterIncomingSmsCallback
 (
     IncomingSmsCallback cb
 );
 
-PA_SHARED void taf_pa_sms_RegisterMemoryFullCallback
+PA_SHARED pa_result_t taf_pa_sms_RegisterMemoryFullCallback
 (
     MemoryFullCallback cb
 );
@@ -90,7 +90,7 @@ PA_SHARED pa_result_t taf_pa_sms_SendRawSms
     uint8_t phoneId
 );
 
-PA_SHARED void taf_pa_sms_SendPDUMessageAsync
+PA_SHARED pa_result_t taf_pa_sms_SendPDUMessageAsync
 (
     uint8_t phoneId,
     const uint8_t* pduData,
@@ -171,16 +171,16 @@ PA_SHARED pa_result_t taf_pa_sms_DeleteMessage
     uint8_t phoneId
 );
 
-PA_SHARED int32_t taf_pa_sms_RequestSmsMessageList
+PA_SHARED pa_result_t taf_pa_sms_RequestSmsMessageList
 (
     uint32_t* arr,
     size_t arrSize,
     uint32_t timeout,
     taf_pa_sms_Tag tagType,
-    uint8_t phoneId
+    uint8_t phoneId,
+    int32_t* msgCountPtr
 );
 
 }
 
 #endif /* TAF_SMS_PA_HPP */
-

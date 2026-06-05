@@ -154,10 +154,11 @@ PA_SHARED pa_result_t taf_pa_mrc_SetProcessStatus
     taf_pa_mrc_Status_t status
 );
 
-PA_SHARED taf_pa_mrc_ProcessStatusHandlerRef_t taf_pa_mrc_AddProcessStatusHandler
+PA_SHARED pa_result_t taf_pa_mrc_AddProcessStatusHandler
 (
     taf_pa_mrc_ProcessStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_mrc_ProcessStatusHandlerRef_t* handlerRefPtr
 );
 
 PA_SHARED pa_result_t taf_pa_mrc_GetEfsPeStatus
@@ -186,10 +187,11 @@ PA_SHARED pa_result_t taf_pa_mrc_PerformABSync
     void
 );
 
-PA_SHARED taf_pa_mrc_ScrubStatusHandlerRef_t taf_pa_mrc_AddScrubStatusHandler
+PA_SHARED pa_result_t taf_pa_mrc_AddScrubStatusHandler
 (
     taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_mrc_ScrubStatusHandlerRef_t* handlerRefPtr
 );
 
 PA_SHARED pa_result_t taf_pa_mrc_AckSlotToggle

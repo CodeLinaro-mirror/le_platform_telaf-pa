@@ -112,8 +112,8 @@ typedef struct
 // Typedef for asynchronous callbacks
 typedef void (*taf_pa_l2tp_CallCb)(pa_result_t result, void *contextPtr);
 
-PA_SHARED bool taf_pa_l2tp_Init();
-PA_SHARED bool taf_pa_l2tp_Deinit();
+PA_SHARED pa_result_t taf_pa_l2tp_Init();
+PA_SHARED pa_result_t taf_pa_l2tp_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -192,4 +192,3 @@ PA_SHARED pa_result_t taf_pa_net_SetL2tpConfigSync
 );
 
 #endif /* TAF_L2TP_PA_HPP */
-

@@ -27,7 +27,7 @@ typedef void* KeyMgt_KeyFileRef_t;
  * PA initialization.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED void taf_pa_fsc_Init
+PA_SHARED pa_result_t taf_pa_fsc_Init
 (
     void* cryptoFunc
 );
@@ -37,7 +37,7 @@ PA_SHARED void taf_pa_fsc_Init
  * PA deinitialization.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED void taf_pa_fsc_Deinit
+PA_SHARED pa_result_t taf_pa_fsc_Deinit
 (
     void
 );

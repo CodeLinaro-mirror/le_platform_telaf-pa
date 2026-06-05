@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 #include <iostream>
+#include <atomic>
 
 
 #include "tafSocksPa.hpp"
@@ -24,6 +25,8 @@ class taf_SocksAdaptor
             static taf_SocksAdaptor &getInstance();
 
             pa_result_t initialize();
+
+            std::atomic<bool> isInitialized{false};
 
             std::shared_ptr<telux::data::net::ISocksManager> getSocksManager()
             {
@@ -206,10 +209,12 @@ pa_result_t taf_pa_socks_Init()
     if (result == PA_OK)
     {
         PA_INFO("Socks platform adapter initialization is done");
+        pSocksAdaptor.isInitialized = true;
     }
     else
     {
         PA_CRIT("Failed to initialize Socks platform adapter, ret: %d", result);
+        pSocksAdaptor.isInitialized = false;
     }
 
     return result;
@@ -241,11 +246,13 @@ pa_result_t taf_pa_net_SetDeviceMode
  *
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_net_DeviceMode_t taf_pa_net_GetDeviceMode
+pa_result_t taf_pa_net_GetDeviceMode
 (
+    taf_pa_net_DeviceMode_t* deviceModePtr
 )
 {
-    return TAF_PA_NET_DEVICE_NONE;
+    if (deviceModePtr) *deviceModePtr = TAF_PA_NET_DEVICE_NONE;
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -276,17 +283,16 @@ pa_result_t taf_pa_net_SetSocksAuthMethod
  * Get SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_net_AuthMethod_t taf_pa_net_GetSocksAuthMethod
+pa_result_t taf_pa_net_GetSocksAuthMethod
 (
+    taf_pa_net_AuthMethod_t* authMethodPtr
 )
 {
     PA_INFO("Actual taf_pa_net_GetSocksAuthMethod implementation");
 
     taf_prop_net_AuthMethod_t auth = taf_prop_net_GetSocksAuthMethod();
-
-    taf_pa_net_AuthMethod_t authMethod = static_cast<taf_pa_net_AuthMethod_t>(auth);
-
-    return authMethod;
+    if (authMethodPtr) *authMethodPtr = static_cast<taf_pa_net_AuthMethod_t>(auth);
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -598,11 +604,20 @@ pa_result_t taf_pa_socks_Deinit()
 {
     PA_INFO("Starting SOCKS platform adaptor deinitialization...");
     auto &pSocksAdaptor = taf_SocksAdaptor::getInstance();
+
+    // Check if Init() was successfully called
+    if (!pSocksAdaptor.isInitialized)
+    {
+        PA_WARN("SOCKS Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     PA_INFO("Clearing SOCKS callbacks");
     pSocksAdaptor.callCbEnableAsync = nullptr;
     pSocksAdaptor.callCbDisableAsync = nullptr;
     PA_INFO("Resetting socksManager");
     pSocksAdaptor.socksManager.reset();
+    pSocksAdaptor.isInitialized = false;
     PA_INFO("SOCKS platform adaptor deinitialization complete.");
     return PA_OK;
 }

@@ -142,6 +142,7 @@ pa_result_t taf::pa::data::TafPaTeluxData::GetServinSystemInitState
     taf::pa::data::SubsystemState_e &sState
 )
 {
+    std::shared_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
     PA_INFO("Serving system init state for slot id[%d]: %d", slotId,
                                             servingSystemManagersInitStateMap_[slotId]);
     sState = servingSystemManagersInitStateMap_[slotId];
@@ -155,9 +156,11 @@ pa_result_t taf::pa::data::TafPaTeluxData::SetServingSystemInitState
     bool bSendEvent
 )
 {
-    servingSystemManagersInitStateMap_[slotId] = sState;
-    PA_INFO("Serving system init state for slot id[%d]: %d", slotId,
-                                                    servingSystemManagersInitStateMap_[slotId]);
+    {
+        std::unique_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
+        servingSystemManagersInitStateMap_[slotId] = sState;
+    }
+    PA_INFO("Serving system init state for slot id[%d]: %d", slotId, TO_INT(sState));
 
     if (bSendEvent)
     {
@@ -216,8 +219,11 @@ pa_result_t taf::pa::data::TafPaTeluxData::RegisterDataServingSystemListeners()
     {
         if (false == bDataSSLRegisteredMap_[(SlotId)slotId])
         {
-            SubsystemState_e subsysState =
-                                servingSystemManagersInitStateMap_[static_cast<SlotId_e>(slotId)];
+            SubsystemState_e subsysState;
+            {
+                std::shared_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
+                subsysState = servingSystemManagersInitStateMap_[static_cast<SlotId_e>(slotId)];
+            }
             if (SubsystemState_e::AVAILABLE != subsysState)
             {
                 PA_ERROR("Subsystem not initialized for slot id: %d", slotId);
@@ -333,8 +339,12 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
         taf::pa::data::SlotId_e paSlotId = static_cast<taf::pa::data::SlotId_e>(slotId);
 
         // Check if already initialized
-        if (taf::pa::data::SubsystemState_e::AVAILABLE ==
-                                                    servingSystemManagersInitStateMap_[paSlotId])
+        SubsystemState_e initCheckState;
+        {
+            std::shared_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
+            initCheckState = servingSystemManagersInitStateMap_[paSlotId];
+        }
+        if (taf::pa::data::SubsystemState_e::AVAILABLE == initCheckState)
         {
             PA_INFO("Data serving system manager already initialized for slot ID %d.", slotId);
             successfulSlots.push_back(slotId);
@@ -498,8 +508,11 @@ pa_result_t taf::pa::data::TafPaTeluxData::deInitDataServingSystemManagers()
     PA_INFO("Clear dataServingSystemManagersMap_");
     dataServingSystemManagersMap_.clear();
 
-    servingSystemManagersInitStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
-    servingSystemManagersInitStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
+    {
+        std::unique_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
+        servingSystemManagersInitStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
+        servingSystemManagersInitStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
+    }
 
     // Clear subsystem state change event callbacks
     PA_INFO("Clear subsystemEventsCallbacks_");
@@ -547,7 +560,10 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetServingSystemInitState
 
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
                                                               "PA phone manager not initialized.");
-    sState = servingSystemManagersInitStateMap_[slotId];
+    {
+        std::shared_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
+        sState = servingSystemManagersInitStateMap_[slotId];
+    }
     PA_DEBUG("Serving system init state for slot id[%d]: %d", slotId,TO_INT(sState));
     return PA_OK;
 }

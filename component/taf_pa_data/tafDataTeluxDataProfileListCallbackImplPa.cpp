@@ -28,6 +28,19 @@ bool taf::pa::data::TafPaTeluxDataProfileListCallback::GetListProfilesCmdInProgr
     return bListProfilesCmdInProgress_.load();
 }
 
+// atomically transition bListProfilesCmdInProgress_ from false→true using
+// compare_exchange_strong, collapsing the separate check-then-set into a single indivisible
+// operation so two concurrent NB threads cannot both pass the "not busy" guard.
+// Returns true  → caller acquired the token (flag was false, now true; proceed).
+// Returns false → flag was already true; caller must return PA_BUSY.
+bool taf::pa::data::TafPaTeluxDataProfileListCallback::TryAcquireListProfilesCmd()
+{
+    bool expected = false;
+    bool acquired = bListProfilesCmdInProgress_.compare_exchange_strong(expected, true);
+    PA_DEBUG("TryAcquireListProfilesCmd: %s", acquired ? "acquired" : "busy");
+    return acquired;
+}
+
 void taf::pa::data::TafPaTeluxDataProfileListCallback::SetListProfilesCallback
 (
     taf_pa_data_profile_GetAllAsyncCb callback
@@ -40,6 +53,17 @@ void
 taf::pa::data::TafPaTeluxDataProfileListCallback::SetListProfilesContext(void *ctxPtr)
 {
     contextListProfiles_ = ctxPtr;
+    PA_DEBUG("contextListProfiles_: %p", contextListProfiles_);
+}
+
+// set both fields atomically under profileListMutex_ so the SB callback
+// can never observe a partially-updated pair (new callback with stale/null context).
+void taf::pa::data::TafPaTeluxDataProfileListCallback::SetListProfilesCallbackAndContext(
+    taf_pa_data_profile_GetAllAsyncCb callback, void *ctxPtr)
+{
+    std::lock_guard<std::mutex> lock(profileListMutex_);
+    callbackListProfiles_ = callback;
+    contextListProfiles_  = ctxPtr;
     PA_DEBUG("contextListProfiles_: %p", contextListProfiles_);
 }
 
@@ -58,35 +82,43 @@ void taf::pa::data::TafPaTeluxDataProfileListCallback::onProfileListResponse(
                                                                                          result);
     PA_INFO("Phone ID: %d, Slot ID: %d", TO_INT(phoneId), TO_INT(slotId));
 
-    if (telux ::common::ErrorCode::SUCCESS != error)
+    // copy both callback and context atomically under profileListMutex_ before
+    // any use.  This prevents observing a partially-updated pair written by PaListProfiles()
+    // on the NB side (new callback with stale/null context, or vice versa).  The lock is
+    // released before invoking the callback to avoid holding it during the user's handler.
+    taf_pa_data_profile_GetAllAsyncCb localCallback;
+    void *localContext;
+    {
+        std::lock_guard<std::mutex> lock(profileListMutex_);
+        localCallback = callbackListProfiles_;
+        localContext  = contextListProfiles_;
+    }
+
+    if (telux::common::ErrorCode::SUCCESS != error)
     {
         PA_WARN("onProfileListResponse failed: %d(%s)", TO_INT(error),
                 telux::common::Utils::getErrorCodeAsString(error).c_str());
-        // call the callback with error
-        if (nullptr != callbackListProfiles_)
+        // call the callback with error (outside the lock)
+        if (nullptr != localCallback)
         {
-            callbackListProfiles_(
+            localCallback(
                 phoneId,                                     // The phone ID
                 PA_FAULT,                                    // Error
                 std::vector<taf::pa::data::ProfileInfo_t>(), // Empty vector
-                contextListProfiles_                         // App provided context
+                localContext                                 // App provided context
             );
         }
         else
         {
             PA_WARN("callbackListProfiles_ is NULL");
         }
-        // Reset the callback and context
-        SetListProfilesCallback(nullptr);
-        SetListProfilesContext(nullptr);
+        // Reset both fields atomically
+        SetListProfilesCallbackAndContext(nullptr, nullptr);
         // Reset call in progress flag
         SetListProfilesCmdInProgress(false);
         return;
     }
     PA_INFO("onProfileListResponse: %zu profiles", profiles.size());
-
-    // Protect the critical section
-    std::lock_guard<std::mutex> lock(profileListMutex_);
 
     // Convert the telux::data::DataProfile to taf::pa::data::ProfileInfo_t
     std::vector<taf::pa::data::ProfileInfo_t> profileInfos;
@@ -106,14 +138,14 @@ void taf::pa::data::TafPaTeluxDataProfileListCallback::onProfileListResponse(
         }
     }
 
-    // call the callback
-    if (nullptr != callbackListProfiles_)
+    // call the callback outside the lock
+    if (nullptr != localCallback)
     {
-        callbackListProfiles_(
-            phoneId,             // The phone ID
-            PA_OK,               // Success
-            profileInfos,        // ProfileInfo_t vector
-            contextListProfiles_ // App provided context
+        localCallback(
+            phoneId,      // The phone ID
+            PA_OK,        // Success
+            profileInfos, // ProfileInfo_t vector
+            localContext  // App provided context
         );
     }
     else
@@ -121,9 +153,8 @@ void taf::pa::data::TafPaTeluxDataProfileListCallback::onProfileListResponse(
         PA_WARN("callbackListProfiles_ is NULL");
     }
 
-    // Reset the callback and context
-    SetListProfilesCallback(nullptr);
-    SetListProfilesContext(nullptr);
+    // Reset both fields atomically
+    SetListProfilesCallbackAndContext(nullptr, nullptr);
     // Reset call in progress flag
     SetListProfilesCmdInProgress(false);
     return;

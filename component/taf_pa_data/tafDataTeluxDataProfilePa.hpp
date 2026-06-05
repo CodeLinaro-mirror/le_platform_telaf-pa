@@ -23,6 +23,7 @@
 
 #include <map>
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <future>
 #include <shared_mutex>
@@ -72,11 +73,19 @@ namespace data
             telux::common::ErrorCode error) override;
         void SetListProfilesCallback(taf_pa_data_profile_GetAllAsyncCb callback);
         void SetListProfilesContext(void *ctxPtr);
+        // Set both callback and context atomically under profileListMutex_
+        void SetListProfilesCallbackAndContext(taf_pa_data_profile_GetAllAsyncCb callback,
+                                              void *ctxPtr);
 
         // State management functions
         void SetListProfilesCmdInProgress(bool bState);
         // Returns true if a profile list command is in progress
         bool GetListProfilesCmdInProgress();
+        // atomically transition bListProfilesCmdInProgress_ from false→true.
+        // Returns true if the caller successfully acquired the "in-progress" token
+        // (i.e. the flag was false and is now set to true).
+        // Returns false if the flag was already true (another request is in progress).
+        bool TryAcquireListProfilesCmd();
 
     private:
 
@@ -226,6 +235,42 @@ namespace data
         std::mutex dataProfileDeleteMutex_;
         std::mutex dataProfileUpdateMutex_;
         std::mutex dataProfileGetDetailsMutex_;
+
+        // counter + CV used to drain all detached async threads launched
+        // from PaUpdateProfileEventInfo() before deInitDataProfileManagers() clears
+        // dataProfileManagersMap_.
+        //
+        // Protocol (all three fields are accessed only while holding asyncThreadDrainMtx_,
+        // except for the atomic load/store which uses acquire/release ordering):
+        //
+        //  PaUpdateProfileEventInfo():
+        //    1. Lock asyncThreadDrainMtx_.
+        //    2. If deinitInProgress_ is true, drop the event and return (Deinit has started).
+        //    3. Increment activeAsyncThreadCount_.
+        //    4. Unlock.
+        //    5. Launch (and detach) the worker thread.
+        //    In the worker thread, at exit:
+        //    6. Lock asyncThreadDrainMtx_.
+        //    7. Decrement activeAsyncThreadCount_.
+        //    8. notify_all on asyncThreadDrainCv_.
+        //    9. Unlock.
+        //
+        //  deInitDataProfileManagers() (after PaDeregisterProfileCallbacks() returns):
+        //    1. Lock asyncThreadDrainMtx_.
+        //    2. Set deinitInProgress_ = true  (blocks any new thread launches).
+        //    3. wait_for on asyncThreadDrainCv_ until activeAsyncThreadCount_ == 0.
+        //    4. Unlock.
+        //    5. Clear dataProfileManagersMap_ (safe: no thread is accessing it).
+        //
+        //  initDataProfileManagers() resets deinitInProgress_ = false so that a
+        //  subsequent Init() call re-enables thread launches.
+        std::atomic<int>        activeAsyncThreadCount_{0};
+        std::mutex              asyncThreadDrainMtx_;
+        std::condition_variable asyncThreadDrainCv_;
+        bool                    deinitInProgress_{false};
+
+        // Mutex for protecting dataProfileManagersInitStateMap_ (NB reads, SB writes).
+        std::shared_mutex dataProfileSubsysStateMapMtx_;
 
         // Callbacks
         std::shared_mutex dataProfileCallbacksMutex_;

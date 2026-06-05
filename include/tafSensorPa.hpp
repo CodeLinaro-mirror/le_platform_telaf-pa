@@ -135,7 +135,7 @@ PA_SHARED pa_result_t taf_pa_sensor_GetSensorInfo(
 );
 
 // Gets a client ID for a sensor instance by its name.
-PA_SHARED taf_pa_sensor_SensorId taf_pa_sensor_GetSensorClient(const std::string& sensorName);
+PA_SHARED pa_result_t taf_pa_sensor_GetSensorClient(const std::string& sensorName, taf_pa_sensor_SensorId& sensorId);
 
 // Releases a sensor client associated with the given ID.
 PA_SHARED pa_result_t taf_pa_sensor_ReleaseSensorClient(taf_pa_sensor_SensorId sensorId);

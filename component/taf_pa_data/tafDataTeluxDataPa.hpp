@@ -173,6 +173,9 @@ class TafPaTeluxData
         // Mutex for synchronizing registering, deregistering and calling client callbacks.
         std::mutex roamingEventsCbksMtx_;
 
+        // Mutex for protecting servingSystemManagersInitStateMap_ (NB reads, SB writes).
+        std::shared_mutex servingSystemStateMapMtx_;
+
         // The callback entry vector for subsystem events
         std::vector<SubsystemEventsCallbackEntry_t> subsystemEventsCallbacks_;
         uint16_t subsystemEventsCallbackId_ = 1;

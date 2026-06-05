@@ -9,6 +9,7 @@
 #include <telux/data/DataFactory.hpp>
 #include <telux/data/net/NatManager.hpp>
 #include <glib.h>
+#include <atomic>
 
 using namespace telux::data;
 using namespace telux::common;
@@ -24,6 +25,8 @@ class taf_NatAdaptor
 
             pa_result_t initialize();
             
+            std::atomic<bool> isInitialized{false};
+
             std::shared_ptr<telux::data::net::INatManager> getNatManager()
             {
               return staticNatManager;
@@ -123,10 +126,12 @@ pa_result_t taf_pa_nat_Init()
     if (result == PA_OK)
     {
         PA_INFO("NAT platform adapter initialization is done");
+        pNatAdaptor.isInitialized = true;
     }
     else
     {
         PA_CRIT("Failed to initialize NAT platform adapter, ret: %d", result);
+        pNatAdaptor.isInitialized = false;
     }
 
     return PA_OK;
@@ -430,8 +435,17 @@ pa_result_t taf_pa_nat_Deinit()
 {
     PA_INFO("Starting NAT platform adaptor deinitialization...");
     auto &pNatAdaptor = taf_NatAdaptor::getInstance();
+
+    // Check if Init() was successfully called
+    if (!pNatAdaptor.isInitialized)
+    {
+        PA_WARN("NAT Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     PA_INFO("Resetting staticNatManager");
     pNatAdaptor.staticNatManager.reset();
+    pNatAdaptor.isInitialized = false;
     PA_INFO("NAT platform adaptor deinitialization complete.");
     return PA_OK;
 }
