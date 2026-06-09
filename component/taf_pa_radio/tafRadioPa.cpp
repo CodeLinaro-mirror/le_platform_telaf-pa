@@ -654,6 +654,11 @@ class Listener
                 (
                     tel::LteCsCapability capability
                 ) override;
+
+                void onServiceStatusChange
+                (
+                    telux::common::ServiceStatus status
+                ) override;
         };
 
         class ImsServingSystemListener :
@@ -742,6 +747,11 @@ class Listener
                 void onNrIconTypeChanged
                 (
                     telux::data::NrIconType type
+                ) override;
+
+                void onServiceStatusChange
+                (
+                    telux::common::ServiceStatus status
                 ) override;
         };
 };
@@ -3506,6 +3516,27 @@ void RequestCallback::NrIconTypeResponse
     sem_post(&semaphore);
 }
 
+static void RatSvcStatusHandler
+(
+    uint32_t instance,
+    taf_prop_radio_RatSvcStatusIndication_t indication,
+    void* contextPtr
+);
+
+static void LteCphyCaHandler
+(
+    uint32_t instance,
+    taf_prop_radio_LteCphyCaIndication_t indication,
+     void* contextPtr
+);
+
+static void DataAvailSysStatusHandler
+(
+    uint32_t instance,
+    taf_prop_radio_DataAvailSysStatusIndication_t indication,
+    void* contextPtr
+);
+
 void Listener::TelephonyServingSystemListener::onNetworkRejection
 (
     tel:: NetworkRejectInfo info
@@ -3597,6 +3628,93 @@ void Listener::TelephonyServingSystemListener::onLteCsCapabilityChanged
         taf_pa_radio_LteCsCapabilityIndication_t indication;
         indication.capability = Utility::Convert::LteCsCapability(capability);
         handlerFunc(instance, indication, ctx);
+    }
+}
+
+void Listener::TelephonyServingSystemListener::onServiceStatusChange
+(
+    telux::common::ServiceStatus status
+)
+{
+    auto& pa = PlatformAdaptor::GetInstance();
+    std::lock_guard<std::mutex> lock(pa.initMutex);
+
+    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_INFO("TelephonyServingSystem service status changed to available for instance %d.",
+            instance);
+
+        if (!pa.propRadioInitialized.load(std::memory_order_acquire))
+        {
+            int32_t res = taf_prop_radio_Init();
+            if (res == 0)
+            {
+                PA_INFO("taf_prop_radio_Init() completed successfully.");
+                pa.propRadioInitialized.store(true, std::memory_order_release);
+            }
+            else if (res == -ENOSYS)
+            {
+                PA_INFO("taf_prop_radio_Init() not implemented (stub).");
+            }
+            else
+            {
+                PA_ERROR("taf_prop_radio_Init() failed with result %d.", res);
+                return;
+            }
+        }
+
+        int32_t res = taf_prop_radio_InitInstance(instance);
+        if (res == 0)
+        {
+            PA_INFO("taf_prop_radio_InitInstance() completed successfully for instance %d.",
+                instance);
+            if (instance == 0)
+            {
+                taf_prop_radio_AddRatSvcStatusHandler(0, RatSvcStatusHandler, nullptr);
+                taf_prop_radio_AddLteCphyCaHandler(0, LteCphyCaHandler, nullptr);
+                taf_prop_radio_AddDataAvailSysStatusHandler(0, DataAvailSysStatusHandler, nullptr);
+                PA_INFO("Re-registered prop indication handlers after service recovery.");
+            }
+        }
+        else
+        {
+            PA_ERROR("taf_prop_radio_InitInstance() failed with result %d for instance %d.",
+                res, instance);
+        }
+        return;
+    }
+
+    PA_WARN("TelephonyServingSystem service status changed to unavailable for instance %d. "
+        "Calling deinit", instance);
+
+    if (!pa.propRadioInitialized.load(std::memory_order_acquire))
+    {
+        PA_INFO("Skipping taf_prop_radio_Deinit() because prop radio was not initialized.");
+        return;
+    }
+
+    if (instance == 0)
+    {
+        taf_prop_radio_AddRatSvcStatusHandler(0, nullptr, nullptr);
+        taf_prop_radio_AddLteCphyCaHandler(0, nullptr, nullptr);
+        taf_prop_radio_AddDataAvailSysStatusHandler(0, nullptr, nullptr);
+        PA_INFO("Removed prop indication handlers before service deinit.");
+    }
+
+    int32_t res = taf_prop_radio_Deinit();
+    if (res == 0)
+    {
+        PA_INFO("taf_prop_radio_Deinit() completed successfully for instance %d.", instance);
+        pa.propRadioInitialized.store(false, std::memory_order_release);
+    }
+    else if (res == -ENOSYS)
+    {
+        PA_INFO("taf_prop_radio_Deinit() not implemented (stub).");
+    }
+    else
+    {
+        PA_ERROR("taf_prop_radio_Deinit() failed with result %d for instance %d.",
+            res, instance);
     }
 }
 
@@ -3792,6 +3910,92 @@ void Listener::DataServingSystemListener::onNrIconTypeChanged
         taf_pa_radio_NrIconChangeIndication_t indication;
         indication.icon = Utility::Convert::NrIcon(type);
         handlerFunc(instance, indication, ctx);
+    }
+}
+
+void Listener::DataServingSystemListener::onServiceStatusChange
+(
+    telux::common::ServiceStatus status
+)
+{
+    auto& pa = PlatformAdaptor::GetInstance();
+    std::lock_guard<std::mutex> lock(pa.initMutex);
+
+    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_INFO("DataServingSystem service status changed to available for instance %d.", instance);
+
+        if (!pa.propRadioInitialized.load(std::memory_order_acquire))
+        {
+            int32_t res = taf_prop_radio_Init();
+            if (res == 0)
+            {
+                PA_INFO("taf_prop_radio_Init() completed successfully.");
+                pa.propRadioInitialized.store(true, std::memory_order_release);
+            }
+            else if (res == -ENOSYS)
+            {
+                PA_INFO("taf_prop_radio_Init() not implemented (stub).");
+            }
+            else
+            {
+                PA_ERROR("taf_prop_radio_Init() failed with result %d.", res);
+                return;
+            }
+        }
+
+        int32_t res = taf_prop_radio_InitInstance(instance);
+        if (res == 0)
+        {
+            PA_INFO("taf_prop_radio_InitInstance() completed successfully for instance %d.",
+                instance);
+            if (instance == 0)
+            {
+                taf_prop_radio_AddRatSvcStatusHandler(0, RatSvcStatusHandler, nullptr);
+                taf_prop_radio_AddLteCphyCaHandler(0, LteCphyCaHandler, nullptr);
+                taf_prop_radio_AddDataAvailSysStatusHandler(0, DataAvailSysStatusHandler, nullptr);
+                PA_INFO("Re-registered prop indication handlers after service recovery.");
+            }
+        }
+        else
+        {
+            PA_ERROR("taf_prop_radio_InitInstance() failed with result %d for instance %d.",
+                res, instance);
+        }
+        return;
+    }
+
+    PA_WARN("DataServingSystem service status changed to unavailable for instance %d. "
+        "Calling deinit", instance);
+
+    if (!pa.propRadioInitialized.load(std::memory_order_acquire))
+    {
+        PA_INFO("Skipping taf_prop_radio_Deinit() because prop radio was not initialized.");
+        return;
+    }
+
+    if (instance == 0)
+    {
+        taf_prop_radio_AddRatSvcStatusHandler(0, nullptr, nullptr);
+        taf_prop_radio_AddLteCphyCaHandler(0, nullptr, nullptr);
+        taf_prop_radio_AddDataAvailSysStatusHandler(0, nullptr, nullptr);
+        PA_INFO("Removed prop indication handlers before service deinit.");
+    }
+
+    int32_t res = taf_prop_radio_Deinit();
+    if (res == 0)
+    {
+        PA_INFO("taf_prop_radio_Deinit() completed successfully for instance %d.", instance);
+        pa.propRadioInitialized.store(false, std::memory_order_release);
+    }
+    else if (res == -ENOSYS)
+    {
+        PA_INFO("taf_prop_radio_Deinit() not implemented (stub).");
+    }
+    else
+    {
+        PA_ERROR("taf_prop_radio_Deinit() failed with result %d for instance %d.",
+            res, instance);
     }
 }
 
