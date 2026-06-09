@@ -11,6 +11,7 @@
 #include <atomic>
 
 #define MAX_INIT_TIMEOUT 5
+#define NETWORK_COMMAND_TIMEOUT 30
 
 using namespace telux::tel;
 using namespace telux::common;
@@ -1477,12 +1478,45 @@ pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
         PA_ERROR("Unable to convert msd data");
         return res;
     }
+
+    // Create callback object with promise to keep it alive
     auto cbPtr = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback,context);
+
+    // Get future for synchronization
+    auto future = cbPtr->getFuture();
+
+    // Make SDK call
     Status status = callMngr->updateECallMsd(phoneId,ecallMsdData,cbPtr);
     if(status != Status::SUCCESS){
         PA_ERROR("Unable to update Msd");
+        return paCtrl->MapStatus(status);
     }
-    return paCtrl->MapStatus(status);
+
+    // Wait for callback to complete (cbPtr stays alive on stack)
+    PA_DEBUG("Waiting for updateECallMsd callback...");
+    std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);  // 30 seconds
+    std::future_status waitStatus = future.wait_for(timeout);
+
+    if (std::future_status::timeout == waitStatus) {
+        PA_ERROR("updateECallMsd timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+        return PA_TIMEOUT;
+    }
+
+    // Get result from callback
+    try {
+        telux::common::ErrorCode errorCode = future.get();
+        if (errorCode != telux::common::ErrorCode::SUCCESS) {
+            PA_ERROR("updateECallMsd failed with error: %d", (int)errorCode);
+            return paCtrl->MapErrorCode(errorCode);
+        }
+    }
+    catch (const std::exception& e) {
+        PA_ERROR("Exception getting future result: %s", e.what());
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("updateECallMsd completed successfully");
+    return PA_OK;
 }
 
 pa_result_t tafpa::ecall::taf_pa_ecall_UpdateHlapTimer(
@@ -1931,16 +1965,41 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Answer(
             (paCtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfo.dir))
         {
             auto cbObj = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback, context);
+
+            // Get future for synchronization
+            auto future = cbObj->getFuture();
+
             Status status = (*iCall)->answer(cbObj);
-            if (status == telux::common::Status::SUCCESS &&
-            cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS)
-            {
-                PA_INFO("Success on answer ecall");
-                return PA_OK;
+            if (status != telux::common::Status::SUCCESS) {
+                PA_ERROR("Failed to answer call, status: %d", (int)status);
+                return paCtrl->MapStatus(status);
             }
 
-            PA_ERROR("Failed to answer call, status: %d", (int)status);
-            return PA_FAULT;
+            // Wait for callback with timeout
+            PA_DEBUG("Waiting for answer callback...");
+            std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
+            std::future_status waitStatus = future.wait_for(timeout);
+
+            if (std::future_status::timeout == waitStatus) {
+                PA_ERROR("answer timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return PA_TIMEOUT;
+            }
+
+            // Get result from callback
+            try {
+                telux::common::ErrorCode errorCode = future.get();
+                if (errorCode == telux::common::ErrorCode::SUCCESS) {
+                    PA_INFO("Success on answer ecall");
+                    return PA_OK;
+                } else {
+                    PA_ERROR("answer failed with error: %d", (int)errorCode);
+                    return paCtrl->MapErrorCode(errorCode);
+                }
+            }
+            catch (const std::exception& e) {
+                PA_ERROR("Exception getting future result: %s", e.what());
+                return PA_FAULT;
+            }
         }
     }
     return PA_NOT_FOUND;
@@ -1975,17 +2034,43 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Hangup(
                 PA_ERROR("Call is already ended");
                 return PA_DUPLICATE;
             }
+
             auto cbObj = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback, context);
+
+            // Get future for synchronization
+            auto future = cbObj->getFuture();
+
             Status status = (*iCall)->hangup(cbObj);
-            if (status == telux::common::Status::SUCCESS &&
-            cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS)
-            {
-                PA_INFO("Success on answer ecall");
-                return PA_OK;
+            if (status != telux::common::Status::SUCCESS) {
+                PA_ERROR("Failed to hangup call, status: %d", (int)status);
+                return paCtrl->MapStatus(status);
             }
 
-            PA_ERROR("Failed to hangup call, status: %d", (int)status);
-            return PA_FAULT;
+            // Wait for callback with timeout
+            PA_DEBUG("Waiting for hangup callback...");
+            std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
+            std::future_status waitStatus = future.wait_for(timeout);
+
+            if (std::future_status::timeout == waitStatus) {
+                PA_ERROR("hangup timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return PA_TIMEOUT;
+            }
+
+            // Get result from callback
+            try {
+                telux::common::ErrorCode errorCode = future.get();
+                if (errorCode == telux::common::ErrorCode::SUCCESS) {
+                    PA_INFO("Success on hangup ecall");
+                    return PA_OK;
+                } else {
+                    PA_ERROR("hangup failed with error: %d", (int)errorCode);
+                    return paCtrl->MapErrorCode(errorCode);
+                }
+            }
+            catch (const std::exception& e) {
+                PA_ERROR("Exception getting future result: %s", e.what());
+                return PA_FAULT;
+            }
         }
     }
     return PA_NOT_FOUND;
@@ -2020,17 +2105,43 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
                 PA_ERROR("Call is already ended");
                 return PA_DUPLICATE;
             }
+
             auto cbObj = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback, context);
+
+            // Get future for synchronization
+            auto future = cbObj->getFuture();
+
             Status status = (*iCall)->reject(cbObj);
-            if (status == telux::common::Status::SUCCESS &&
-            cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS)
-            {
-                PA_INFO("Success on answer ecall");
-                return PA_OK;
+            if (status != telux::common::Status::SUCCESS) {
+                PA_ERROR("Failed to reject call, status: %d", (int)status);
+                return paCtrl->MapStatus(status);
             }
 
-            PA_ERROR("Failed to reject call, status: %d", (int)status);
-            return PA_FAULT;
+            // Wait for callback with timeout
+            PA_DEBUG("Waiting for reject callback...");
+            std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
+            std::future_status waitStatus = future.wait_for(timeout);
+
+            if (std::future_status::timeout == waitStatus) {
+                PA_ERROR("reject timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return PA_TIMEOUT;
+            }
+
+            // Get result from callback
+            try {
+                telux::common::ErrorCode errorCode = future.get();
+                if (errorCode == telux::common::ErrorCode::SUCCESS) {
+                    PA_INFO("Success on reject ecall");
+                    return PA_OK;
+                } else {
+                    PA_ERROR("reject failed with error: %d", (int)errorCode);
+                    return paCtrl->MapErrorCode(errorCode);
+                }
+            }
+            catch (const std::exception& e) {
+                PA_ERROR("Exception getting future result: %s", e.what());
+                return PA_FAULT;
+            }
         }
     }
     return PA_NOT_FOUND;
