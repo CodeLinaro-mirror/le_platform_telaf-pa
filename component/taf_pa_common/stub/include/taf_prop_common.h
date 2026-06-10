@@ -6,13 +6,44 @@
 #ifndef TAF_PROP_COMMON_H
 #define TAF_PROP_COMMON_H
 
+#include <stdint.h>
+#include <stdarg.h>   // va_list
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stdarg.h>   // va_list
+typedef int32_t prop_result_t;
 
 #define PROP_SHARED __attribute__((visibility("default")))
+
+typedef enum {
+    TAF_PROP_OK = 0,
+    TAF_PROP_NOT_FOUND = -1,
+    TAF_PROP_NOT_POSSIBLE = -2,
+    TAF_PROP_OUT_OF_RANGE = -3,
+    TAF_PROP_NO_MEMORY = -4,
+    TAF_PROP_NOT_PERMITTED = -5,
+    TAF_PROP_FAULT = -6,
+    TAF_PROP_COMM_ERROR = -7,
+    TAF_PROP_TIMEOUT = -8,
+    TAF_PROP_OVERFLOW = -9,
+    TAF_PROP_UNDERFLOW = -10,
+    TAF_PROP_WOULD_BLOCK = -11,
+    TAF_PROP_DEADLOCK = -12,
+    TAF_PROP_FORMAT_ERROR = -13,
+    TAF_PROP_DUPLICATE = -14,
+    TAF_PROP_BAD_PARAMETER = -15,
+    TAF_PROP_CLOSED = -16,
+    TAF_PROP_BUSY = -17,
+    TAF_PROP_UNSUPPORTED = -18,
+    TAF_PROP_IO_ERROR = -19,
+    TAF_PROP_NOT_IMPLEMENTED = -20,
+    TAF_PROP_UNAVAILABLE = -21,
+    TAF_PROP_TERMINATED = -22,
+    TAF_PROP_IN_PROGRESS = -23,
+    TAF_PROP_SUSPENDED = -24
+} prop_result_enum_t;
 
 typedef enum
 {
@@ -71,6 +102,10 @@ PROP_SHARED void taf_prop_common_LogMessage
 #define PROP_CRIT(fmt, ...)   taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_CRIT,   __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define PROP_ALERT(fmt, ...)  taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_ALERT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define PROP_EMERG(fmt, ...)  taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_EMERG,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define PROP_FATAL(fmt, ...) { PROP_EMERG(fmt, ##__VA_ARGS__); exit(EXIT_FAILURE); }
+#define PROP_FATAL_IF(condition, fmt, ...) if (condition) { PROP_FATAL(fmt, ##__VA_ARGS__) }
+#define PROP_ASSERT(condition) PROP_FATAL_IF(!(condition), "Assert Failed: '%s'", #condition)
 
 #ifdef __cplusplus
 }

@@ -11,7 +11,7 @@
 
 
 #include "tafSocksPa.hpp"
-#include "taf_ns_net.hpp"
+#include "taf_prop_net.hpp"
 #include "tafInternalCommonPa.h"
 
 #include <telux/data/DataFactory.hpp>
@@ -621,3 +621,4 @@ pa_result_t taf_pa_socks_Deinit()
     PA_INFO("SOCKS platform adaptor deinitialization complete.");
     return PA_OK;
 }
+

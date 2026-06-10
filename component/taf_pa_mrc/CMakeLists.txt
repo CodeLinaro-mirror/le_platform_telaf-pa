@@ -23,7 +23,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/stub/inclu
 
 target_link_libraries(${TARGET_NAME} PRIVATE telux_platform)
 target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
-target_link_libraries(${TARGET_NAME} PRIVATE taf_ns_mrc)
+target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_mrc)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib

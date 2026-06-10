@@ -1,9 +1,7 @@
-﻿/*
+/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
-
-#include "taf_ns_common.h"
 
 #include "taf_prop_common.h"
 
@@ -17,10 +15,14 @@
 #include <syslog.h>
 #include <stdbool.h>
 #include <atomic>
+#include <dlfcn.h>
 #include <dlt/dlt.h>
 
 // Thread-safe initialization flag
 static std::atomic<bool> gCommonPaInitialized(false);
+
+/* Guard to prevent PA -> common -> PA recursive setlevel loop */
+static std::atomic<bool> gSetLevelFanoutInProgress(false);
 
 DltContext* DltCtxPtr = NULL;
 
@@ -28,6 +30,21 @@ DltContext* DltCtxPtr = NULL;
 
 static taf_pa_common_LogLevel_t   gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
 static taf_pa_common_LogBackend_t gLogBackend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
+
+/* Function pointers resolved per-library so that both prop and noship
+ * common libraries can be bound explicitly even though they export the
+ * same symbol names.
+ */
+using PropCommonLogBindFn = void (*)(const taf_prop_common_LogVtable_t* vt);
+using PropCommonLogSetLevelFn = void (*)(taf_prop_common_LogLevel_t level);
+
+static void* gPropCommonHandle = NULL;
+static void* gNsCommonHandle   = NULL;
+
+static PropCommonLogBindFn     gPropCommonLogBindFn     = NULL;
+static PropCommonLogBindFn     gNsCommonLogBindFn       = NULL;
+static PropCommonLogSetLevelFn gPropCommonLogSetLevelFn = NULL;
+static PropCommonLogSetLevelFn gNsCommonLogSetLevelFn   = NULL;
 
 static const char* LogLevelToStr
 (
@@ -59,7 +76,6 @@ static const char* LogLevelToStr
     return " INFO";
 }
 
-
 static DltLogLevelType LogLevelToDlt(taf_pa_common_LogLevel_t level)
 {
     switch (level)
@@ -75,7 +91,6 @@ static DltLogLevelType LogLevelToDlt(taf_pa_common_LogLevel_t level)
         default:                             return DLT_LOG_INFO;
     }
 }
-
 
 static int LogLevelToSyslog
 (
@@ -137,36 +152,6 @@ static taf_prop_common_LogLevel_t LogLevelToPropLogLevel
     return TAF_PROP_COMMON_LOG_LEVEL_INFO;
 }
 
-static taf_ns_common_LogLevel_t LogLevelToNsLogLevel
-(
-    taf_pa_common_LogLevel_t level
-)
-{
-    switch (level)
-    {
-        case TAF_PA_COMMON_LOG_LEVEL_DEBUG:
-            return TAF_NS_COMMON_LOG_LEVEL_DEBUG;
-        case TAF_PA_COMMON_LOG_LEVEL_INFO:
-            return TAF_NS_COMMON_LOG_LEVEL_INFO;
-        case TAF_PA_COMMON_LOG_LEVEL_NOTICE:
-            return TAF_NS_COMMON_LOG_LEVEL_NOTICE;
-        case TAF_PA_COMMON_LOG_LEVEL_WARN:
-            return TAF_NS_COMMON_LOG_LEVEL_WARN;
-        case TAF_PA_COMMON_LOG_LEVEL_ERROR:
-            return TAF_NS_COMMON_LOG_LEVEL_ERROR;
-        case TAF_PA_COMMON_LOG_LEVEL_CRIT:
-            return TAF_NS_COMMON_LOG_LEVEL_CRIT;
-        case TAF_PA_COMMON_LOG_LEVEL_ALERT:
-            return TAF_NS_COMMON_LOG_LEVEL_ALERT;
-        case TAF_PA_COMMON_LOG_LEVEL_EMERG:
-            return TAF_NS_COMMON_LOG_LEVEL_EMERG;
-        default:
-            break;
-    }
-
-    return TAF_NS_COMMON_LOG_LEVEL_INFO;
-}
-
 static taf_pa_common_LogBackend_t DetectBackendFromEnv(void)
 {
     const char *env = getenv("TAF_PA_LOG_BACKEND");
@@ -210,7 +195,38 @@ static int FormatLog(char *out, size_t out_sz,
     return n + m;
 }
 
-/* ===== PA -> PA-prop injected vtable implementation ===== */
+static void ResolveCommonLogApis(void)
+{
+    if (!gPropCommonHandle)
+    {
+        gPropCommonHandle = dlopen("libComponent_taf_prop_common.so", RTLD_NOW | RTLD_GLOBAL);
+        if (gPropCommonHandle)
+        {
+            gPropCommonLogBindFn =
+                reinterpret_cast<PropCommonLogBindFn>(
+                    dlsym(gPropCommonHandle, "taf_prop_common_LogBind"));
+            gPropCommonLogSetLevelFn =
+                reinterpret_cast<PropCommonLogSetLevelFn>(
+                    dlsym(gPropCommonHandle, "taf_prop_common_LogSetlevel"));
+        }
+    }
+
+    if (!gNsCommonHandle)
+    {
+        gNsCommonHandle = dlopen("libComponent_taf_ns_common.so", RTLD_NOW | RTLD_GLOBAL);
+        if (gNsCommonHandle)
+        {
+            gNsCommonLogBindFn =
+                reinterpret_cast<PropCommonLogBindFn>(
+                    dlsym(gNsCommonHandle, "taf_prop_common_LogBind"));
+            gNsCommonLogSetLevelFn =
+                reinterpret_cast<PropCommonLogSetLevelFn>(
+                    dlsym(gNsCommonHandle, "taf_prop_common_LogSetlevel"));
+        }
+    }
+}
+
+/* ===== PA -> common injected vtable implementation ===== */
 
 static taf_pa_common_LogLevel_t PropLevelToPaLevel(taf_prop_common_LogLevel_t level)
 {
@@ -231,6 +247,31 @@ static taf_pa_common_LogLevel_t PropLevelToPaLevel(taf_prop_common_LogLevel_t le
 pa_result_t taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
 {
     gLogLevel = level;
+
+    ResolveCommonLogApis();
+
+    bool expected = false;
+    if (!gSetLevelFanoutInProgress.compare_exchange_strong(
+            expected, true,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire))
+    {
+        return PA_OK;
+    }
+
+    taf_prop_common_LogLevel_t commonLevel = LogLevelToPropLogLevel(level);
+
+    if (gPropCommonLogSetLevelFn)
+    {
+        gPropCommonLogSetLevelFn(commonLevel);
+    }
+
+    if (gNsCommonLogSetLevelFn)
+    {
+        gNsCommonLogSetLevelFn(commonLevel);
+    }
+
+    gSetLevelFanoutInProgress.store(false, std::memory_order_release);
     return PA_OK;
 }
 
@@ -270,7 +311,6 @@ static void EmitLog(taf_pa_common_LogLevel_t level, const char* msg)
             break;
     }
 }
-
 
 pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
                               const char* file, const char* func, int line,
@@ -321,75 +361,38 @@ static void taf_pa_common_LogVMessage(taf_pa_common_LogLevel_t level,
     int len = FormatLog(buf, sizeof(buf), level, file, func, line, fmt, ap);
     if (len < 0) return;
 
-    if ((size_t)len >= sizeof(buf) && sizeof(buf) >= 4) {
-        buf[sizeof(buf)-4]='.'; buf[sizeof(buf)-3]='.'; buf[sizeof(buf)-2]='.'; buf[sizeof(buf)-1]='\0';
+    if ((size_t)len >= sizeof(buf) && sizeof(buf) >= 4)
+    {
+        buf[sizeof(buf)-4] = '.';
+        buf[sizeof(buf)-3] = '.';
+        buf[sizeof(buf)-2] = '.';
+        buf[sizeof(buf)-1] = '\0';
     }
 
     EmitLog(level, buf);
 }
 
-static void PaProp_SetLevel(taf_prop_common_LogLevel_t level)
+static void PaShared_SetLevel(taf_prop_common_LogLevel_t level)
 {
-    /* Optional: keep PA log level in sync if desired */
-    taf_pa_common_LogSetlevel(PropLevelToPaLevel(level));
+    /* Keep PA log level in sync, but DO NOT fan-out again from callback */
+    gLogLevel = PropLevelToPaLevel(level);
 }
 
-static void PaProp_LogVprintf(taf_prop_common_LogLevel_t level,
-                              const char* file,
-                              const char* func,
-                              int line,
-                              const char* fmt,
-                              va_list ap)
+static void PaShared_LogVprintf(taf_prop_common_LogLevel_t level,
+                                const char* file,
+                                const char* func,
+                                int line,
+                                const char* fmt,
+                                va_list ap)
 {
     taf_pa_common_LogVMessage(PropLevelToPaLevel(level), file, func, line, fmt, ap);
 }
 
-static const taf_prop_common_LogVtable_t PropLogVt = {
+static const taf_prop_common_LogVtable_t SharedLogVt = {
     .abi_version = 1,
     .size = sizeof(taf_prop_common_LogVtable_t),
-    .log_vprintf = PaProp_LogVprintf,
-    .set_level   = PaProp_SetLevel,
-};
-
-/* ===== PA -> PA-noship injected vtable implementation ===== */
-
-static taf_pa_common_LogLevel_t NsLevelToPaLevel(taf_ns_common_LogLevel_t level)
-{
-    switch (level)
-    {
-        case TAF_NS_COMMON_LOG_LEVEL_DEBUG:  return TAF_PA_COMMON_LOG_LEVEL_DEBUG;
-        case TAF_NS_COMMON_LOG_LEVEL_INFO:   return TAF_PA_COMMON_LOG_LEVEL_INFO;
-        case TAF_NS_COMMON_LOG_LEVEL_NOTICE: return TAF_PA_COMMON_LOG_LEVEL_NOTICE;
-        case TAF_NS_COMMON_LOG_LEVEL_WARN:   return TAF_PA_COMMON_LOG_LEVEL_WARN;
-        case TAF_NS_COMMON_LOG_LEVEL_ERROR:  return TAF_PA_COMMON_LOG_LEVEL_ERROR;
-        case TAF_NS_COMMON_LOG_LEVEL_CRIT:   return TAF_PA_COMMON_LOG_LEVEL_CRIT;
-        case TAF_NS_COMMON_LOG_LEVEL_ALERT:  return TAF_PA_COMMON_LOG_LEVEL_ALERT;
-        case TAF_NS_COMMON_LOG_LEVEL_EMERG:  return TAF_PA_COMMON_LOG_LEVEL_EMERG;
-        default:                             return TAF_PA_COMMON_LOG_LEVEL_INFO;
-    }
-}
-
-static void PaNs_SetLevel(taf_ns_common_LogLevel_t level)
-{
-    /* Optional: keep PA log level in sync if desired */
-    taf_pa_common_LogSetlevel(NsLevelToPaLevel(level));
-}
-
-static void PaNs_LogVprintf(taf_ns_common_LogLevel_t level,
-                            const char* file,
-                            const char* func,
-                            int line,
-                            const char* fmt,
-                            va_list ap)
-{
-    taf_pa_common_LogVMessage(NsLevelToPaLevel(level), file, func, line, fmt, ap);
-}
-
-static const taf_ns_common_LogVtable_t NsLogVt = {
-    .abi_version = 1,
-    .size = sizeof(taf_ns_common_LogVtable_t),
-    .log_vprintf = PaNs_LogVprintf,
-    .set_level   = PaNs_SetLevel,
+    .log_vprintf = PaShared_LogVprintf,
+    .set_level   = PaShared_SetLevel,
 };
 
 pa_result_t taf_pa_common_LogInit(
@@ -412,18 +415,26 @@ pa_result_t taf_pa_common_LogInit(
         backend = DetectBackendFromEnv();
 
     gLogBackend = backend;
-
     gLogLevel = initLogLevel;
 
     // Initialize DLT context from the provided pointer
-    if (logCtxPtr != NULL) {
+    if (logCtxPtr != NULL)
+    {
         DltCtxPtr = (DltContext*)logCtxPtr;
     }
 
-    /* Inject PA logging vtable into PA-prop and PA-noship. */
+    /* Inject the SAME PA logging vtable into both common libraries explicitly. */
+    ResolveCommonLogApis();
 
-    taf_prop_common_LogBind(&PropLogVt);
-    taf_ns_common_LogBind(&NsLogVt);
+    if (gPropCommonLogBindFn)
+    {
+        gPropCommonLogBindFn(&SharedLogVt);
+    }
+
+    if (gNsCommonLogBindFn)
+    {
+        gNsCommonLogBindFn(&SharedLogVt);
+    }
 
     PA_INFO("Common PA initialization flag set to true.");
 
@@ -440,21 +451,26 @@ pa_result_t taf_pa_common_LogDeinit(void)
     }
 
     // Clear injected vtables to avoid dangling pointers in PA-prop and PA-noship
-    taf_prop_common_LogBind(NULL);
-    taf_ns_common_LogBind(NULL);
+    ResolveCommonLogApis();
+
+    if (gPropCommonLogBindFn)
+    {
+        gPropCommonLogBindFn(NULL);
+    }
+
+    if (gNsCommonLogBindFn)
+    {
+        gNsCommonLogBindFn(NULL);
+    }
 
     // Clear DLT context pointer so no further DLT log attempts are made
     DltCtxPtr = NULL;
 
-    // Reset log backend and level to their compile-time defaults so that any
-    // taf_pa_common_LogMessage() call issued between LogDeinit and the next
-    // LogInit falls back to syslog at INFO level rather than using stale state
-    // from the previous init cycle.
+    // Reset log backend and level to defaults
     gLogBackend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
     gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
 
-    // Log before resetting the flag so the message is emitted while the
-    // logging subsystem is still considered active.
+    // Log before resetting the flag
     PA_INFO("Common PA initialization flag reset to false.");
 
     // Reset the atomic flag last, after all cleanup is complete.

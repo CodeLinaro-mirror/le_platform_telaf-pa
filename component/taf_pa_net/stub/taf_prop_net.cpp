@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "taf_ns_net.hpp"
+#include "taf_prop_net.hpp"
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -11,22 +11,22 @@
  */
 //--------------------------------------------------------------------------------------------------
 
-int32_t taf_ns_net_Init
+int32_t taf_prop_net_Init
 (
     void
 )
 {
     PA_INFO("Function is not implemented in stub PA.");
-    return TAF_NS_NET_RESULT_NOT_IMPLEMENTED;
+    return TAF_PROP_NET_RESULT_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Set device mode
  *
- * @return LE_TAF_NS_NET_RESULT_FAULT                      Failed
- *         TAF_NS_NET_RESULT_BAD_PARAMETER              Invalid deviceMode
- *         TAF_NS_NET_RESULT_OK                         Succeeded
+ * @return LE_TAF_PROP_NET_RESULT_FAULT                      Failed
+ *         TAF_PROP_NET_RESULT_BAD_PARAMETER              Invalid deviceMode
+ *         TAF_PROP_NET_RESULT_OK                         Succeeded
  *
  */
 //--------------------------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ int32_t taf_prop_net_SetDeviceMode
 )
 {
     PA_INFO("-----default stub Impl SetDeviceMode---");
-    return TAF_NS_NET_RESULT_OK;
+    return TAF_PROP_NET_RESULT_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -66,7 +66,7 @@ int32_t taf_prop_net_SetSocksAuthMethod
 )
 {
     PA_INFO("-----default stub Impl SetSocksAuthMethod---");
-    return TAF_NS_NET_RESULT_OK;
+    return TAF_PROP_NET_RESULT_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -93,7 +93,7 @@ int32_t taf_prop_net_SetSocksLanInterface
 )
 {
     PA_INFO("-----default stub Impl SetSocksLanInterface---");
-    return TAF_NS_NET_RESULT_OK;
+    return TAF_PROP_NET_RESULT_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -108,7 +108,7 @@ int32_t taf_prop_net_GetSocksLanInterface
 )
 {
     PA_INFO("-----default stub Impl GetSocksLanInterface---");
-    return TAF_NS_NET_RESULT_OK;
+    return TAF_PROP_NET_RESULT_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -123,7 +123,7 @@ int32_t taf_prop_net_AddSocksAssociation
 )
 {
     PA_INFO("-----default stub Impl AddSocksAssociation---");
-    return TAF_NS_NET_RESULT_OK;
+    return TAF_PROP_NET_RESULT_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -137,5 +137,5 @@ int32_t taf_prop_net_RemoveSocksAssociation
 )
 {
     PA_INFO("-----default stub Impl RemoveSocksAssociation---");
-    return TAF_NS_NET_RESULT_OK;
+    return TAF_PROP_NET_RESULT_OK;
 }
