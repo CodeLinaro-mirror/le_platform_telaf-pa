@@ -22,7 +22,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/stub/include)
 
 target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
-target_link_libraries(${TARGET_NAME} PRIVATE taf_ns_flash)
+target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_flash)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib

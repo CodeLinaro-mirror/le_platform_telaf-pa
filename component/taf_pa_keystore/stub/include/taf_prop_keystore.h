@@ -6,7 +6,7 @@
 #ifndef TAF_PROP_KEYSTORAGE_H
 #define TAF_PROP_KEYSTORAGE_H
 
-#include "taf_ns_common.h"
+#include "taf_prop_common.h"
 #include "tafKeystorePa.h"
 
 //--------------------------------------------------------------------------------------------------
@@ -16,7 +16,7 @@
  * @return
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED void taf_prop_ks_Component_Init
+PROP_SHARED void taf_prop_ks_Component_Init
 (
     void
 );
@@ -30,7 +30,7 @@ NS_SHARED void taf_prop_ks_Component_Init
  *      LE_FAULT if there was some other error.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_Init
+PROP_SHARED prop_result_t taf_prop_ks_Init
 (
     void
 );
@@ -42,7 +42,7 @@ NS_SHARED ns_result_t taf_prop_ks_Init
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GenerateRsaEncKey
+PROP_SHARED prop_result_t taf_prop_ks_GenerateRsaEncKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -63,7 +63,7 @@ NS_SHARED ns_result_t taf_prop_ks_GenerateRsaEncKey
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GenerateRsaSigKey
+PROP_SHARED prop_result_t taf_prop_ks_GenerateRsaSigKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -84,7 +84,7 @@ NS_SHARED ns_result_t taf_prop_ks_GenerateRsaSigKey
  * The impData must be PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GenerateEcdsaKey
+PROP_SHARED prop_result_t taf_prop_ks_GenerateEcdsaKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -105,7 +105,7 @@ NS_SHARED ns_result_t taf_prop_ks_GenerateEcdsaKey
  * The impData must be raw key bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GenerateAesKey
+PROP_SHARED prop_result_t taf_prop_ks_GenerateAesKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -126,7 +126,7 @@ NS_SHARED ns_result_t taf_prop_ks_GenerateAesKey
  * Currently only digest DIGEST_SHA2_256 is supported. The impData must be raw key bytes if provided
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GenerateHmacKey
+PROP_SHARED prop_result_t taf_prop_ks_GenerateHmacKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -145,7 +145,7 @@ NS_SHARED ns_result_t taf_prop_ks_GenerateHmacKey
  * Export a key into specified key data format.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_ExportKey
+PROP_SHARED prop_result_t taf_prop_ks_ExportKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -160,7 +160,7 @@ NS_SHARED ns_result_t taf_prop_ks_ExportKey
  * Share a key.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_ShareKey
+PROP_SHARED prop_result_t taf_prop_ks_ShareKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -174,7 +174,7 @@ NS_SHARED ns_result_t taf_prop_ks_ShareKey
  * Cancel key sharing to an application.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_CancelKeySharing
+PROP_SHARED prop_result_t taf_prop_ks_CancelKeySharing
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -186,7 +186,7 @@ NS_SHARED ns_result_t taf_prop_ks_CancelKeySharing
  * Delete a key file by key name.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_DeleteKey
+PROP_SHARED prop_result_t taf_prop_ks_DeleteKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef        ///< [IN] Key file reference
@@ -197,7 +197,7 @@ NS_SHARED ns_result_t taf_prop_ks_DeleteKey
  * Get a key file reference by key name.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GetKey
+PROP_SHARED prop_result_t taf_prop_ks_GetKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -209,7 +209,7 @@ NS_SHARED ns_result_t taf_prop_ks_GetKey
  * Get a key file reference of a shared key by key name and app name.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GetSharedKey
+PROP_SHARED prop_result_t taf_prop_ks_GetSharedKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -222,7 +222,7 @@ NS_SHARED ns_result_t taf_prop_ks_GetSharedKey
  * Get a shared app list for a shared key.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GetSharedAppList
+PROP_SHARED prop_result_t taf_prop_ks_GetSharedAppList
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -234,7 +234,7 @@ NS_SHARED ns_result_t taf_prop_ks_GetSharedAppList
  * Get key usage
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_GetKeyUsage
+PROP_SHARED prop_result_t taf_prop_ks_GetKeyUsage
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -246,7 +246,7 @@ NS_SHARED ns_result_t taf_prop_ks_GetKeyUsage
  * Start the session for the given crypto operation.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_CryptoSessionStart
+PROP_SHARED prop_result_t taf_prop_ks_CryptoSessionStart
 (
     int clientSessionFd,                     ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t     keyFileRef,      ///< [IN] Key file reference
@@ -264,7 +264,7 @@ NS_SHARED ns_result_t taf_prop_ks_CryptoSessionStart
  * This API can be called for multiple times but must before CryptoSessionProcess API.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_CryptoSessionProcessAead
+PROP_SHARED prop_result_t taf_prop_ks_CryptoSessionProcessAead
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] Data buffer to hold the AEAD data
@@ -279,7 +279,7 @@ NS_SHARED ns_result_t taf_prop_ks_CryptoSessionProcessAead
  * CryptoEndSession API is called.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_CryptoSessionProcess
+PROP_SHARED prop_result_t taf_prop_ks_CryptoSessionProcess
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] InputData can be one of below 4 cases:
@@ -300,7 +300,7 @@ NS_SHARED ns_result_t taf_prop_ks_CryptoSessionProcess
  * Finalizes and stop a crypto operation session started with CryptoStartSession API.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_CryptoSessionEnd
+PROP_SHARED prop_result_t taf_prop_ks_CryptoSessionEnd
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] Signature to verify for verification session
@@ -319,7 +319,7 @@ NS_SHARED ns_result_t taf_prop_ks_CryptoSessionEnd
  * Abort crypto operation session started with CryptoStartSession API.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_CryptoSessionAbort
+PROP_SHARED prop_result_t taf_prop_ks_CryptoSessionAbort
 (
     uint64_t                opHandle      ///< [IN] Cyrpto operation handle
 );
@@ -329,7 +329,7 @@ NS_SHARED ns_result_t taf_prop_ks_CryptoSessionAbort
  * Register Key creation handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_RegKeyCreationHandler
+PROP_SHARED prop_result_t taf_prop_ks_RegKeyCreationHandler
 (
     taf_pa_ks_KeyCreationHandler_t handlerFunc
 );
@@ -339,7 +339,7 @@ NS_SHARED ns_result_t taf_prop_ks_RegKeyCreationHandler
  * Register Key sharing state change handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_ks_RegKeySharingHandler
+PROP_SHARED prop_result_t taf_prop_ks_RegKeySharingHandler
 (
     taf_pa_ks_KeySharingHandler_t handlerFunc
 );

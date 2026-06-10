@@ -19,7 +19,7 @@ target_link_libraries(
         telux_power
     PRIVATE
         taf_pa_common
-        taf_ns_pa_pms
+        taf_prop_pa_pms
         )
 
 install(TARGETS taf_pa_pms LIBRARY DESTINATION lib)

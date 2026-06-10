@@ -46,7 +46,7 @@ target_link_libraries(${TARGET_NAME}
     PRIVATE telux_common telux_tel telux_data
     PRIVATE taf_pa_common
 )
-target_link_libraries(${TARGET_NAME} PRIVATE taf_ns_net)
+target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_net)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib

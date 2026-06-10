@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_NS_NET_HPP
-#define TAF_NS_NET_HPP
+#ifndef TAF_PROP_NET_HPP
+#define TAF_PROP_NET_HPP
 
 #include "tafCommonPa.h"
 
-#define TAF_NS_NET_RESULT_OK 0
-#define TAF_NS_NET_RESULT_FAULT -6
-#define TAF_NS_NET_RESULT_BAD_PARAMETER -15
-#define TAF_NS_NET_RESULT_NOT_IMPLEMENTED -20
+#define TAF_PROP_NET_RESULT_OK 0
+#define TAF_PROP_NET_RESULT_FAULT -6
+#define TAF_PROP_NET_RESULT_BAD_PARAMETER -15
+#define TAF_PROP_NET_RESULT_NOT_IMPLEMENTED -20
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -47,7 +47,7 @@ typedef enum
 }
 taf_prop_net_AuthMethod_t;
 
-PA_SHARED int32_t taf_ns_net_Init();
+PA_SHARED int32_t taf_prop_net_Init();
 
 
 //--------------------------------------------------------------------------------------------------
@@ -108,4 +108,4 @@ PA_SHARED int32_t taf_prop_net_RemoveSocksAssociation(const char* userName);
 
 
 
-#endif /* TAF_NS_NET_HPP_ */
+#endif /* TAF_PROP_NET_HPP_ */
