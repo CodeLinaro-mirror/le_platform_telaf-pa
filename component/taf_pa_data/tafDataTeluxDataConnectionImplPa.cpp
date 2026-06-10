@@ -182,8 +182,21 @@ void taf::pa::data::TafPaTeluxDataConnection::LogDataCallInfo
 
     PA_DEBUG("tech preference:      %s", taf::pa::data::Utils::TechPreferenceToString(
                                              dataCall->getTechPreference()));
-    PA_DEBUG("DataBearerTechnology: %s", taf::pa::data::Utils::DataBearerToString(
-                                             dataCall->getCurrentBearerTech()));
+    {
+        auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
+        taf::pa::data::SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(
+                                                                         dataCall->getSlotId());
+        telux::data::ServiceStatus svcStatus{};
+        if (PA_OK == teluxPaData.PaGetServiceStatus(slotIdPa, svcStatus))
+        {
+            PA_DEBUG("NetworkRat (bearer tech): %s",
+                     taf::pa::data::Utils::NetworkRatToString(svcStatus.networkRat));
+        }
+        else
+        {
+            PA_DEBUG("NetworkRat (bearer tech): unavailable");
+        }
+    }
 
     return;
 }

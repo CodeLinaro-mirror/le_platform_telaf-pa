@@ -18,6 +18,7 @@
 #include "telux/common/CommonDefines.hpp"
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
+#include "telux/data/ServingSystemManager.hpp"
 #include <telux/tel/PhoneFactory.hpp>
 #include "tafDataTeluxDataServingSysPa.hpp"
 #include "tafInternalCommonPa.h"
@@ -114,6 +115,12 @@ class TafPaTeluxData
         void SendSubsystemEventToClients(const SubsystemEvent_t &eventInfo);
 
         pa_result_t PaGetRoamingStatus(const PhoneId_e phoneId, RoamingStatus_t &roamingStatus);
+
+        pa_result_t PaGetServiceStatus
+        (
+            const taf::pa::data::SlotId_e slotId,
+            telux::data::ServiceStatus &serviceStatus
+        );
 
         pa_result_t PaAddRoamingEventsCallback
         (
