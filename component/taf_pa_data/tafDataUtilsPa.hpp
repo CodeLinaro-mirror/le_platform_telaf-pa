@@ -16,6 +16,7 @@
 #include "tafDataPa.hpp"
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
+#include "telux/data/ServingSystemManager.hpp"
 #include "telux/common/CommonDefines.hpp"
 #include <thread>
 #include <sstream>
@@ -62,6 +63,11 @@ class Utils
         static DataBearerTechnology_e ConvertBearerTech
         (
             telux::data::DataBearerTechnology
+        );
+
+        static DataBearerTechnology_e ConvertNetworkRat
+        (
+            telux::data::NetworkRat
         );
 
         static EmergencyCapability_e ConvertEmerCallCap
@@ -132,6 +138,7 @@ class Utils
         static const char *IpFamilyTypeToString(telux::data::IpFamilyType ipType);
         static const char *TechPreferenceToString(telux::data::TechPreference techPref);
         static const char *DataBearerToString(telux::data::DataBearerTechnology techPref);
+        static const char *NetworkRatToString(telux::data::NetworkRat rat);
         static const char *CallEndReasonTypeToString(telux::common::EndReasonType endType);
         static const char *ProfileChangeEventToString(telux::data::ProfileChangeEvent event);
         static const char *SubsysStateToString(taf::pa::data::SubsystemState_e state);
