@@ -1467,12 +1467,6 @@ pa_result_t taf_pa_sim_RefreshRegister(
     taf_pa_sim_RefreshFile_t* files
 )
 {
-    // Validate input
-    if (files == nullptr || filesLen > MAX_SIM_REFRESH_FILES)
-    {
-        PA_ERROR("Invalid parameters: files is nullptr or filesLen exceeds limit.");
-        return TAF_PA_SIM_RESULT_BAD_PARAMETER;
-    }
     taf_prop_sim_SessionType_t propSessionType = Utility::Convert::SessionType(sessionType);
     taf_prop_sim_Result_t result = taf_prop_sim_RefreshRegister(propSessionType, filesLen,(taf_prop_sim_RefreshFile_t*)files);
     return Utility::Convert::Result(result);
