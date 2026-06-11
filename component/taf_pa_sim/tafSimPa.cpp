@@ -2567,14 +2567,37 @@ pa_result_t taf_pa_sim_GetState
             PA_INFO("TAF_PA_SIM_PRESENT");
             return TAF_PA_SIM_RESULT_OK;
         }
+        else if(cardState == telux::tel::CardState::CARDSTATE_ABSENT)
+        {
+            PA_INFO("Card State is Absent" );
+            *state = TAF_PA_SIM_ABSENT;
+            return TAF_PA_SIM_RESULT_OK;
+        }
+        else if(cardState == telux::tel::CardState::CARDSTATE_ERROR)
+        {
+            PA_INFO("Card State is Error");
+            *state = TAF_PA_SIM_ERROR;
+            return TAF_PA_SIM_RESULT_OK;
+        }
+        else if(cardState == telux::tel::CardState::CARDSTATE_RESTRICTED)
+        {
+            PA_INFO("Card State is Restricted");
+            *state = TAF_PA_SIM_RESTRICTED;
+            return TAF_PA_SIM_RESULT_OK;
+        }
+        else
+        {
+            PA_INFO("Card State is Unknown");
+            *state = TAF_PA_SIM_STATE_UNKNOWN;
+            return TAF_PA_SIM_RESULT_OK;
+        }
     }
     else
     {
-        *state = TAF_PA_SIM_ABSENT;
-        PA_INFO("TAF_PA_SIM_ABSENT");
+        *state = TAF_PA_SIM_STATE_UNKNOWN;
+        PA_INFO("TAF_PA_SIM_STATE_UNKNOWN (card is null)");
+        return TAF_PA_SIM_RESULT_OK;
     }
-    PA_INFO("getstate: success");
-    return TAF_PA_SIM_RESULT_OK;
 }
 
 pa_result_t taf_pa_sim_SetPower
