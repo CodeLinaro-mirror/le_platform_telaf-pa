@@ -60,17 +60,19 @@ typedef enum
 
 typedef struct
 {
-    taf_prop_sim_SessionType_t sessionType;
-    taf_prop_sim_RefreshMode_t refreshMode;
-    taf_prop_sim_RefreshStage_t refreshStage;
-}taf_prop_sim_RefreshChangeInd_t;
-
-typedef struct
-{
     uint16_t file_id;
     uint32_t path_len;
     uint8_t path[TAF_PROP_SIM_MAX_SIM_PATH];
 }taf_prop_sim_RefreshFile_t;
+
+typedef struct
+{
+    taf_prop_sim_SessionType_t sessionType;
+    taf_prop_sim_RefreshMode_t refreshMode;
+    taf_prop_sim_RefreshStage_t refreshStage;
+    uint32_t filesLen;
+    taf_prop_sim_RefreshFile_t files[TAF_PROP_SIM_MAX_SIM_REFRESH_FILES];
+}taf_prop_sim_RefreshChangeInd_t;
 
 typedef void (*taf_prop_sim_RefreshChangeHandlerFunc_t)
 (
@@ -138,6 +140,18 @@ PROP_SHARED int32_t taf_prop_sim_Deinit
  */
 //--------------------------------------------------------------------------------------------------
 PROP_SHARED taf_prop_sim_Result_t taf_prop_sim_RefreshRegister
+(
+    taf_prop_sim_SessionType_t sessionType,
+    uint32_t filesLen,
+    taf_prop_sim_RefreshFile_t* files
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ *  UIM refresh deregister.
+ */
+//--------------------------------------------------------------------------------------------------
+PROP_SHARED taf_prop_sim_Result_t taf_prop_sim_RefreshDeregister
 (
     taf_prop_sim_SessionType_t sessionType,
     uint32_t filesLen,
