@@ -65,9 +65,17 @@ typedef enum
 }taf_pa_sim_RefreshStage_t;
 
 typedef struct {
+    uint16_t file_id;
+    uint32_t path_len;
+    uint8_t path[MAX_SIM_PATH];
+}taf_pa_sim_RefreshFile_t;
+
+typedef struct {
     taf_pa_sim_SessionType_t sessionType;
     taf_pa_sim_RefreshMode_t refreshMode;
     taf_pa_sim_RefreshStage_t refreshStage;
+    uint32_t filesLen;
+    taf_pa_sim_RefreshFile_t files[MAX_SIM_REFRESH_FILES];
 }taf_pa_sim_RefreshChangeInd_t;
 
 typedef enum
@@ -225,12 +233,6 @@ struct taf_pa_sim_EventListener
     taf_pa_sim_setCardLockResponseCb setCardLockResponseCb;
 };
 
-typedef struct {
-    uint16_t file_id;
-    uint32_t path_len;
-    uint8_t path[MAX_SIM_PATH];
-}taf_pa_sim_RefreshFile_t;
-
 typedef void (*taf_pa_sim_RefreshChangeHandlerFunc_t)
 (
     taf_pa_sim_RefreshChangeInd_t refreshChangeInd, void* contextPtr
@@ -301,6 +303,18 @@ PA_SHARED pa_result_t taf_pa_sim_SetActiveProfile
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED pa_result_t taf_pa_sim_RefreshRegister
+(
+    taf_pa_sim_SessionType_t sessionType,
+    uint32_t filesLen,
+    taf_pa_sim_RefreshFile_t* files
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ *  PA refresh unregister.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t taf_pa_sim_RefreshUnregister
 (
     taf_pa_sim_SessionType_t sessionType,
     uint32_t filesLen,

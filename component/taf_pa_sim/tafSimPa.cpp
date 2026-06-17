@@ -1087,6 +1087,16 @@ static void RefreshSvcStatusHandler(taf_prop_sim_RefreshChangeInd_t indication, 
         paInd.sessionType = Utility::Convert::SessionType(indication.sessionType);
         paInd.refreshMode = Utility::Convert::RefreshMode(indication.refreshMode);
         paInd.refreshStage = Utility::Convert::RefreshStage(indication.refreshStage);
+        paInd.filesLen = indication.filesLen;
+
+        // Copy files array (limit to MAX_SIM_REFRESH_FILES)
+        uint32_t filesToCopy = (indication.filesLen < MAX_SIM_REFRESH_FILES) ?
+                               indication.filesLen : MAX_SIM_REFRESH_FILES;
+        if (filesToCopy > 0 && indication.files != nullptr)
+        {
+            memcpy(paInd.files, indication.files,
+                   filesToCopy * sizeof(taf_pa_sim_RefreshFile_t));
+        }
 
         handler(paInd, ctx);
     }
@@ -1469,6 +1479,23 @@ pa_result_t taf_pa_sim_RefreshRegister(
 {
     taf_prop_sim_SessionType_t propSessionType = Utility::Convert::SessionType(sessionType);
     taf_prop_sim_Result_t result = taf_prop_sim_RefreshRegister(propSessionType, filesLen,(taf_prop_sim_RefreshFile_t*)files);
+    return Utility::Convert::Result(result);
+}
+
+pa_result_t taf_pa_sim_RefreshUnregister(
+    taf_pa_sim_SessionType_t sessionType,
+    uint32_t filesLen,
+    taf_pa_sim_RefreshFile_t* files
+)
+{
+    if(sessionType == TAF_PA_SIM_SESSION_TYPE_UNKNOWN)
+    {
+        PA_ERROR("Invalid parameter: sessionType is UNKNOWN.");
+        return TAF_PA_SIM_RESULT_BAD_PARAMETER;
+    }
+    taf_prop_sim_SessionType_t propSessionType = Utility::Convert::SessionType(sessionType);
+    taf_prop_sim_Result_t result = taf_prop_sim_RefreshDeregister(propSessionType,
+                                   filesLen, (taf_prop_sim_RefreshFile_t*)files);
     return Utility::Convert::Result(result);
 }
 
