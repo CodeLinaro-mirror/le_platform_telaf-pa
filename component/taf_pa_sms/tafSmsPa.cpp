@@ -497,8 +497,8 @@ void SmsPAController::tafSmsListener::onIncomingSms
     std::string pdu(rawPduBytes.begin(), rawPduBytes.end());
     std::string sender = smsMsg->getSender();
 
-    PA_INFO("Received SMS from phone ID %d from: %s", phoneId, sender.c_str());
-    PA_INFO("message: %s", smsMsg->getText().c_str());
+    PA_DEBUG("Received SMS from phone ID %d from: %s", phoneId, sender.c_str());
+    PA_DEBUG("message: %s", smsMsg->getText().c_str());
 
     int storageIdx = -1;
 

@@ -768,7 +768,7 @@ std::shared_ptr<taf_pa_voicecall_CallInfo_t> VoiceCallPAController::createCallIn
     );
     if (src_len >= PA_MAX_DESTINATION_LEN_BYTE)
     {
-        PA_ERROR("destId truncated: src_len=%zu, buf_size=%u, value='%s'",
+        PA_DEBUG("destId truncated: src_len=%zu, buf_size=%u, value='%s'",
                  static_cast<size_t>(src_len),
                  static_cast<unsigned>(PA_MAX_DESTINATION_LEN_BYTE),
                  remote.c_str());
@@ -793,7 +793,8 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
 
     if (state == telux::tel::CallState::CALL_DIALING)
     {
-        int callInfoFd = open(VoiceCallInfoConfFile, O_CREAT | O_RDWR | O_APPEND, 0644);
+        int callInfoFd = open(VoiceCallInfoConfFile,
+                O_CREAT | O_RDWR | O_APPEND | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
         if (callInfoFd < 0)
         {
             PA_ERROR("Failed to open voice call info file!");
@@ -869,7 +870,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
         }
     }
 
-    PA_INFO("On call state change dest: %s, state: %s",
+    PA_DEBUG("On call state change dest: %s, state: %s",
         iCall->getRemotePartyNumber().c_str(), pACtrl->stateToStr(state));
     // call platform listener
     taf_pa_voicecall_EventListener listener = nullptr;
@@ -889,7 +890,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
                               sizeof(callInfo.destId));
         if (src_len >= sizeof(callInfo.destId))
         {
-            PA_ERROR("destId truncated: src_len=%zu, buf_size=%zu, value='%s'",
+            PA_DEBUG("destId truncated: src_len=%zu, buf_size=%zu, value='%s'",
             static_cast<size_t>(src_len),
             sizeof(callInfo.destId),
             remote.c_str());
@@ -914,7 +915,7 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
     telux::tel::CallState state = iCall->getCallState();
     auto pACtrl = VoiceCallPAController::getInstance();
 
-    PA_INFO("On call state change dest: %s, state: %s",
+    PA_DEBUG("On call state change dest: %s, state: %s",
         iCall->getRemotePartyNumber().c_str(), pACtrl->stateToStr(state));
 
     if (iCall->getCallDirection() != telux::tel::CallDirection::INCOMING)
@@ -923,7 +924,8 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
         return;
     }
 
-    int callInfoFd = open(VoiceCallInfoConfFile, O_CREAT | O_RDWR | O_APPEND, 0644);
+    int callInfoFd = open(VoiceCallInfoConfFile,
+            O_CREAT | O_RDWR | O_APPEND | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
     if (callInfoFd < 0)
     {
         PA_ERROR("Failed to open voice call info file!");
@@ -987,7 +989,7 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Make(
         callMgr, std::move(callInfoPtr), callback, context
     );
 
-    PA_INFO("Starting voice call for phone %d num: %s", callInfo.phoneId, callInfo.destId);
+    PA_DEBUG("Starting voice call for phone %d num: %s", callInfo.phoneId, callInfo.destId);
 
     telux::common::Status status = callMgr->makeCall(callInfo.phoneId, std::string(callInfo.destId), cbObj);
     telux::common::ErrorCode errorCode = cbObj->getFuture().get();
@@ -1027,7 +1029,8 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Stop(
             (pACtrl->directionToPaDirection(iCall->getCallDirection()) == callInfo.direction))
         {
             if (iCall->getCallState() == telux::tel::CallState::CALL_ENDED) {
-                PA_ERROR("Call for phone %d, dest: %s is already ended", callInfo.phoneId, callInfo.destId);
+                PA_DEBUG("Call for phone %d, dest: %s is already ended", callInfo.phoneId,
+                        callInfo.destId);
                 return PA_DUPLICATE;
             }
 
