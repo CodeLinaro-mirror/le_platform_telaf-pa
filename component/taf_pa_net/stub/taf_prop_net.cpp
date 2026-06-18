@@ -22,6 +22,20 @@ int32_t taf_prop_net_Init
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * Deinit this component
+ */
+//--------------------------------------------------------------------------------------------------
+int32_t taf_prop_net_Deinit
+(
+    void
+)
+{
+    PA_INFO("Function is not implemented in stub PA.");
+    return TAF_PROP_NET_RESULT_NOT_IMPLEMENTED;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
  * Set device mode
  *
  * @return LE_TAF_PROP_NET_RESULT_FAULT                      Failed

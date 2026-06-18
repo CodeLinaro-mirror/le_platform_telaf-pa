@@ -293,6 +293,21 @@ pa_result_t taf_pa_net_Deinit()
 
     PA_INFO("Resetting phoneManager");
     pNetAdaptor.phoneManager.reset();
+
+    int32_t nsRes = taf_prop_net_Deinit();
+    if (nsRes == TAF_PROP_NET_RESULT_OK)
+    {
+        PA_INFO("taf_prop_net_Deinit() completed successfully.");
+    }
+    else if (nsRes == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
+    {
+        PA_INFO("taf_prop_net_Deinit() not implemented (stub).");
+    }
+    else
+    {
+        PA_ERROR("taf_prop_net_Deinit() failed with result %d.", nsRes);
+    }
+
     pNetAdaptor.isInitialized = false;
     PA_INFO("Net platform adaptor deinitialization complete.");
     return PA_OK;
