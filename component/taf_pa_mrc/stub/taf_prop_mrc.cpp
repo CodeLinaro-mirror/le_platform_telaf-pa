@@ -36,6 +36,16 @@ int32_t taf_prop_mrc_Init
     return -ENOSYS;
 }
 
+int32_t taf_prop_mrc_Deinit
+(
+    void
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+
+    return -ENOSYS;
+}
+
 int32_t taf_prop_mrc_RegisterIndication
 (
     uint8_t registration

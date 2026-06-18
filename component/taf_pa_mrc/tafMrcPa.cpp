@@ -9,6 +9,7 @@
 #include <future>
 #include <condition_variable>
 #include <atomic>
+#include <mutex>
 
 #include <telux/common/CommonDefines.hpp>
 #include <telux/platform/PlatformFactory.hpp>
@@ -27,6 +28,7 @@ using namespace telux::platform;
 
 // Thread-safe initialization flag
 static std::atomic<bool> gMrcPaInitialized(false);
+static std::mutex gMrcPaMutex;
 
 #define SERVICE_PROMISE_AND_CALLBACK(name)                                \
     auto name##Promise = make_shared<promise<ServiceStatus>>();           \
@@ -335,6 +337,7 @@ static void ScrubStatusHandler
 pa_result_t taf_pa_mrc_Init()
 {
     PA_DEBUG("PA implementation.");
+    std::lock_guard<std::mutex> paLock(gMrcPaMutex);
 
     // Check if already initialized (idempotent pattern)
     if (gMrcPaInitialized.load(std::memory_order_acquire))
@@ -688,6 +691,7 @@ pa_result_t taf_pa_mrc_AckSlotToggle
 pa_result_t taf_pa_mrc_Deinit()
 {
     PA_DEBUG("PA implementation.");
+    std::lock_guard<std::mutex> paLock(gMrcPaMutex);
 
     // Check if initialized before attempting deinit
     if (!gMrcPaInitialized.load(std::memory_order_acquire))
@@ -713,6 +717,21 @@ pa_result_t taf_pa_mrc_Deinit()
         pa.indicators.processStatus.contextPtr = nullptr;
         pa.indicators.scrubStatus.handlerFuncPtr = nullptr;
         pa.indicators.scrubStatus.contextPtr = nullptr;
+    }
+
+    // Step 2: Ask the ns-layer to release QMI clients and clear its handlers.
+    int32_t nsResult = taf_prop_mrc_Deinit();
+    if (nsResult == -ENOSYS)
+    {
+        PA_INFO("MRC proprietary platform adaptor is not implemented.");
+    }
+    else if (nsResult == -EINVAL)
+    {
+        PA_WARN("MRC proprietary platform adaptor was not initialized.");
+    }
+    else if (nsResult != 0)
+    {
+        PA_ERROR("taf_prop_mrc_Deinit failed: err(%d)", nsResult);
     }
 
     // Step 3: Reset the IFsManager shared pointer.
