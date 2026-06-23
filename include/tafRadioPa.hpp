@@ -1005,7 +1005,7 @@ PA_SHARED pa_result_t taf_pa_radio_GetVoiceServiceInfo
     taf_pa_radio_VoiceServiceInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetDataServieState
+PA_SHARED pa_result_t taf_pa_radio_GetDataServiceState
 (
     uint32_t instance,
     taf_pa_radio_DataServiceState_t* statePtr
