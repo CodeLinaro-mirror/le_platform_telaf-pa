@@ -6587,10 +6587,30 @@ pa_result_t taf_pa_radio_AddNrIconChangeHandler
     return PA_OK;
 }
 
+taf_prop_radio_DisableIndicationMode_t convertDisableIndicationModetoProp
+(
+    taf_pa_radio_DisableIndicationMode_t mode  
+)
+{
+    switch (mode)
+    {
+        case TAF_PA_RADIO_DISABLE_IND_MODE_ALL:
+            return TAF_PROP_RADIO_DISABLE_IND_MODE_ALL;
+        case TAF_PA_RADIO_DISABLE_IND_MODE_SKIP_NAS_SYS_INFO_IND:
+            return TAF_PROP_RADIO_DISABLE_IND_MODE_SKIP_NAS_SYS_INFO_IND;
+        default:
+            return TAF_PROP_RADIO_DISABLE_IND_MODE_ALL;
+    }
+
+    return TAF_PROP_RADIO_DISABLE_IND_MODE_ALL;
+
+}
+
 pa_result_t taf_pa_radio_RegisterIndication
 (
     uint32_t instance,
-    uint8_t registration
+    uint8_t registration,
+    taf_pa_radio_DisableIndicationMode_t mode    
 )
 {
     std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
@@ -6603,7 +6623,9 @@ pa_result_t taf_pa_radio_RegisterIndication
         return -EINVAL;
     }
 
-    int32_t result = taf_prop_radio_RegisterIndication(instance, registration);
+    taf_prop_radio_DisableIndicationMode_t propMode = convertDisableIndicationModetoProp(mode);
+
+    int32_t result = taf_prop_radio_RegisterIndication(instance, registration, propMode);
     if (result != 0)
         PA_ERROR("Failed to control radio proprietary indications for instance %d.", instance);
 
@@ -6961,4 +6983,75 @@ pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
     *statusPtr = Utility::Convert::RoamingStatus(status);
 
     return result;
+}
+
+taf_prop_radio_SysInfoIndLimitMask_t convertSysInfoIndLimitMasktoProp
+(
+    taf_pa_radio_SysInfoIndLimitMask_t limitMask  
+)
+{
+    return static_cast<taf_prop_radio_SysInfoIndLimitMask_t>(limitMask);
+}
+
+pa_result_t taf_pa_radio_SetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_pa_radio_SysInfoIndLimitMask_t limitMask
+)
+{
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
+    taf_prop_radio_SysInfoIndLimitMask_t propLimitMask = convertSysInfoIndLimitMasktoProp(limitMask);
+    int32_t result = taf_prop_radio_SetSysInfoIndLimit(instance, propLimitMask);
+    if(result != 0)
+    {
+        return PA_FAULT;
+    }
+    return PA_OK;
+
+}
+
+pa_result_t  taf_pa_radio_GetServiceStatus
+(
+    uint32_t instance,
+    taf_pa_radio_Rat_t *servingRat,
+    taf_pa_radio_RatServiceStatus_t* statusPtr
+)
+{
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
+    taf_prop_radio_Rat_t propServingRat = TAF_PROP_RADIO_RAT_UNKNOWN;
+    taf_prop_radio_RatServiceStatus_t propStatus = TAF_PROP_RADIO_RAT_SERVICE_STATUS_UNKNOWN;
+    
+    int32_t result = taf_prop_radio_GetServiceStatus(instance, &propServingRat, &propStatus);
+    if(result != 0)
+    {
+        return PA_FAULT;
+    }
+    
+    if (servingRat != nullptr)
+        *servingRat = Utility::Convert::Rat(propServingRat);
+    if (statusPtr != nullptr)
+        *statusPtr = Utility::Convert::RatServiceStatus(propStatus);
+    
+    return PA_OK;    
+}
+
+pa_result_t taf_pa_radio_GetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_pa_radio_SysInfoIndLimitMask_t *limitMaskPtr
+)
+{
+    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
+    taf_prop_radio_SysInfoIndLimitMask_t propLimitMask = TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_NONE;
+    
+    int32_t result = taf_prop_radio_GetSysInfoIndLimit(instance, &propLimitMask);
+    if(result != 0)
+    {
+        return PA_FAULT;
+    }
+    
+    if (limitMaskPtr != nullptr)
+        *limitMaskPtr = static_cast<taf_pa_radio_SysInfoIndLimitMask_t>(propLimitMask);
+    
+    return PA_OK;
 }
