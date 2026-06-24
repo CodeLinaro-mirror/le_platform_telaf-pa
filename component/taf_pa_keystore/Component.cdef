@@ -1,6 +1,7 @@
 sources:
 {
     taf_pa_keystore.c
+    tafFilePa.c
 }
 
 cxxflags:

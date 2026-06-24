@@ -7,6 +7,35 @@
 #include "interfaces.h"
 #include "taf_pa_keystore.h"
 #include "taf_prop_keystore.h"
+#include "taf_prop_file.h"
+#include "tafFilePa.h"
+#include <stdatomic.h>
+#include <stdbool.h>
+
+// Thread-safe initialization flag
+static _Atomic(bool) g_keystore_initialized = false;
+static _Atomic(bool) g_file_vtable_initialized = false;
+
+// Forward declarations for file functions (defined in taf_pa_file.c)
+//--------------------------------------------------------------------------------------------------
+/**
+ * The file vtable with actual file function pointers
+ * This will be injected into the noship keystore component
+ */
+//--------------------------------------------------------------------------------------------------
+static const taf_prop_file_vtable_t g_file_vtable = {
+    .abi_version = 1,
+    .size = sizeof(taf_prop_file_vtable_t),
+
+    // RFS File Operations
+    .prop_open = taf_pa_file_Open,
+    .prop_close = taf_pa_file_Close,
+    .prop_read = taf_pa_file_Read,
+    .prop_write = taf_pa_file_Write,
+    .prop_delete = taf_pa_file_Delete,
+    .prop_copy = taf_pa_file_Copy,
+    .prop_rename = taf_pa_file_Rename,
+};
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -19,7 +48,66 @@
 //--------------------------------------------------------------------------------------------------
 le_result_t taf_pa_ks_Init(void)
 {
-    return taf_prop_ks_Init();
+    LE_INFO("Telaf keyStore PA initializing ...");
+
+    // Initialize RFS vtable injection first
+
+    bool expected = false;
+    if (!atomic_compare_exchange_strong(&g_file_vtable_initialized, &expected, true))
+    {
+        LE_WARN("RFS vtable already initialized");
+        return LE_OK;
+    }
+
+    LE_INFO("Injecting RFS vtable into keystore noship component");
+
+    // Get the vtable from taf_pa_file.c and inject it into noship component
+    taf_prop_file_vtable_Bind(&g_file_vtable);
+
+    LE_INFO("RFS vtable injection completed successfully");
+
+    // Initialize the proprietary keystore
+    le_result_t result = taf_prop_ks_Init();
+    if (result == LE_OK)
+    {
+        atomic_store(&g_keystore_initialized, true);
+    }
+
+    return result;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * PA deinitialization.
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t taf_pa_ks_Deinit(void)
+{
+    // Check if initialization was successful before proceeding with deinitialization
+    if (!atomic_load(&g_keystore_initialized))
+    {
+        LE_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return LE_FAULT;
+    }
+
+     if (!atomic_load(&g_file_vtable_initialized))
+    {
+        LE_WARN("RFS vtable not initialized - ignoring deinit request");
+        return LE_FAULT;
+    }
+
+    LE_INFO("Unbinding RFS vtable from keystore noship component");
+
+    // Unbind the vtable
+    taf_prop_file_vtable_Bind(NULL);
+
+    // Reset initialization flag
+    atomic_store(&g_file_vtable_initialized, false);
+    LE_INFO("RFS vtable unbinding completed successfully");
+
+    atomic_store(&g_keystore_initialized, false);
+    LE_INFO("Telaf keyStore PA deinitialized.");
+    return LE_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
