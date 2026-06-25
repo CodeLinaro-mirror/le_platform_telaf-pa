@@ -30,6 +30,9 @@ static bool subListenerRegistered = {false};
 static bool cardListenerRegistered = {false};
 static bool multiSimListenerRegistered = {false};
 static std::atomic<bool> g_simPaInitialized(false);
+static std::atomic<bool> g_propSimInitialized(false);
+
+static void RefreshSvcStatusHandler(taf_prop_sim_RefreshChangeInd_t indication, void* contextPtr);
 
 #define SERVICE_PROMISE_AND_CALLBACK(name)                                \
     auto name##Promise = make_shared<promise<common::ServiceStatus>>();   \
@@ -116,6 +119,7 @@ class tafPaCardListener : public telux::tel::ICardListener
     public:
         tafPaCardListener(){};
         void onCardInfoChanged(int slotId) override;
+        void onServiceStatusChange(telux::common::ServiceStatus status) override;
 };
 
 class tafPaMultiSimListener : public telux::tel::IMultiSimListener
@@ -536,6 +540,63 @@ void tafPaCardListener::onCardInfoChanged(int slotId)
     else
     {
         PA_ERROR("unable to find event Listener for onCardInfoChanged");
+    }
+}
+
+void tafPaCardListener::onServiceStatusChange
+(
+    telux::common::ServiceStatus status
+)
+{
+    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_INFO("CardManager service status changed to available. Re-initializing prop SIM.");
+
+        if (!g_propSimInitialized.load(std::memory_order_acquire))
+        {
+            taf_prop_sim_Result_t res = taf_prop_sim_Init();
+            if (res == TAF_PROP_SIM_RESULT_OK)
+            {
+                PA_INFO("taf_prop_sim_Init() completed successfully after service recovery.");
+                taf_prop_sim_AddRefreshChangeHandler(RefreshSvcStatusHandler, nullptr);
+                g_propSimInitialized.store(true, std::memory_order_release);
+            }
+            else
+            {
+                PA_ERROR("taf_prop_sim_Init() failed with result %d after service recovery.", res);
+            }
+        }
+        return;
+    }
+
+    PA_WARN("CardManager service status changed to unavailable. Calling taf_prop_sim_Deinit().");
+
+    if (g_propSimInitialized.load(std::memory_order_acquire))
+    {
+        pa_result_t removeRes = taf_pa_sim_RemoveRefreshChangeHandler(nullptr);
+        if (removeRes == PA_OK)
+        {
+            PA_INFO("taf_pa_sim_RemoveRefreshChangeHandler() completed successfully.");
+        }
+        else
+        {
+            PA_ERROR("taf_pa_sim_RemoveRefreshChangeHandler() failed with result %d.", removeRes);
+        }
+
+        int32_t res = taf_prop_sim_Deinit();
+        if (res == 0)
+        {
+            PA_INFO("taf_prop_sim_Deinit() completed successfully.");
+        }
+        else if (res == -EINVAL)
+        {
+            PA_WARN("taf_prop_sim_Deinit() called before Init() was successfully called.");
+        }
+        else
+        {
+            PA_ERROR("taf_prop_sim_Deinit() failed with result %d.", res);
+        }
+        g_propSimInitialized.store(false, std::memory_order_release);
     }
 }
 
@@ -1287,6 +1348,7 @@ pa_result_t taf_pa_sim_Init()
     }
             taf_prop_sim_AddRefreshChangeHandler(RefreshSvcStatusHandler,nullptr);
     PA_INFO("Sim proprietary platform adaptor initialization is done.");
+    g_propSimInitialized.store(true, std::memory_order_release);
     g_simPaInitialized.store(true, std::memory_order_release);
     return TAF_PA_SIM_RESULT_OK;
 }
@@ -1359,7 +1421,27 @@ pa_result_t taf_pa_sim_Deinit()
     pa.multiSimMgr.reset();
     pa.managers.phone.reset();
 
-    // Step 7: Reset the initialization flag
+    // Step 7: Deinitialize the proprietary SIM platform adaptor if it was initialized.
+    if (g_propSimInitialized.load(std::memory_order_acquire))
+    {
+        int32_t res = taf_prop_sim_Deinit();
+        if (res == 0)
+        {
+            PA_INFO("taf_prop_sim_Deinit() completed successfully.");
+        }
+        else if (res == -EINVAL)
+        {
+            PA_WARN("taf_prop_sim_Deinit() called before Init() was successfully called.");
+        }
+        else
+        {
+            PA_ERROR("taf_prop_sim_Deinit() failed with result %d.", res);
+            overallResult = TAF_PA_SIM_RESULT_FAULT;
+        }
+        g_propSimInitialized.store(false, std::memory_order_release);
+    }
+
+    // Step 8: Reset the initialization flag
     PA_INFO("Resetting initialization flag");
     g_simPaInitialized.store(false, std::memory_order_release);
 
