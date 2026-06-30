@@ -431,9 +431,9 @@ void tafPaSubscriptionListener::onSubscriptionInfoChanged
     {
         auto slotId = subscription->getSlotId();
         PA_INFO("Subscription info changed for slot: %d", slotId);
-        PA_INFO("ICCID: %s", subscription->getIccId().c_str());
-        PA_INFO("IMSI: %s", subscription->getImsi().c_str());
-        PA_INFO("Phone Number: %s", subscription->getPhoneNumber().c_str());
+        PA_DEBUG("ICCID: %s", subscription->getIccId().c_str());
+        PA_DEBUG("IMSI: %s", subscription->getImsi().c_str());
+        PA_DEBUG("Phone Number: %s", subscription->getPhoneNumber().c_str());
         {
             // Acquire write lock on cardsMutex_ before modifying managers.cards
             std::unique_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
@@ -461,7 +461,7 @@ void tafPaSubscriptionListener::onSubscriptionInfoChanged
     auto simIccidEvent = std::make_shared<taf_pa_sim_Iccid_t>();
     simIccidEvent->simId = (taf_pa_sim_Id_t)simPtr->simId;
     simIccidEvent->ICCID = simPtr->ICCID;
-    PA_INFO(" simIccidEvent->ICCID : %s",simIccidEvent->ICCID.c_str());
+    PA_DEBUG(" simIccidEvent->ICCID : %s",simIccidEvent->ICCID.c_str());
     taf_pa_sim_EventListener* listener1 = nullptr;
     {
         std::lock_guard<std::mutex> elLock(pa.eventListenerMutex_);
@@ -1467,12 +1467,6 @@ pa_result_t taf_pa_sim_RefreshRegister(
     taf_pa_sim_RefreshFile_t* files
 )
 {
-    // Validate input
-    if (files == nullptr || filesLen > MAX_SIM_REFRESH_FILES)
-    {
-        PA_ERROR("Invalid parameters: files is nullptr or filesLen exceeds limit.");
-        return TAF_PA_SIM_RESULT_BAD_PARAMETER;
-    }
     taf_prop_sim_SessionType_t propSessionType = Utility::Convert::SessionType(sessionType);
     taf_prop_sim_Result_t result = taf_prop_sim_RefreshRegister(propSessionType, filesLen,(taf_prop_sim_RefreshFile_t*)files);
     return Utility::Convert::Result(result);
@@ -1913,7 +1907,7 @@ pa_result_t taf_pa_sim_GetIccid(taf_pa_sim_Id_t simId,
             PA_WARN("ICCID truncated: original length %d, buffer size %d",
                     iccidLen, TAF_PA_SIM_ICCID_BYTES);
         }
-        PA_INFO("iccIdStr: %s",iccIdStr.c_str());
+        PA_DEBUG("iccIdStr: %s",iccIdStr.c_str());
     }
 
     PA_INFO("taf_pa_sim_GetIccid is completed successfully.");
@@ -1985,7 +1979,7 @@ pa_result_t taf_pa_sim_GetSubscriberPhoneNumber(taf_pa_sim_Id_t simId,
             PA_WARN("Phone number truncated: original length %zu, buffer size %d",
                                         phoneLen, TAF_PA_SIM_PHONE_NUM_MAX_BYTES);
         }
-        PA_INFO("phoneNumber : %s",phoneNumber.c_str());
+        PA_DEBUG("phoneNumber : %s",phoneNumber.c_str());
     }
 
     PA_INFO("Get phone number successfully.");
@@ -2055,7 +2049,7 @@ pa_result_t taf_pa_sim_GetImsi(taf_pa_sim_Id_t simId,
             PA_WARN("IMSI truncated: original length %zu, buffer size %d",
                                           imsiLen, TAF_PA_SIM_IMSI_BYTES);
         }
-        PA_INFO("imsi : %s",imsi.c_str());
+        PA_DEBUG("imsi : %s",imsi.c_str());
     }
 
     PA_INFO("Get IMSI successfully.");
@@ -2138,7 +2132,7 @@ void PlatformAdaptor::InitializeSimInfo
         }
         else
         {
-            PA_INFO("ICCID: %s (length: %d)", simPtr->ICCID, iccidLen);
+            PA_DEBUG("ICCID: %s (length: %d)", simPtr->ICCID, iccidLen);
         }
 
         int imsiLen = std::snprintf(simPtr->IMSI, TAF_PA_SIM_IMSI_BYTES, "%s",
@@ -2156,7 +2150,7 @@ void PlatformAdaptor::InitializeSimInfo
         }
         else
         {
-            PA_INFO("IMSI: %s (length: %d)", simPtr->IMSI, imsiLen);
+            PA_DEBUG("IMSI: %s (length: %d)", simPtr->IMSI, imsiLen);
         }
 
         int phoneLen = std::snprintf(simPtr->phoneNumber, TAF_PA_SIM_PHONE_NUM_MAX_BYTES,
@@ -2177,7 +2171,7 @@ void PlatformAdaptor::InitializeSimInfo
         }
         else
         {
-            PA_INFO("Phone number: %s (length: %d)", simPtr->phoneNumber, phoneLen);
+            PA_DEBUG("Phone number: %s (length: %d)", simPtr->phoneNumber, phoneLen);
         }
     }
     else
@@ -2380,8 +2374,8 @@ pa_result_t taf_pa_sim_GetHomeNetworkMccMnc(taf_pa_sim_Id_t simId,
     {
         *mcc = subscription->getMcc();
         *mnc = subscription->getMnc();
-        PA_INFO("*mcc : %d",*mcc);
-        PA_INFO("*mcc : %d",*mnc);
+        PA_DEBUG("*mcc : %d",*mcc);
+        PA_DEBUG("*mcc : %d",*mnc);
     }
 
     PA_INFO("Get carrier name successfully.");
@@ -2424,8 +2418,8 @@ pa_result_t taf_pa_sim_GetHomeNetworkMccMncStr(taf_pa_sim_Id_t simId,
     {
         mcc = subscription->getMobileCountryCode();
         mnc = subscription->getMobileNetworkCode();
-        PA_INFO("*mcc string : %s",mcc.c_str());
-        PA_INFO("*mnc string : %s",mnc.c_str());
+        PA_DEBUG("*mcc string : %s",mcc.c_str());
+        PA_DEBUG("*mnc string : %s",mnc.c_str());
     }
 
     PA_INFO("Get MCC/MNC successfully.");
@@ -2567,14 +2561,37 @@ pa_result_t taf_pa_sim_GetState
             PA_INFO("TAF_PA_SIM_PRESENT");
             return TAF_PA_SIM_RESULT_OK;
         }
+        else if(cardState == telux::tel::CardState::CARDSTATE_ABSENT)
+        {
+            PA_INFO("Card State is Absent" );
+            *state = TAF_PA_SIM_ABSENT;
+            return TAF_PA_SIM_RESULT_OK;
+        }
+        else if(cardState == telux::tel::CardState::CARDSTATE_ERROR)
+        {
+            PA_INFO("Card State is Error");
+            *state = TAF_PA_SIM_ERROR;
+            return TAF_PA_SIM_RESULT_OK;
+        }
+        else if(cardState == telux::tel::CardState::CARDSTATE_RESTRICTED)
+        {
+            PA_INFO("Card State is Restricted");
+            *state = TAF_PA_SIM_RESTRICTED;
+            return TAF_PA_SIM_RESULT_OK;
+        }
+        else
+        {
+            PA_INFO("Card State is Unknown");
+            *state = TAF_PA_SIM_STATE_UNKNOWN;
+            return TAF_PA_SIM_RESULT_OK;
+        }
     }
     else
     {
-        *state = TAF_PA_SIM_ABSENT;
-        PA_INFO("TAF_PA_SIM_ABSENT");
+        *state = TAF_PA_SIM_STATE_UNKNOWN;
+        PA_INFO("TAF_PA_SIM_STATE_UNKNOWN (card is null)");
+        return TAF_PA_SIM_RESULT_OK;
     }
-    PA_INFO("getstate: success");
-    return TAF_PA_SIM_RESULT_OK;
 }
 
 pa_result_t taf_pa_sim_SetPower
@@ -3738,7 +3755,7 @@ pa_result_t taf_pa_sim_GetEID
         pa_result_t result = futResult.get();
         if (result == PA_OK) {
             eidStr = *eidResultPtr;
-            PA_INFO("EID retrieved successfully: %s", eidStr.c_str());
+            PA_DEBUG("EID retrieved successfully: %s", eidStr.c_str());
         }
         return result;
     } else {
