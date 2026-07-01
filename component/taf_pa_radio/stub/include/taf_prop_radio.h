@@ -31,6 +31,20 @@ typedef uint64_t taf_prop_radio_SoBitMask_t;
 
 typedef enum
 {
+    TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_NONE = 0,
+    TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_BY_STATE_TOGGLE = (1 << 0),
+    TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_BY_SRV_STATUS = (1 << 1)
+} taf_prop_radio_SysInfoIndLimitMask_t;
+
+typedef enum
+{
+    TAF_PROP_RADIO_DISABLE_IND_MODE_NONE,
+    TAF_PROP_RADIO_DISABLE_IND_MODE_ALL,
+    TAF_PROP_RADIO_DISABLE_IND_MODE_SKIP_NAS_SYS_INFO_IND
+} taf_prop_radio_DisableIndicationMode_t;
+
+typedef enum
+{
     TAF_PROP_RADIO_RAT_UNKNOWN = 0,
     TAF_PROP_RADIO_RAT_GSM = 1,
     TAF_PROP_RADIO_RAT_CDMA = 2,
@@ -212,7 +226,27 @@ PROP_SHARED int32_t taf_prop_radio_InitInstance
 PROP_SHARED int32_t taf_prop_radio_RegisterIndication
 (
     uint32_t instance,
-    uint8_t registration
+    uint8_t registration,
+    taf_prop_radio_DisableIndicationMode_t mode
+);
+
+PROP_SHARED int32_t taf_prop_radio_SetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_prop_radio_SysInfoIndLimitMask_t limitMask
+);
+
+PROP_SHARED int32_t taf_prop_radio_GetServiceStatus
+(
+    uint32_t instance,
+    taf_prop_radio_Rat_t *servingRat,
+    taf_prop_radio_RatServiceStatus_t* status
+);
+
+PROP_SHARED int32_t taf_prop_radio_GetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_prop_radio_SysInfoIndLimitMask_t *limitMask
 );
 
 PROP_SHARED int32_t taf_prop_radio_PerformPciNetworkScan
@@ -286,4 +320,3 @@ PROP_SHARED int32_t taf_prop_radio_GetDataCurrRoamingStatus
 #endif
 
 #endif /* TAF_PROP_RADIO_H */
-
