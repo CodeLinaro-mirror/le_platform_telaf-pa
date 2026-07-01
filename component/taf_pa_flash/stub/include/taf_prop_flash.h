@@ -6,9 +6,6 @@
 #ifndef TAF_PROP_FLASH_H
 #define TAF_PROP_FLASH_H
 
-#include <stddef.h>      // size_t
-#include <sys/types.h>   // off_t
-#include <cstdint>
 #include "taf_prop_common.h"
 
 #ifdef __cplusplus
@@ -156,9 +153,9 @@ PROP_SHARED int32_t taf_prop_flash_GetUbiVolumeInfo
     taf_prop_flash_UbiVolumeInfo_t* infoPtr
 );
 
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TAF_PROP_MRC_H */
+#endif /* TAF_PROP_FLASH_H */
+

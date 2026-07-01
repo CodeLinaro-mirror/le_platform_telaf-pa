@@ -54,6 +54,7 @@ typedef enum
     MODEM_WS_INCOMING_SMS     = 0x0001,
     MODEM_WS_INCOMING_VCALL   = 0x0002,
     MODEM_WS_SIM_PROFILE_SWAP = 0x0004,
+    MODEM_WS_NAS_SYS_INFO     = 0x0008,
 
 } taf_prop_pa_pms_ModemWakeupSource_t;
 

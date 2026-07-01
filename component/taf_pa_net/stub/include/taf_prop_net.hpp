@@ -6,7 +6,8 @@
 #ifndef TAF_PROP_NET_HPP
 #define TAF_PROP_NET_HPP
 
-#include "tafCommonPa.h"
+
+#include "taf_prop_common.h"
 
 #define TAF_PROP_NET_RESULT_OK 0
 #define TAF_PROP_NET_RESULT_FAULT -6
@@ -47,71 +48,70 @@ typedef enum
 }
 taf_prop_net_AuthMethod_t;
 
-PA_SHARED int32_t taf_prop_net_Init();
+PROP_SHARED int32_t taf_prop_net_Init();
 
 //--------------------------------------------------------------------------------------------------
 /**
  *  Net deinitialization.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_Deinit();
-
+PROP_SHARED int32_t taf_prop_net_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Set device mode
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_SetDeviceMode(taf_prop_net_DeviceMode_t deviceMode);
+PROP_SHARED int32_t taf_prop_net_SetDeviceMode(taf_prop_net_DeviceMode_t deviceMode);
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Get device mode
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED taf_prop_net_DeviceMode_t taf_prop_net_GetDeviceMode();
+PROP_SHARED taf_prop_net_DeviceMode_t taf_prop_net_GetDeviceMode();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Set SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_SetSocksAuthMethod(taf_prop_net_AuthMethod_t authMethod);
+PROP_SHARED int32_t taf_prop_net_SetSocksAuthMethod(taf_prop_net_AuthMethod_t authMethod);
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Get SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED taf_prop_net_AuthMethod_t taf_prop_net_GetSocksAuthMethod();
+PROP_SHARED taf_prop_net_AuthMethod_t taf_prop_net_GetSocksAuthMethod();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Sets SOCKS LAN interface
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_SetSocksLanInterface(const char* ifName);
+PROP_SHARED int32_t taf_prop_net_SetSocksLanInterface(const char* ifName);
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Gets SOCKS LAN interface
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_GetSocksLanInterface(char* ifName, size_t ifNameSize);
+PROP_SHARED int32_t taf_prop_net_GetSocksLanInterface(char* ifName, size_t ifNameSize);
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Adds username/profile association
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_AddSocksAssociation(const char* userName, uint32_t profileId);
+PROP_SHARED int32_t taf_prop_net_AddSocksAssociation(const char* userName, uint32_t profileId);
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Deletes username/profile association
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_RemoveSocksAssociation(const char* userName);
+PROP_SHARED int32_t taf_prop_net_RemoveSocksAssociation(const char* userName);
 
 
 
