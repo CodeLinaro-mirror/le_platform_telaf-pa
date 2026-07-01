@@ -5447,7 +5447,7 @@ pa_result_t taf_pa_radio_PerformPlmnNetworkScan
         PA_ERROR("Network selection manager %d is nullptr.", instance);
         return -EFAULT;
     }
-    if (pa.managers.networkSelections[instance] == nullptr)
+    if (pa.listeners.networkSelections[instance] == nullptr)
     {
         PA_ERROR("Network selection listener %d is nullptr.", instance);
         return -EFAULT;
@@ -5457,7 +5457,19 @@ pa_result_t taf_pa_radio_PerformPlmnNetworkScan
     info.scanType = tel::NetworkScanType::USER_SPECIFIED_RAT;
     info.ratMask = Utility::Convert::RatToTelRat(configPtr->bitmask);
 
-    auto status = pa.managers.networkSelections[instance]->registerListener(
+    // Reset listener state before starting a new scan to ensure clean state
+    pa.listeners.networkSelections[instance]->operatorInfoList.clear();
+    pa.listeners.networkSelections[instance]->result = 0;
+
+    // Deregister any existing listener first to ensure clean state
+    auto status = pa.managers.networkSelections[instance]->deregisterListener(
+        pa.listeners.networkSelections[instance]);
+    if (status != common::Status::SUCCESS)
+    {
+        PA_DEBUG("Listener was not registered, proceeding with registration.");
+    }
+
+    status = pa.managers.networkSelections[instance]->registerListener(
         pa.listeners.networkSelections[instance]);
     if (status != common::Status::SUCCESS)
     {
@@ -5471,6 +5483,9 @@ pa_result_t taf_pa_radio_PerformPlmnNetworkScan
     if (result != common::Status::SUCCESS)
     {
         PA_ERROR("Failed to perform network scan with network selection manager %d.", instance);
+        // Cleanup: deregister listener before returning error
+        pa.managers.networkSelections[instance]->deregisterListener(
+            pa.listeners.networkSelections[instance]);
         return -EFAULT;
     }
 
@@ -5480,11 +5495,15 @@ pa_result_t taf_pa_radio_PerformPlmnNetworkScan
     {
         PA_ERROR("Error occured when getting response with network selection manager %d.",
             instance);
+        // Cleanup: deregister listener before returning error
+        pa.managers.networkSelections[instance]->deregisterListener(
+            pa.listeners.networkSelections[instance]);
         return -EFAULT;
     }
 
     Utility::WaitCallback::Scan(instance, configPtr->timeout);
 
+    // Always deregister listener after scan completes (success or failure)
     status = pa.managers.networkSelections[instance]->deregisterListener(
         pa.listeners.networkSelections[instance]);
     if (status != common::Status::SUCCESS)
