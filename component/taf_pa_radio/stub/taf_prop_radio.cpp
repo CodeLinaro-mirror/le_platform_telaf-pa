@@ -60,10 +60,11 @@ int32_t taf_prop_radio_SetSysInfoIndLimit
     return -ENOSYS;
 }
 
-int32_t taf_prop_radio_GetSysInfoIndLimit
+int32_t taf_prop_radio_GetServiceStatus
 (
     uint32_t instance,
-    taf_prop_radio_SysInfoIndLimitMask_t *limitMask
+    taf_prop_radio_Rat_t *servingRat,
+    taf_prop_radio_RatServiceStatus_t* status
 )
 {
     PROP_INFO("Function is not implemented in stub PA.");
@@ -71,11 +72,10 @@ int32_t taf_prop_radio_GetSysInfoIndLimit
     return -ENOSYS;
 }
 
-int32_t taf_prop_radio_GetServiceStatus
+int32_t taf_prop_radio_GetSysInfoIndLimit
 (
     uint32_t instance,
-    taf_prop_radio_Rat_t *servingRat,
-    taf_prop_radio_RatServiceStatus_t* status
+    taf_prop_radio_SysInfoIndLimitMask_t *limitMask
 )
 {
     PROP_INFO("Function is not implemented in stub PA.");

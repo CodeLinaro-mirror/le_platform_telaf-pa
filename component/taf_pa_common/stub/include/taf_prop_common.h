@@ -7,7 +7,12 @@
 #define TAF_PROP_COMMON_H
 
 #include <stdint.h>
-#include <stdarg.h>   // va_list
+#include <stdarg.h>
+#include <syslog.h>
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -94,14 +99,14 @@ PROP_SHARED void taf_prop_common_LogMessage
     ...
 );
 
-#define PROP_DEBUG(fmt, ...)  taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_DEBUG,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PROP_INFO(fmt, ...)   taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_INFO,   __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PROP_NOTICE(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_NOTICE, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PROP_WARN(fmt, ...)   taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_WARN,   __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PROP_ERROR(fmt, ...)  taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_ERROR,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PROP_CRIT(fmt, ...)   taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_CRIT,   __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PROP_ALERT(fmt, ...)  taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_ALERT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
-#define PROP_EMERG(fmt, ...)  taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_EMERG,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PROP_DEBUG(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_DEBUG, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PROP_INFO(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_INFO,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PROP_NOTICE(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_NOTICE,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PROP_WARN(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_WARN,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PROP_ERROR(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_ERROR,   __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PROP_CRIT(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_CRIT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PROP_ALERT(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_ALERT,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+#define PROP_EMERG(fmt, ...) taf_prop_common_LogMessage(TAF_PROP_COMMON_LOG_LEVEL_EMERG,  __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 
 #define PROP_FATAL(fmt, ...) { PROP_EMERG(fmt, ##__VA_ARGS__); exit(EXIT_FAILURE); }
 #define PROP_FATAL_IF(condition, fmt, ...) if (condition) { PROP_FATAL(fmt, ##__VA_ARGS__) }

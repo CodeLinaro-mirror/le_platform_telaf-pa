@@ -26,6 +26,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/taf_pa_net)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../taf_pa_common/stub/include)
 
 
 add_library(${TARGET_NAME} SHARED ${TAF_PA_NET_SOURCES})
