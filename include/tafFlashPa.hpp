@@ -36,54 +36,54 @@ typedef struct taf_pa_flash_MtdRef* taf_pa_flash_MtdRef_t;
 
 typedef struct taf_pa_flash_UbiVolumeRef* taf_pa_flash_UbiVolumeRef_t;
 
-PA_SHARED pa_result_t taf_pa_flash_Init
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_Init
 (
     void
 );
 
-PA_SHARED pa_result_t taf_pa_flash_Deinit
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_Deinit
 (
     void
 );
 
-PA_SHARED pa_result_t taf_pa_flash_OpenMtd
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_OpenMtd
 (
     const char* namePtr,
     taf_pa_flash_OpenModeBitMask_t mode,
     taf_pa_flash_MtdRef_t* mtdRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_flash_CloseMtd
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_CloseMtd
 (
     taf_pa_flash_MtdRef_t mtdRef
 );
 
-PA_SHARED pa_result_t taf_pa_flash_GetMtdInfo
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_GetMtdInfo
 (
     taf_pa_flash_MtdRef_t mtdRef,
     taf_pa_flash_MtdInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_flash_EraseMtdBlock
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_EraseMtdBlock
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t blockIndex
 );
 
-PA_SHARED pa_result_t taf_pa_flash_CheckMtdGoodBlock
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_CheckMtdGoodBlock
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t blockIndex,
 	bool* isGoodBlockPtr
 );
 
-PA_SHARED pa_result_t taf_pa_flash_MarkMtdBadBlock
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_MarkMtdBadBlock
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t blockIndex
 );
 
-PA_SHARED pa_result_t taf_pa_flash_ReadMtdPage
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_ReadMtdPage
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t pageIndex,
@@ -91,7 +91,7 @@ PA_SHARED pa_result_t taf_pa_flash_ReadMtdPage
     size_t* dataSizePtr
 );
 
-PA_SHARED pa_result_t taf_pa_flash_WriteMtdPage
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_WriteMtdPage
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t pageIndex,
@@ -99,32 +99,32 @@ PA_SHARED pa_result_t taf_pa_flash_WriteMtdPage
     size_t dataSize
 );
 
-PA_SHARED pa_result_t taf_pa_flash_CopyMtd
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_CopyMtd
 (
     const char* srcNamePtr,
     const char* dstNamePtr,
     size_t dataSize
 );
 
-PA_SHARED pa_result_t taf_pa_flash_OpenUbiVolume
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_OpenUbiVolume
 (
     const char* namePtr,
     taf_pa_flash_OpenModeBitMask_t mode,
     taf_pa_flash_UbiVolumeRef_t* ubiVolumeRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_flash_CloseUbiVolume
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_CloseUbiVolume
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef
 );
 
-PA_SHARED pa_result_t taf_pa_flash_SetUbiVolumeUpdateSize
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_SetUbiVolumeUpdateSize
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef,
     int64_t size
 );
 
-PA_SHARED pa_result_t taf_pa_flash_ReadUbiVolume
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_ReadUbiVolume
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef,
     off_t offset,
@@ -132,14 +132,14 @@ PA_SHARED pa_result_t taf_pa_flash_ReadUbiVolume
     size_t* dataSizePtr
 );
 
-PA_SHARED pa_result_t taf_pa_flash_UpdateUbiVolume
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_UpdateUbiVolume
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef,
     const unsigned char* dataPtr,
     size_t dataSize
 );
 
-PA_SHARED pa_result_t taf_pa_flash_CopyUbiVolume
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_CopyUbiVolume
 (
     const char* srcNamePtr,
     const char* dstNamePtr,
@@ -147,12 +147,12 @@ PA_SHARED pa_result_t taf_pa_flash_CopyUbiVolume
     size_t dataSize
 );
 
-PA_SHARED pa_result_t taf_pa_flash_EraseUbiVolume
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_EraseUbiVolume
 (
     const char* namePtr
 );
 
-PA_SHARED pa_result_t taf_pa_flash_GetUbiVolumeInfo
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_GetUbiVolumeInfo
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef,
     taf_pa_flash_UbiVolumeInfo_t* infoPtr

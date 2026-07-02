@@ -113,7 +113,7 @@ namespace data
 
         // Functions
         void fillCallEndReason(const telux::common::DataCallEndReason&,DataCallEndReason_t&);
-        pa_result_t updateBitRate
+        taf_pa_result_t updateBitRate
         (
             const std::shared_ptr<telux::data::IDataCall> &dataCall,
             telux::data::BitRateInfo &bitRate
@@ -135,40 +135,40 @@ namespace data
         // External APIs
         void Init(SlotCount_e slotCount);
         void Deinit();
-        pa_result_t PaGetSubsysState(taf::pa::data::SlotId_e slotId, SubsystemState_e &sState);
-        pa_result_t SetSubsysState
+        taf_pa_result_t PaGetSubsysState(taf::pa::data::SlotId_e slotId, SubsystemState_e &sState);
+        taf_pa_result_t SetSubsysState
         (
             taf::pa::data::SlotId_e slotId,
             SubsystemState_e sState,
             bool bSendEvent=false
         );
-        pa_result_t PaRegisterDataConnCallbacks();
-        pa_result_t PaDeregisterDataConnCallbacks();
-        pa_result_t PaGetDefaultProfile(const PhoneId_e phoneId, ProfileId_e &profileId);
-        pa_result_t PaSetDefaultProfile(const PhoneId_e phoneId, const ProfileId_e profileId);
+        taf_pa_result_t PaRegisterDataConnCallbacks();
+        taf_pa_result_t PaDeregisterDataConnCallbacks();
+        taf_pa_result_t PaGetDefaultProfile(const PhoneId_e phoneId, ProfileId_e &profileId);
+        taf_pa_result_t PaSetDefaultProfile(const PhoneId_e phoneId, const ProfileId_e profileId);
 
-        pa_result_t PaStartDataSessionAsync
+        taf_pa_result_t PaStartDataSessionAsync
         (
             const DataCallStartStopParams_t& params
         );
-        pa_result_t PaStopDataSessionAsync
+        taf_pa_result_t PaStopDataSessionAsync
         (
             const DataCallStartStopParams_t& params
         );
-        pa_result_t PaRequestDataCallsListAsync
+        taf_pa_result_t PaRequestDataCallsListAsync
         (
             taf::pa::data::PhoneId_e phoneId,
             taf::pa::data::taf_pa_data_RequestCallListCb callBack,
             std::shared_ptr<void> context
         );
 
-        pa_result_t paGetThrottledApnInfo(
+        taf_pa_result_t paGetThrottledApnInfo(
             const taf::pa::data::PhoneId_e phoneId,
             std::vector<ThrottledApnEventInfo_t> &throttledApnEventInfoList);
 
         // Data call events
         void PaSendDataCallEventInfoToClients(const DataCallEventInfo_t &dataCallEventInfo);
-        pa_result_t PaAddDataCallEventsCallback
+        taf_pa_result_t PaAddDataCallEventsCallback
         (
             taf_pa_data_CallEventsCb callBack,
             ///< [IN] The callback function.
@@ -177,7 +177,7 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        pa_result_t PaRemoveDataCallEventsCallback
+        taf_pa_result_t PaRemoveDataCallEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
@@ -188,7 +188,7 @@ namespace data
         (
             const std::vector<ThrottledApnEventInfo_t> &throttledApnEventList
         );
-        pa_result_t PaAddThrottledApnEventsCallback
+        taf_pa_result_t PaAddThrottledApnEventsCallback
         (
             taf_pa_data_ThrottledApnEventsCb callBack,
             ///< [IN] The callback function.
@@ -197,7 +197,7 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        pa_result_t PaRemoveThrottledApnEventsCallback
+        taf_pa_result_t PaRemoveThrottledApnEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
@@ -208,7 +208,7 @@ namespace data
         (
             const QosTftEventInfo_t &qosTftEventsList
         );
-        pa_result_t PaAddQosTftEventsCallback
+        taf_pa_result_t PaAddQosTftEventsCallback
         (
             taf_pa_data_QosTftEventsCb callBack,
             ///< [IN] The callback function.
@@ -217,7 +217,7 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        pa_result_t PaRemoveQosTftEventsCallback
+        taf_pa_result_t PaRemoveQosTftEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
@@ -228,7 +228,7 @@ namespace data
         (
             const HwAccelerationChangeEvent_t &hwAccelerationEventInfo
         );
-        pa_result_t PaAddHwAccelerationChangeEventsCallback
+        taf_pa_result_t PaAddHwAccelerationChangeEventsCallback
         (
             taf_pa_data_HwAccelerationEventsCb callBack,
             ///< [IN] The callback function.
@@ -237,7 +237,7 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        pa_result_t PaRemoveHwAccelerationChangeEventsCallback
+        taf_pa_result_t PaRemoveHwAccelerationChangeEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
@@ -248,7 +248,7 @@ namespace data
         (
             const std::vector<ThroughputInfo_t> &throughputInfoList
         );
-        pa_result_t PaAddThroughputEventsCallback
+        taf_pa_result_t PaAddThroughputEventsCallback
         (
             taf_pa_data_ThroughputEventsCb callBack,
             ///< [IN] The callback function.
@@ -257,17 +257,17 @@ namespace data
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        pa_result_t PaRemoveThroughputEventsCallback
+        taf_pa_result_t PaRemoveThroughputEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
         );
-        pa_result_t PaSetThroughputReportInterval
+        taf_pa_result_t PaSetThroughputReportInterval
         (
             PhoneId_e phoneId,
             uint32_t reportInterval
         );
-        pa_result_t PaGetLastThroughputInfo
+        taf_pa_result_t PaGetLastThroughputInfo
         (
             PhoneId_e phoneId,
             std::vector<ThroughputInfo_t> &throughputInfoList
@@ -350,7 +350,7 @@ namespace data
         );
 
         void initDataConnectionManagers();
-        pa_result_t deInitDataConnectionManagers();
+        taf_pa_result_t deInitDataConnectionManagers();
         TafPaTeluxDataConnection() {};
     };
 

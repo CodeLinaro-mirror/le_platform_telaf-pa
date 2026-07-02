@@ -71,23 +71,23 @@ typedef void (*taf_pa_health_ModemStatusUpdateHandler_t)
 //--------------------------------------------------------------------------------------------------
 typedef void (*taf_pa_health_ModemOperatingModeUpdateHandler_t)
 (
-    pa_result_t result
+    taf_pa_result_t result
 );
 
-PA_SHARED  pa_result_t taf_pa_health_ModemNotificationInit(void);
-PA_SHARED  pa_result_t taf_pa_health_RegModemListener(void);
-PA_SHARED  pa_result_t taf_pa_health_DeregModemListener(void);
-PA_SHARED  pa_result_t taf_pa_health_PhoneInit(void);
+TAF_PA_SHARED  taf_pa_result_t taf_pa_health_ModemNotificationInit(void);
+TAF_PA_SHARED  taf_pa_result_t taf_pa_health_RegModemListener(void);
+TAF_PA_SHARED  taf_pa_result_t taf_pa_health_DeregModemListener(void);
+TAF_PA_SHARED  taf_pa_result_t taf_pa_health_PhoneInit(void);
 
-PA_SHARED pa_result_t taf_pa_health_Deinit(void);
-PA_SHARED  pa_result_t taf_pa_health_ReqPhoneOperatingMode(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_health_Deinit(void);
+TAF_PA_SHARED  taf_pa_result_t taf_pa_health_ReqPhoneOperatingMode(void);
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Register modem status change update handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_health_RegModemStatusUpdateHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_health_RegModemStatusUpdateHandler
 (
     taf_pa_health_ModemStatusUpdateHandler_t handlerFunc
 );
@@ -97,7 +97,7 @@ PA_SHARED pa_result_t taf_pa_health_RegModemStatusUpdateHandler
  * Register modem oprating status change update handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_health_RegModemOperationModeUpdateHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_health_RegModemOperationModeUpdateHandler
 (
     taf_pa_health_ModemOperatingModeUpdateHandler_t handlerFunc
 );

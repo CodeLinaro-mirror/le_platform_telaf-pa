@@ -40,7 +40,7 @@ class TafPaThermalListener : public telux::therm::IThermalListener
 public:
     void onServiceStatusChange(telux::common::ServiceStatus serviceStatus) override
     {
-        PA_INFO("Thermal service status changed: %d", static_cast<int>(serviceStatus));
+        TAF_PA_INFO("Thermal service status changed: %d", static_cast<int>(serviceStatus));
     }
 
     void onTripEvent(std::shared_ptr<telux::therm::ITripPoint> tripPoint,
@@ -164,9 +164,9 @@ static void BuildDeviceNameToIdMap()
  * Initialize the thermal PA layer
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_Init(void)
+taf_pa_result_t taf_pa_therm_Init(void)
 {
-    PA_INFO("Initializing Thermal PA layer");
+    TAF_PA_INFO("Initializing Thermal PA layer");
 
     try
     {
@@ -178,7 +178,7 @@ pa_result_t taf_pa_therm_Init(void)
                 try {
                     promisePtr->set_value(status);
                 } catch (const std::future_error& e) {
-                    PA_ERROR("Promise already satisfied: %s", e.what());
+                    TAF_PA_ERROR("Promise already satisfied: %s", e.what());
                 }
             },
             telux::common::ProcType::LOCAL_PROC
@@ -186,8 +186,8 @@ pa_result_t taf_pa_therm_Init(void)
 
         if (!g_thermalManager)
         {
-            PA_ERROR("Failed to get thermal manager instance");
-            return PA_FAULT;
+            TAF_PA_ERROR("Failed to get thermal manager instance");
+            return TAF_PA_FAULT;
         }
 
         auto future = promisePtr->get_future();
@@ -196,14 +196,14 @@ pa_result_t taf_pa_therm_Init(void)
             telux::common::ServiceStatus status = future.get();
             if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
             {
-                PA_ERROR("Thermal service not available");
-                return PA_FAULT;
+                TAF_PA_ERROR("Thermal service not available");
+                return TAF_PA_FAULT;
             }
         }
         else
         {
-            PA_ERROR("Timeout waiting for thermal service");
-            return PA_FAULT;
+            TAF_PA_ERROR("Timeout waiting for thermal service");
+            return TAF_PA_FAULT;
         }
 
         // Create and register listener
@@ -211,22 +211,22 @@ pa_result_t taf_pa_therm_Init(void)
         auto result = g_thermalManager->registerListener(g_thermalListener);
         if (result != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("Failed to register thermal listener");
-            return PA_FAULT;
+            TAF_PA_ERROR("Failed to register thermal listener");
+            return TAF_PA_FAULT;
         }
 
         // Build name to ID maps
         BuildZoneNameToIdMap();
         BuildDeviceNameToIdMap();
 
-        PA_INFO("Thermal PA layer initialized successfully");
+        TAF_PA_INFO("Thermal PA layer initialized successfully");
         g_thermPaInitialized.store(true, std::memory_order_release);
-        return PA_OK;
+        return TAF_PA_OK;
     }
     catch (const std::exception& e)
     {
-        PA_ERROR("Exception during thermal PA init: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("Exception during thermal PA init: %s", e.what());
+        return TAF_PA_FAULT;
     }
 }
 
@@ -235,12 +235,12 @@ pa_result_t taf_pa_therm_Init(void)
  * Get list of all thermal zones
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_GetThermalZones(std::vector<taf_pa_therm_ThermalZoneInfo>& thermalZones)
+taf_pa_result_t taf_pa_therm_GetThermalZones(std::vector<taf_pa_therm_ThermalZoneInfo>& thermalZones)
 {
     if (!g_thermalManager)
     {
-        PA_ERROR("Thermal manager not initialized");
-        return PA_FAULT;
+        TAF_PA_ERROR("Thermal manager not initialized");
+        return TAF_PA_FAULT;
     }
 
     try
@@ -257,12 +257,12 @@ pa_result_t taf_pa_therm_GetThermalZones(std::vector<taf_pa_therm_ThermalZoneInf
             thermalZones.push_back(zoneInfo);
         }
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
     catch (const std::exception& e)
     {
-        PA_ERROR("Exception getting thermal zones: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("Exception getting thermal zones: %s", e.what());
+        return TAF_PA_FAULT;
     }
 }
 
@@ -271,12 +271,12 @@ pa_result_t taf_pa_therm_GetThermalZones(std::vector<taf_pa_therm_ThermalZoneInf
  * Get thermal zone by ID
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_GetThermalZoneById(uint32_t zoneId, taf_pa_therm_ThermalZoneInfo& zoneInfo)
+taf_pa_result_t taf_pa_therm_GetThermalZoneById(uint32_t zoneId, taf_pa_therm_ThermalZoneInfo& zoneInfo)
 {
     if (!g_thermalManager)
     {
-        PA_ERROR("Thermal manager not initialized");
-        return PA_FAULT;
+        TAF_PA_ERROR("Thermal manager not initialized");
+        return TAF_PA_FAULT;
     }
 
     try
@@ -284,8 +284,8 @@ pa_result_t taf_pa_therm_GetThermalZoneById(uint32_t zoneId, taf_pa_therm_Therma
         auto zone = g_thermalManager->getThermalZone(zoneId);
         if (!zone)
         {
-            PA_ERROR("Thermal zone %u not found", zoneId);
-            return PA_FAULT;
+            TAF_PA_ERROR("Thermal zone %u not found", zoneId);
+            return TAF_PA_FAULT;
         }
 
         zoneInfo.zoneId = zone->getId();
@@ -293,12 +293,12 @@ pa_result_t taf_pa_therm_GetThermalZoneById(uint32_t zoneId, taf_pa_therm_Therma
         zoneInfo.passiveTemp = zone->getPassiveTemp();
         zoneInfo.description = zone->getDescription();
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
     catch (const std::exception& e)
     {
-        PA_ERROR("Exception getting thermal zone by ID: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("Exception getting thermal zone by ID: %s", e.what());
+        return TAF_PA_FAULT;
     }
 }
 
@@ -307,13 +307,13 @@ pa_result_t taf_pa_therm_GetThermalZoneById(uint32_t zoneId, taf_pa_therm_Therma
  * Get thermal zone by name
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_GetThermalZoneByName(const std::string& zoneName, taf_pa_therm_ThermalZoneInfo& zoneInfo)
+taf_pa_result_t taf_pa_therm_GetThermalZoneByName(const std::string& zoneName, taf_pa_therm_ThermalZoneInfo& zoneInfo)
 {
     auto it = g_zoneNameToIdMap.find(zoneName);
     if (it == g_zoneNameToIdMap.end())
     {
-        PA_ERROR("Thermal zone '%s' not found", zoneName.c_str());
-        return PA_FAULT;
+        TAF_PA_ERROR("Thermal zone '%s' not found", zoneName.c_str());
+        return TAF_PA_FAULT;
     }
 
     return taf_pa_therm_GetThermalZoneById(it->second, zoneInfo);
@@ -324,12 +324,12 @@ pa_result_t taf_pa_therm_GetThermalZoneByName(const std::string& zoneName, taf_p
  * Get trip points for a thermal zone
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_GetTripPoints(uint32_t zoneId, std::vector<taf_pa_therm_TripPointInfo>& tripPoints)
+taf_pa_result_t taf_pa_therm_GetTripPoints(uint32_t zoneId, std::vector<taf_pa_therm_TripPointInfo>& tripPoints)
 {
     if (!g_thermalManager)
     {
-        PA_ERROR("Thermal manager not initialized");
-        return PA_FAULT;
+        TAF_PA_ERROR("Thermal manager not initialized");
+        return TAF_PA_FAULT;
     }
 
     try
@@ -337,8 +337,8 @@ pa_result_t taf_pa_therm_GetTripPoints(uint32_t zoneId, std::vector<taf_pa_therm
         auto zone = g_thermalManager->getThermalZone(zoneId);
         if (!zone)
         {
-            PA_ERROR("Thermal zone %u not found", zoneId);
-            return PA_FAULT;
+            TAF_PA_ERROR("Thermal zone %u not found", zoneId);
+            return TAF_PA_FAULT;
         }
 
         auto teluxTripPoints = zone->getTripPoints();
@@ -381,12 +381,12 @@ pa_result_t taf_pa_therm_GetTripPoints(uint32_t zoneId, std::vector<taf_pa_therm
             tripPoints.push_back(info);
         }
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
     catch (const std::exception& e)
     {
-        PA_ERROR("Exception getting trip points: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("Exception getting trip points: %s", e.what());
+        return TAF_PA_FAULT;
     }
 }
 
@@ -395,12 +395,12 @@ pa_result_t taf_pa_therm_GetTripPoints(uint32_t zoneId, std::vector<taf_pa_therm
  * Get bound cooling devices for a thermal zone
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_GetBoundCoolingDevices(uint32_t zoneId, std::vector<taf_pa_therm_BoundCoolingDevice>& boundDevices)
+taf_pa_result_t taf_pa_therm_GetBoundCoolingDevices(uint32_t zoneId, std::vector<taf_pa_therm_BoundCoolingDevice>& boundDevices)
 {
     if (!g_thermalManager)
     {
-        PA_ERROR("Thermal manager not initialized");
-        return PA_FAULT;
+        TAF_PA_ERROR("Thermal manager not initialized");
+        return TAF_PA_FAULT;
     }
 
     try
@@ -408,8 +408,8 @@ pa_result_t taf_pa_therm_GetBoundCoolingDevices(uint32_t zoneId, std::vector<taf
         auto zone = g_thermalManager->getThermalZone(zoneId);
         if (!zone)
         {
-            PA_ERROR("Thermal zone %u not found", zoneId);
-            return PA_FAULT;
+            TAF_PA_ERROR("Thermal zone %u not found", zoneId);
+            return TAF_PA_FAULT;
         }
 
         auto teluxBoundDevices = zone->getBoundCoolingDevices();
@@ -460,12 +460,12 @@ pa_result_t taf_pa_therm_GetBoundCoolingDevices(uint32_t zoneId, std::vector<taf
             boundDevices.push_back(deviceInfo);
         }
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
     catch (const std::exception& e)
     {
-        PA_ERROR("Exception getting bound cooling devices: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("Exception getting bound cooling devices: %s", e.what());
+        return TAF_PA_FAULT;
     }
 }
 
@@ -474,12 +474,12 @@ pa_result_t taf_pa_therm_GetBoundCoolingDevices(uint32_t zoneId, std::vector<taf
  * Get list of all cooling devices
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_GetCoolingDevices(std::vector<taf_pa_therm_CoolingDeviceInfo>& coolingDevices)
+taf_pa_result_t taf_pa_therm_GetCoolingDevices(std::vector<taf_pa_therm_CoolingDeviceInfo>& coolingDevices)
 {
     if (!g_thermalManager)
     {
-        PA_ERROR("Thermal manager not initialized");
-        return PA_FAULT;
+        TAF_PA_ERROR("Thermal manager not initialized");
+        return TAF_PA_FAULT;
     }
 
     try
@@ -496,12 +496,12 @@ pa_result_t taf_pa_therm_GetCoolingDevices(std::vector<taf_pa_therm_CoolingDevic
             coolingDevices.push_back(deviceInfo);
         }
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
     catch (const std::exception& e)
     {
-        PA_ERROR("Exception getting cooling devices: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("Exception getting cooling devices: %s", e.what());
+        return TAF_PA_FAULT;
     }
 }
 
@@ -510,12 +510,12 @@ pa_result_t taf_pa_therm_GetCoolingDevices(std::vector<taf_pa_therm_CoolingDevic
  * Get cooling device by ID
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_GetCoolingDeviceById(uint32_t deviceId, taf_pa_therm_CoolingDeviceInfo& deviceInfo)
+taf_pa_result_t taf_pa_therm_GetCoolingDeviceById(uint32_t deviceId, taf_pa_therm_CoolingDeviceInfo& deviceInfo)
 {
     if (!g_thermalManager)
     {
-        PA_ERROR("Thermal manager not initialized");
-        return PA_FAULT;
+        TAF_PA_ERROR("Thermal manager not initialized");
+        return TAF_PA_FAULT;
     }
 
     try
@@ -523,8 +523,8 @@ pa_result_t taf_pa_therm_GetCoolingDeviceById(uint32_t deviceId, taf_pa_therm_Co
         auto device = g_thermalManager->getCoolingDevice(deviceId);
         if (!device)
         {
-            PA_ERROR("Cooling device %u not found", deviceId);
-            return PA_FAULT;
+            TAF_PA_ERROR("Cooling device %u not found", deviceId);
+            return TAF_PA_FAULT;
         }
 
         deviceInfo.deviceId = device->getId();
@@ -532,12 +532,12 @@ pa_result_t taf_pa_therm_GetCoolingDeviceById(uint32_t deviceId, taf_pa_therm_Co
         deviceInfo.currentCoolingLevel = device->getCurrentCoolingLevel();
         deviceInfo.description = device->getDescription();
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
     catch (const std::exception& e)
     {
-        PA_ERROR("Exception getting cooling device by ID: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("Exception getting cooling device by ID: %s", e.what());
+        return TAF_PA_FAULT;
     }
 }
 
@@ -546,13 +546,13 @@ pa_result_t taf_pa_therm_GetCoolingDeviceById(uint32_t deviceId, taf_pa_therm_Co
  * Get cooling device by name
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_GetCoolingDeviceByName(const std::string& deviceName, taf_pa_therm_CoolingDeviceInfo& deviceInfo)
+taf_pa_result_t taf_pa_therm_GetCoolingDeviceByName(const std::string& deviceName, taf_pa_therm_CoolingDeviceInfo& deviceInfo)
 {
     auto it = g_deviceNameToIdMap.find(deviceName);
     if (it == g_deviceNameToIdMap.end())
     {
-        PA_ERROR("Cooling device '%s' not found", deviceName.c_str());
-        return PA_FAULT;
+        TAF_PA_ERROR("Cooling device '%s' not found", deviceName.c_str());
+        return TAF_PA_FAULT;
     }
 
     return taf_pa_therm_GetCoolingDeviceById(it->second, deviceInfo);
@@ -563,23 +563,23 @@ pa_result_t taf_pa_therm_GetCoolingDeviceByName(const std::string& deviceName, t
  * Register trip event handler
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_RegisterTripEventHandler(
+taf_pa_result_t taf_pa_therm_RegisterTripEventHandler(
     taf_pa_therm_TripEventHandler_t handler,
     void* contextPtr
 )
 {
     if (!handler)
     {
-        PA_ERROR("Invalid handler");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid handler");
+        return TAF_PA_FAULT;
     }
 
     {
         std::lock_guard<std::mutex> lock(thermHandlerMutex);
         g_tripEventHandler = handler;
     }
-    PA_INFO("Trip event handler registered");
-    return PA_OK;
+    TAF_PA_INFO("Trip event handler registered");
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -587,12 +587,12 @@ pa_result_t taf_pa_therm_RegisterTripEventHandler(
  * Deregister trip event handler
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_DeregisterTripEventHandler(void)
+taf_pa_result_t taf_pa_therm_DeregisterTripEventHandler(void)
 {
     std::lock_guard<std::mutex> lock(thermHandlerMutex);
     g_tripEventHandler = nullptr;
-    PA_INFO("Trip event handler deregistered");
-    return PA_OK;
+    TAF_PA_INFO("Trip event handler deregistered");
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -600,23 +600,23 @@ pa_result_t taf_pa_therm_DeregisterTripEventHandler(void)
  * Register cooling level change handler
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
+taf_pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
     taf_pa_therm_CoolingLevelChangeHandler_t handler,
     void* contextPtr
 )
 {
     if (!handler)
     {
-        PA_ERROR("Invalid handler");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid handler");
+        return TAF_PA_FAULT;
     }
 
     {
         std::lock_guard<std::mutex> lock(thermHandlerMutex);
         g_coolingLevelChangeHandler = handler;
     }
-    PA_INFO("Cooling level change handler registered");
-    return PA_OK;
+    TAF_PA_INFO("Cooling level change handler registered");
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -624,12 +624,12 @@ pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
  * Deregister cooling level change handler
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void)
+taf_pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void)
 {
     std::lock_guard<std::mutex> lock(thermHandlerMutex);
     g_coolingLevelChangeHandler = nullptr;
-    PA_INFO("Cooling level change handler deregistered");
-    return PA_OK;
+    TAF_PA_INFO("Cooling level change handler deregistered");
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -637,56 +637,56 @@ pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void)
  * Deinitialize the thermal PA layer
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_therm_Deinit(void)
+taf_pa_result_t taf_pa_therm_Deinit(void)
 {
-    PA_INFO("Starting Thermal PA layer deinitialization...");
+    TAF_PA_INFO("Starting Thermal PA layer deinitialization...");
 
     // Step 0: Check if Init() was called successfully
     if (!g_thermPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() was successfully called");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() was successfully called");
+        return TAF_PA_FAULT;
     }
 
     // Step 1: Clear the trip event and cooling level change handler function pointers
     // so no further thermal event callbacks are dispatched after this point.
-    PA_INFO("Clearing g_tripEventHandler and g_coolingLevelChangeHandler");
+    TAF_PA_INFO("Clearing g_tripEventHandler and g_coolingLevelChangeHandler");
     g_tripEventHandler = nullptr;
     g_coolingLevelChangeHandler = nullptr;
 
     // Step 2: Deregister the thermal listener from the thermal manager so the SDK
     // stops delivering events to it.
-    PA_INFO("Deregistering g_thermalListener from g_thermalManager");
+    TAF_PA_INFO("Deregistering g_thermalListener from g_thermalManager");
     if (g_thermalManager && g_thermalListener)
     {
         telux::common::Status status = g_thermalManager->deregisterListener(g_thermalListener);
         if (status != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("Failed to deregister thermal listener");
+            TAF_PA_ERROR("Failed to deregister thermal listener");
             // Continue cleanup even if deregistration failed
         }
     }
 
     // Step 3: Reset the thermal listener shared pointer so the listener object is
     // released once no other owners remain.
-    PA_INFO("Resetting g_thermalListener");
+    TAF_PA_INFO("Resetting g_thermalListener");
     g_thermalListener.reset();
 
     // Step 4: Reset the thermal manager shared pointer so the underlying SDK object
     // is released once no other owners remain.
-    PA_INFO("Resetting g_thermalManager");
+    TAF_PA_INFO("Resetting g_thermalManager");
     g_thermalManager.reset();
 
     // Step 5: Clear the cached name-to-ID maps so stale entries are not visible
     // after a subsequent re-initialization.
-    PA_INFO("Clearing g_zoneNameToIdMap and g_deviceNameToIdMap");
+    TAF_PA_INFO("Clearing g_zoneNameToIdMap and g_deviceNameToIdMap");
     g_zoneNameToIdMap.clear();
     g_deviceNameToIdMap.clear();
 
     // Step 6: Reset the initialization flag
-    PA_INFO("Resetting initialization flag");
+    TAF_PA_INFO("Resetting initialization flag");
     g_thermPaInitialized.store(false, std::memory_order_release);
 
-    PA_INFO("Thermal PA layer deinitialization complete.");
-    return PA_OK;
+    TAF_PA_INFO("Thermal PA layer deinitialization complete.");
+    return TAF_PA_OK;
 }

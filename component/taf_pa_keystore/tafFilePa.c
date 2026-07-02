@@ -27,8 +27,8 @@ int taf_pa_file_Open
     mode_t mode
 )
 {
-    PA_DEBUG("%s", __FUNCTION__);
-    PA_DEBUG("filePathPtr: %s", filePathPtr);
+    TAF_PA_DEBUG("%s", __FUNCTION__);
+    TAF_PA_DEBUG("filePathPtr: %s", filePathPtr);
     return open(filePathPtr, flags, mode);
 }
 
@@ -37,7 +37,7 @@ int taf_pa_file_Close
     int fd
 )
 {
-    PA_DEBUG("%s", __FUNCTION__);
+    TAF_PA_DEBUG("%s", __FUNCTION__);
     return close(fd);
 }
 
@@ -48,7 +48,7 @@ ssize_t taf_pa_file_Read
     size_t sizePtr
 )
 {
-    PA_DEBUG("%s", __FUNCTION__);
+    TAF_PA_DEBUG("%s", __FUNCTION__);
     return read(fd, bufPtr, sizePtr);
 }
 
@@ -59,7 +59,7 @@ ssize_t taf_pa_file_Write
     size_t size
 )
 {
-    PA_DEBUG("%s", __FUNCTION__);
+    TAF_PA_DEBUG("%s", __FUNCTION__);
 
     return write(fd, bufPtr, size);
 }
@@ -69,8 +69,8 @@ void taf_pa_file_Delete
     const char* filePathPtr
 )
 {
-    PA_DEBUG("%s", __FUNCTION__);
-    PA_DEBUG("filePathPtr: %s", filePathPtr);
+    TAF_PA_DEBUG("%s", __FUNCTION__);
+    TAF_PA_DEBUG("filePathPtr: %s", filePathPtr);
 
     unlink(filePathPtr);
 }
@@ -89,7 +89,7 @@ int taf_pa_file_Copy
     srcFd = taf_pa_file_Open(sourcePath, O_RDONLY, 0);
     if (srcFd < 0)
     {
-        PA_ERROR("Failed to open source file");
+        TAF_PA_ERROR("Failed to open source file");
         return errno;
     }
 
@@ -97,7 +97,7 @@ int taf_pa_file_Copy
     destFd = taf_pa_file_Open(destPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (destFd < 0)
     {
-        PA_ERROR("Failed to open destination file");
+        TAF_PA_ERROR("Failed to open destination file");
         taf_pa_file_Close(srcFd);
         return errno;
     }
@@ -109,7 +109,7 @@ int taf_pa_file_Copy
         if (bytesWritten != bytesRead)
         {
             int savedErrno = errno;
-            PA_ERROR("Failed to write to destination file");
+            TAF_PA_ERROR("Failed to write to destination file");
             taf_pa_file_Close(srcFd);
             taf_pa_file_Close(destFd);
             taf_pa_file_Delete(destPath);
@@ -121,7 +121,7 @@ int taf_pa_file_Copy
     if (bytesRead < 0)
     {
         int savedErrno = errno;
-        PA_ERROR("Failed to read from source file");
+        TAF_PA_ERROR("Failed to read from source file");
         taf_pa_file_Close(srcFd);
         taf_pa_file_Close(destFd);
         taf_pa_file_Delete(destPath);

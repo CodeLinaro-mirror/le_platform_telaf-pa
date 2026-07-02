@@ -72,7 +72,7 @@ typedef void (*taf_pa_time_NetworkInfoHandler_t)
 (
     taf_time_NetTimeInfo_t info, ///< [IN] Network time information.
     int slotId,                  ///< Slot ID
-    pa_result_t result           ///< Status
+    taf_pa_result_t result           ///< Status
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -80,16 +80,16 @@ typedef void (*taf_pa_time_NetworkInfoHandler_t)
  * Register GNSS UTC time update handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_time_RegGnssUtcTimeUpdateHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_time_RegGnssUtcTimeUpdateHandler
 (
     taf_pa_time_GnssUtcTimeUpdateHandler_t handlerFunc
 );
 
 
-PA_SHARED pa_result_t taf_pa_gnss_Init(void);
-PA_SHARED pa_result_t taf_pa_time_Deinit(void);
-PA_SHARED pa_result_t taf_pa_RegGnssTimeListener(void);
-PA_SHARED pa_result_t taf_pa_DeregGnssTimeListener(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_gnss_Init(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_time_Deinit(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_RegGnssTimeListener(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_DeregGnssTimeListener(void);
 
 
 //--------------------------------------------------------------------------------------------------
@@ -97,15 +97,15 @@ PA_SHARED pa_result_t taf_pa_DeregGnssTimeListener(void);
  * Register network time change notification handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_time_RegNetworkTimeChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_time_RegNetworkTimeChangeHandler
 (
     taf_pa_time_NetworkChangeHandler_t handlerFunc
 );
 
-PA_SHARED pa_result_t taf_pa_network_Init(int slotId);
-PA_SHARED pa_result_t taf_pa_time_RegNetworkTimeListener(int slotId);
-PA_SHARED pa_result_t taf_pa_time_DeregNetworkTimeListener(int slotId);
-PA_SHARED pa_result_t taf_pa_time_RequestNetworkTime
+TAF_PA_SHARED taf_pa_result_t taf_pa_network_Init(int slotId);
+TAF_PA_SHARED taf_pa_result_t taf_pa_time_RegNetworkTimeListener(int slotId);
+TAF_PA_SHARED taf_pa_result_t taf_pa_time_DeregNetworkTimeListener(int slotId);
+TAF_PA_SHARED taf_pa_result_t taf_pa_time_RequestNetworkTime
 (
     int slotId,
     taf_pa_time_NetworkInfoHandler_t handlerFunc

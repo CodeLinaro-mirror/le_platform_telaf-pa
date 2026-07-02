@@ -955,256 +955,256 @@ typedef enum
     TAF_PA_RADIO_DISABLE_IND_MODE_SKIP_NAS_SYS_INFO_IND
 } taf_pa_radio_DisableIndicationMode_t;
 
-PA_SHARED pa_result_t taf_pa_radio_Init
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_Init
 (
     void
 );
 
-PA_SHARED pa_result_t taf_pa_radio_Deinit
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_Deinit
 (
     void
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetOperatingMode
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetOperatingMode
 (
     uint32_t instance,
     taf_pa_radio_OperatingMode_t* modePtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetOperatingMode
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetOperatingMode
 (
     uint32_t instance,
     taf_pa_radio_OperatingMode_t mode
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetNetworkSelectionPreference
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetNetworkSelectionPreference
 (
     uint32_t instance,
     taf_pa_radio_NetworkSelectionPreference_t* preferencePtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetNetworkSelectionPreference
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetNetworkSelectionPreference
 (
     uint32_t instance,
     taf_pa_radio_NetworkSelectionPreference_t* preferencePtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetPreferredNetwork
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetPreferredNetwork
 (
     uint32_t instance,
     taf_pa_radio_PreferredNetworkConfig_t* configPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetPreferredNetwork
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetPreferredNetwork
 (
     uint32_t instance,
     taf_pa_radio_PreferredNetworks_t* networksPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetPreferredRat
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetPreferredRat
 (
     uint32_t instance,
     taf_pa_radio_RatBitMask_t bitmask
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetPreferredRat
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetPreferredRat
 (
     uint32_t instance,
     taf_pa_radio_RatBitMask_t* bitmaskPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetVoiceServiceInfo
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetVoiceServiceInfo
 (
     uint32_t instance,
     taf_pa_radio_VoiceServiceInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetDataServiceState
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetDataServiceState
 (
     uint32_t instance,
     taf_pa_radio_DataServiceState_t* statePtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetServiceDomain
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetServiceDomain
 (
     uint32_t instance,
     taf_pa_radio_Rat_t rat,
     taf_pa_radio_ServiceDomain_t* domainPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetServiceDomainPreferences
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetServiceDomainPreferences
 (
     uint32_t instance,
     taf_pa_radio_ServiceDomainBitMask_t* bitmaskPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetServiceDomainPreferences
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetServiceDomainPreferences
 (
     uint32_t instance,
     taf_pa_radio_ServiceDomainBitMask_t bitmask
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetSignalStrengthLevel
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetSignalStrengthLevel
 (
     uint32_t instance,
     taf_pa_radio_Rat_t rat,
     taf_pa_radio_SignalStrengthLevel_t* levelPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetSignalStrengthInfo
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetSignalStrengthInfo
 (
     uint32_t instance,
     taf_pa_radio_SignalStrengthInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetSignalStrengthInd
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetSignalStrengthInd
 (
     uint32_t instance,
     taf_pa_radio_SignalStrengthIndConfig_t* configPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetCellLocationListInfo
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetCellLocationListInfo
 (
     uint32_t instance,
     taf_pa_radio_CellLocationListInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetCurrNetworkName
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetCurrNetworkName
 (
     uint32_t instance,
     taf_pa_radio_CurrNetworkName_t* namePtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_PerformPlmnNetworkScan
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_PerformPlmnNetworkScan
 (
     uint32_t instance,
     taf_pa_radio_PlmnNetworkScanConfig_t* configPtr,
     taf_pa_radio_PlmnScanInformation_t* informationPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetBandCapabilities
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetBandCapabilities
 (
     uint32_t instance,
     taf_pa_radio_BandBitMask_t* bitmaskPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetLteBandCapabilities
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetLteBandCapabilities
 (
     uint32_t instance,
     taf_pa_radio_LteBand_t* bandPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetBandPreferences
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetBandPreferences
 (
     uint32_t instance,
     taf_pa_radio_BandBitMask_t bitmask
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetBandPreferences
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetBandPreferences
 (
     uint32_t instance,
     taf_pa_radio_BandBitMask_t* bitmaskPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetLteBandPreferences
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetLteBandPreferences
 (
     uint32_t instance,
     taf_pa_radio_LteBand_t* bandPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetLteBandPreferences
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetLteBandPreferences
 (
     uint32_t instance,
     taf_pa_radio_LteBand_t* bandPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetImsRegistrationStatus
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetImsRegistrationStatus
 (
     uint32_t instance,
     taf_pa_radio_ImsRegistrationStatus_t* statusPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetLteCsCapability
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetLteCsCapability
 (
     uint32_t instance,
     taf_pa_radio_LteCsCapability_t* capabilityPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetImsServiceStatus
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetImsServiceStatus
 (
     uint32_t instance,
     taf_pa_radio_ImsService_t service,
     taf_pa_radio_ImsServiceStatus_t* statusPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetImsPdpFailureErrorCode
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetImsPdpFailureErrorCode
 (
     uint32_t instance,
     taf_pa_radio_ImsPdpFailureErrorCode_t* codePtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_ToggleImsService
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_ToggleImsService
 (
     uint32_t instance,
     taf_pa_radio_ImsServiceSettingBitMask_t bitmask,
     bool enable
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetEnabledImsService
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetEnabledImsService
 (
     uint32_t instance,
     taf_pa_radio_ImsServiceSettingBitMask_t* bitmaskPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetImsUserAgent
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetImsUserAgent
 (
     uint32_t instance,
     const char* namePtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetImsUserAgent
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetImsUserAgent
 (
     uint32_t instance,
     char* namePtr,
     size_t namePtrSize
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetEndcAvailability
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetEndcAvailability
 (
     uint32_t instance,
     taf_pa_radio_EndcAvailability_t* availabilityPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetDcnrRestriction
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetDcnrRestriction
 (
     uint32_t instance,
     taf_pa_radio_DcnrRestriction_t* restrictionPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetSimCapacityInfo
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetSimCapacityInfo
 (
     taf_pa_radio_SimCapabilityInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetDeviceAndSimCardRatCapability
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetDeviceAndSimCardRatCapability
 (
     uint32_t instance,
     taf_pa_radio_DeviceAndSimCardRatCapability_t* capabilityPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetServingCellBandInfo
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetServingCellBandInfo
 (
     uint32_t instance,
     taf_pa_radio_ServingCellBandInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetNrIcon
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetNrIcon
 (
     uint32_t instance,
     taf_pa_radio_NrIcon_t* iconPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddNetworkRejectHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddNetworkRejectHandler
 (
     uint32_t instance,
     taf_pa_radio_NetworkRejectHdlrFunc_t handlerFuncPtr,
@@ -1212,7 +1212,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddNetworkRejectHandler
     taf_pa_radio_NetworkRejectHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddRatChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddRatChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_RatChangeHdlrFunc_t handlerFuncPtr,
@@ -1220,7 +1220,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddRatChangeHandler
     taf_pa_radio_RatChangeHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddVoiceServiceInfoHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddVoiceServiceInfoHandler
 (
     uint32_t instance,
     taf_pa_radio_VoiceServiceInfoHdlrFunc_t handlerFuncPtr,
@@ -1228,7 +1228,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddVoiceServiceInfoHandler
     taf_pa_radio_VoiceServiceInfoHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddDataServiceStatusHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddDataServiceStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataServiceStatusHdlrFunc_t handlerFuncPtr,
@@ -1236,7 +1236,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddDataServiceStatusHandler
     taf_pa_radio_DataServiceStatusHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddDataRoamingStatusHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddDataRoamingStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataRoamingStatusHdlrFunc_t handlerFuncPtr,
@@ -1244,7 +1244,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddDataRoamingStatusHandler
     taf_pa_radio_DataRoamingStatusHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddSignalStrengthInfoChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddSignalStrengthInfoChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_SignalStrengthInfoChangeHdlrFunc_t handlerFuncPtr,
@@ -1252,7 +1252,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddSignalStrengthInfoChangeHandler
     taf_pa_radio_SignalStrengthInfoChangeHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddImsRegStatusChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddImsRegStatusChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsRegStatusChangeHdlrFunc_t handlerFuncPtr,
@@ -1260,7 +1260,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddImsRegStatusChangeHandler
     taf_pa_radio_ImsRegStatusChangeHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddCellInfoChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddCellInfoChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_CellInfoChangeHdlrFunc_t handlerFuncPtr,
@@ -1268,7 +1268,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddCellInfoChangeHandler
     taf_pa_radio_CellInfoChangeHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddOperatingModeChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddOperatingModeChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_OperatingModeChangeHdlrFunc_t handlerFuncPtr,
@@ -1276,7 +1276,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddOperatingModeChangeHandler
     taf_pa_radio_OperatingModeChangeHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddServiceDomainHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddServiceDomainHandler
 (
     uint32_t instance,
     taf_pa_radio_ServiceDomainHdlrFunc_t handlerFuncPtr,
@@ -1284,7 +1284,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddServiceDomainHandler
     taf_pa_radio_ServiceDomainHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddLteCsCapabilityHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddLteCsCapabilityHandler
 (
     uint32_t instance,
     taf_pa_radio_LteCsCapabilityHdlrFunc_t handlerFuncPtr,
@@ -1292,7 +1292,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddLteCsCapabilityHandler
     taf_pa_radio_LteCsCapabilityHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddImsServiceInfoHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddImsServiceInfoHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsServiceInfoHdlrFunc_t handlerFuncPtr,
@@ -1300,7 +1300,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddImsServiceInfoHandler
     taf_pa_radio_ImsServiceInfoHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddImsPdpErrorHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddImsPdpErrorHandler
 (
     uint32_t instance,
     taf_pa_radio_ImsPdpErrorHdlrFunc_t handlerFuncPtr,
@@ -1308,7 +1308,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddImsPdpErrorHandler
     taf_pa_radio_ImsPdpErrorHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddNrIconChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddNrIconChangeHandler
 (
     uint32_t instance,
     taf_pa_radio_NrIconChangeHdlrFunc_t handlerFuncPtr,
@@ -1316,53 +1316,53 @@ PA_SHARED pa_result_t taf_pa_radio_AddNrIconChangeHandler
     taf_pa_radio_NrIconChangeHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_RegisterIndication
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_RegisterIndication
 (
     uint32_t instance,
     uint8_t registration,
     taf_pa_radio_DisableIndicationMode_t mode
 );
 
-PA_SHARED pa_result_t taf_pa_radio_PerformPciNetworkScan
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_PerformPciNetworkScan
 (
     uint32_t instance,
     taf_pa_radio_RatBitMask_t bitmask,
     taf_pa_radio_PciScanInformation_t* informationPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetServingRat
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetServingRat
 (
     uint32_t instance,
     taf_pa_radio_Rat_t* ratPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetRatSvcStatus
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetRatSvcStatus
 (
     uint32_t instance,
     taf_pa_radio_Rat_t rat,
     taf_pa_radio_RatServiceStatus_t* statusPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetServingCellRac
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetServingCellRac
 (
     uint32_t instance,
     taf_pa_radio_Rat_t rat,
     uint8_t* racPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetDataAvailSysStatus
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetDataAvailSysStatus
 (
     uint32_t instance,
     taf_pa_radio_DataAvailSysStatus_t* statusPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetLteCphyCaInfo
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetLteCphyCaInfo
 (
     uint32_t instance,
     taf_pa_radio_LteCphyCaInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddRatSvcStatusHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddRatSvcStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_RatSvcStatusHdlrFunc_t handlerFuncPtr,
@@ -1370,7 +1370,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddRatSvcStatusHandler
     taf_pa_radio_RatSvcStatusHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddLteCphyCaHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddLteCphyCaHandler
 (
     uint32_t instance,
     taf_pa_radio_LteCphyCaHdlrFunc_t handlerFuncPtr,
@@ -1378,7 +1378,7 @@ PA_SHARED pa_result_t taf_pa_radio_AddLteCphyCaHandler
     taf_pa_radio_LteCphyCaHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_AddDataAvailSysStatusHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddDataAvailSysStatusHandler
 (
     uint32_t instance,
     taf_pa_radio_DataAvailSysStatusHdlrFunc_t handlerFuncPtr,
@@ -1386,26 +1386,26 @@ PA_SHARED pa_result_t taf_pa_radio_AddDataAvailSysStatusHandler
     taf_pa_radio_DataAvailSysStatusHandlerRef_t* handlerRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
 (
     uint32_t instance,
     taf_pa_radio_DataRoamingStatus_t* statusPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_SetSysInfoIndLimit
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetSysInfoIndLimit
 (
     uint32_t instance,
     taf_pa_radio_SysInfoIndLimitMask_t limitMask
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetServiceStatus
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetServiceStatus
 (
     uint32_t instance,
     taf_pa_radio_Rat_t *servingRatPtr,
     taf_pa_radio_RatServiceStatus_t *statusPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetSysInfoIndLimit
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetSysInfoIndLimit
 (
     uint32_t instance,
     taf_pa_radio_SysInfoIndLimitMask_t *limitMaskPtr

@@ -50,21 +50,21 @@ public:
                 return static_cast<taf_pa_location_LocationId>(i + 1);
             }
         }
-        PA_ERROR("No free location IDs available. Maximum %zu IDs reached.", MAX_LOCATION_IDS);
+        TAF_PA_ERROR("No free location IDs available. Maximum %zu IDs reached.", MAX_LOCATION_IDS);
         return INVALID_LOCATION_ID;
     }
 
     void releaseId(taf_pa_location_LocationId id) {
         if (id == INVALID_LOCATION_ID || id > MAX_LOCATION_IDS) {
-            PA_ERROR("Attempted to release invalid location ID: %llu", id);
+            TAF_PA_ERROR("Attempted to release invalid location ID: %llu", id);
             return;
         }
         size_t index = static_cast<size_t>(id - 1);
         if (!idMask_.test(index)) {
-            PA_INFO("Location ID %llu was already released or not in use.", id);
+            TAF_PA_INFO("Location ID %llu was already released or not in use.", id);
         }
         idMask_.reset(index);
-        PA_INFO("Location ID %llu released.", id);
+        TAF_PA_INFO("Location ID %llu released.", id);
     }
 
 private:
@@ -80,19 +80,19 @@ public:
         return instance;
     }
 
-    pa_result_t initialize();
-    pa_result_t deinitialize();
+    taf_pa_result_t initialize();
+    taf_pa_result_t deinitialize();
     telux::common::Status RegisterDgnssManager();
     telux::common::Status InitializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,taf_pa_location_GeneralCb callback,std::any context);
     telux::common::Status DeInitializeDgnss(taf_pa_location_GeneralCb callback,std::any context);
-    pa_result_t MapStatus(telux::common::Status status);
-    pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
+    taf_pa_result_t MapStatus(telux::common::Status status);
+    taf_pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
 
     LocationPAController() = default;
 
     ~LocationPAController()
     {
-        PA_INFO("~LocationPAController - cleaning up");
+        TAF_PA_INFO("~LocationPAController - cleaning up");
 
         // Lock mutex to prevent callback execution during cleanup
         std::lock_guard<std::mutex> lock(mutex_);
@@ -100,7 +100,7 @@ public:
         // CRITICAL: Deregister BEFORE destruction completes
         if (mDgnssManager)
         {
-            PA_INFO("Deregistering DGNSS listener in destructor mDgnssManager: %p",mDgnssManager);
+            TAF_PA_INFO("Deregistering DGNSS listener in destructor mDgnssManager: %p",mDgnssManager);
 
             // Clear listener first to prevent callbacks
             dgnssListener_ = nullptr;
@@ -109,11 +109,11 @@ public:
             auto status = mDgnssManager->deRegisterListener();
             if (status == telux::common::Status::SUCCESS)
             {
-                PA_INFO("Successfully deregistered Dgnss manager in destructor");
+                TAF_PA_INFO("Successfully deregistered Dgnss manager in destructor");
             }
             else
             {
-                PA_ERROR("Failed to deregister Dgnss in destructor: %d", (int)status);
+                TAF_PA_ERROR("Failed to deregister Dgnss in destructor: %d", (int)status);
             }
 
             // Clear the pointer
@@ -155,7 +155,7 @@ public:
         telux::common::Status StopReports(taf_pa_location_GeneralCb callback, std::any context);
         uint32_t GetCapabilities();
 
-        pa_result_t RegisterEventListener(
+        taf_pa_result_t RegisterEventListener(
             taf_pa_location_LocationId locationId,
             taf_pa_location_EventListener* listener,
             std::any context);
@@ -195,15 +195,15 @@ public:
     telux::common::Status ReleaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context);
     std::shared_ptr<PALocationClient> GetClientPtr(taf_pa_location_LocationId id);
     taf_pa_location_LocationId CreateLocationClient();
-    pa_result_t ReleaseLocationClient(taf_pa_location_LocationId id);
+    taf_pa_result_t ReleaseLocationClient(taf_pa_location_LocationId id);
     std::shared_ptr<telux::loc::IDgnssManager> getDgnssManager()
     {
         return mDgnssManager;
     }
-    pa_result_t RegisterDgnssEventListener(
+    taf_pa_result_t RegisterDgnssEventListener(
         taf_pa_location_DgnssEventListener* listener,
         std::any context);
-    pa_result_t DeregisterDgnssEventListener(std::any context);
+    taf_pa_result_t DeregisterDgnssEventListener(std::any context);
 private:
     LocationPAController(const LocationPAController&) = delete;
     LocationPAController& operator=(const LocationPAController&) = delete;
@@ -217,7 +217,7 @@ private:
     std::any dgnssListenerContext_;
 };
 
-pa_result_t LocationPAController::PALocationClient::RegisterEventListener(
+taf_pa_result_t LocationPAController::PALocationClient::RegisterEventListener(
 taf_pa_location_LocationId locationId,
     taf_pa_location_EventListener* listener,
     std::any context) {
@@ -229,8 +229,8 @@ taf_pa_location_LocationId locationId,
         std::lock_guard<std::mutex> lock(mtx_);
         eventListener_ = listener;
     } else {
-        PA_ERROR("Listener is NULL for location ID %llu", locationId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Listener is NULL for location ID %llu", locationId);
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (context.has_value())
@@ -238,10 +238,10 @@ taf_pa_location_LocationId locationId,
         eventListenerContext_ = std::move(context);
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t LocationPAController::RegisterDgnssEventListener(
+taf_pa_result_t LocationPAController::RegisterDgnssEventListener(
     taf_pa_location_DgnssEventListener* listener,
     std::any context) {
 
@@ -250,18 +250,18 @@ pa_result_t LocationPAController::RegisterDgnssEventListener(
     if (listener != nullptr) {
         dgnssListener_ = listener;
     } else {
-        PA_ERROR("Dgnss Listener is NULL");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Dgnss Listener is NULL");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (context.has_value())
     {
         dgnssListenerContext_ = std::move(context);
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t LocationPAController::DeregisterDgnssEventListener(std::any context)
+taf_pa_result_t LocationPAController::DeregisterDgnssEventListener(std::any context)
 {
 
     std::lock_guard<std::mutex> lock(mutex_);
@@ -269,155 +269,155 @@ pa_result_t LocationPAController::DeregisterDgnssEventListener(std::any context)
     if (dgnssListener_ != nullptr)
     {
         dgnssListener_ = nullptr;
-        PA_INFO("dgnssListener_ is NULL");
+        TAF_PA_INFO("dgnssListener_ is NULL");
     }
     else
     {
-        PA_INFO("Dgnss dgnssListener_ is aready deregistered");
+        TAF_PA_INFO("Dgnss dgnssListener_ is aready deregistered");
     }
 
     if (context.has_value())
     {
         dgnssListenerContext_ = std::move(context);
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t LocationPAController::MapStatus(telux::common::Status status){
+taf_pa_result_t LocationPAController::MapStatus(telux::common::Status status){
     switch(status)
     {
         case telux::common::Status::SUCCESS:
-            PA_DEBUG("Operation processed successfully");
-            return PA_OK;
+            TAF_PA_DEBUG("Operation processed successfully");
+            return TAF_PA_OK;
         case telux::common::Status::FAILED:
-            PA_DEBUG("Operation processing failed");
-            return PA_FAULT;
+            TAF_PA_DEBUG("Operation processing failed");
+            return TAF_PA_FAULT;
         case telux::common::Status::INVALIDPARAM:
-            PA_DEBUG("Input parameters are invalid");
-            return PA_BAD_PARAMETER;
+            TAF_PA_DEBUG("Input parameters are invalid");
+            return TAF_PA_BAD_PARAMETER;
         case telux::common::Status::NOTALLOWED:
-            PA_DEBUG("Operation not allowed");
-            return PA_NOT_PERMITTED;
+            TAF_PA_DEBUG("Operation not allowed");
+            return TAF_PA_NOT_PERMITTED;
         case telux::common::Status::NOTIMPLEMENTED:
-            PA_DEBUG("Feature not supported");
-            return PA_NOT_IMPLEMENTED ;
+            TAF_PA_DEBUG("Feature not implemented");
+            return TAF_PA_NOT_IMPLEMENTED ;
         case telux::common::Status::CONNECTIONLOST:
-            PA_DEBUG("Connection to Socket server lost");
-            return PA_NOT_FOUND;
+            TAF_PA_DEBUG("Connection to Socket server lost");
+            return TAF_PA_NOT_FOUND;
         case telux::common::Status::EXPIRED:
-            PA_DEBUG("Operation has expired");
-            return PA_TERMINATED;
+            TAF_PA_DEBUG("Operation has expired");
+            return TAF_PA_TERMINATED;
         case telux::common::Status::NOTSUPPORTED:
-            PA_DEBUG("Not supported on target platform");
-            return PA_UNSUPPORTED;
+            TAF_PA_DEBUG("Not supported on target platform");
+            return TAF_PA_UNSUPPORTED;
         default:
-           return PA_FAULT;
+           return TAF_PA_FAULT;
     }
 }
 
-pa_result_t LocationPAController::MapErrorCode(telux::common::ErrorCode errorCode)
+taf_pa_result_t LocationPAController::MapErrorCode(telux::common::ErrorCode errorCode)
 {
     switch(errorCode)
     {
         case telux::common::ErrorCode::SUCCESS:
-            PA_DEBUG("Operation processed successfully");
-            return PA_OK;
+            TAF_PA_DEBUG("Operation processed successfully");
+            return TAF_PA_OK;
         case telux::common::ErrorCode::GENERIC_FAILURE:
-            PA_ERROR("Operation processing failed");
-            return PA_FAULT;
+            TAF_PA_ERROR("Operation processing failed");
+            return TAF_PA_FAULT;
         case telux::common::ErrorCode::INVALID_ARGUMENTS:
-            PA_ERROR("Input parameters are invalid");
-            return PA_BAD_PARAMETER;
+            TAF_PA_ERROR("Input parameters are invalid");
+            return TAF_PA_BAD_PARAMETER;
         case telux::common::ErrorCode::OPERATION_NOT_ALLOWED:
-            PA_ERROR("Operation not allowed");
-            return PA_NOT_PERMITTED;
+            TAF_PA_ERROR("Operation not allowed");
+            return TAF_PA_NOT_PERMITTED;
         case telux::common::ErrorCode::TIMEOUT_ERROR:
-            PA_ERROR("TimeOut Error");
-            return PA_TIMEOUT;
+            TAF_PA_ERROR("TimeOut Error");
+            return TAF_PA_TIMEOUT;
         case telux::common::ErrorCode::INFO_UNAVAILABLE:
-            PA_ERROR("Information not available");
-            return PA_UNAVAILABLE;
+            TAF_PA_ERROR("Information not available");
+            return TAF_PA_UNAVAILABLE;
         case telux::common::ErrorCode::SUBSYSTEM_UNAVAILABLE:
-            PA_ERROR("Subsystem Not Available");
-            return PA_UNAVAILABLE;
+            TAF_PA_ERROR("Subsystem Not Available");
+            return TAF_PA_UNAVAILABLE;
         case telux::common::ErrorCode::REQUEST_NOT_SUPPORTED:
-            PA_ERROR("Request Not supported");
-            return PA_UNSUPPORTED;
+            TAF_PA_ERROR("Request Not supported");
+            return TAF_PA_UNSUPPORTED;
         default:
-           return PA_FAULT;
+           return TAF_PA_FAULT;
     }
 }
 
 void LocationPAController::PALocationClient::Init(){
     if(locationManager_ != nullptr)
     {
-        PA_INFO("locationManager_ --> Init: %p", locationManager_.get());
+        TAF_PA_INFO("locationManager_ --> Init: %p", locationManager_.get());
         auto status = locationManager_->registerForSystemInfoUpdates(shared_from_this());
         if(status == telux::common::Status::SUCCESS)
         {
-            PA_INFO("registerForSystemInfoUpdates listener for location system information");
+            TAF_PA_INFO("registerForSystemInfoUpdates listener for location system information");
         }
         else
         {
-            PA_ERROR("Failed to register a listener for location system information");
+            TAF_PA_ERROR("Failed to register a listener for location system information");
         }
         status = locationManager_->registerListenerEx(shared_from_this());
         if(status == telux::common::Status::SUCCESS)
         {
-            PA_INFO("registerListenerEx a listener!!");
+            TAF_PA_INFO("registerListenerEx a listener!!");
         }
         else
         {
-            PA_ERROR("Failed to register a listener");
+            TAF_PA_ERROR("Failed to register a listener");
         }
     }
     else
     {
-        PA_INFO("locationManager_ is null");
+        TAF_PA_INFO("locationManager_ is null");
     }
 }
 
 void LocationPAController::PALocationClient::CleanUp()
 {
-    PA_INFO("CleanUp!!");
+    TAF_PA_INFO("CleanUp!!");
 
     if(locationManager_ != nullptr)
     {
-        PA_INFO("locationManager_ --> CleanUp: %p", locationManager_.get());
+        TAF_PA_INFO("locationManager_ --> CleanUp: %p", locationManager_.get());
         auto status = locationManager_->deRegisterListenerEx(weak_from_this());
         if(status == telux::common::Status::SUCCESS)
         {
-            PA_INFO("Deregistered a listener!!");
+            TAF_PA_INFO("Deregistered a listener!!");
         }
         else
         {
-            PA_ERROR("Failed to deregister a listener");
+            TAF_PA_ERROR("Failed to deregister a listener");
         }
 
         // Synchronize deRegister callback to prevent manager teardown overlap
         try {
-            PA_INFO("Deregistering system info updates with callback synchronization");
+            TAF_PA_INFO("Deregistering system info updates with callback synchronization");
             auto deregisterPromisePtr = std::make_shared<std::promise<void>>();
             auto deregisterStatus = locationManager_->deRegisterForSystemInfoUpdates(
                 weak_from_this(),
                 [deregisterPromisePtr](telux::common::ErrorCode error) {
                     try {
                         if(error == telux::common::ErrorCode::SUCCESS) {
-                            PA_INFO("Successfully deregistered system info updates");
+                            TAF_PA_INFO("Successfully deregistered system info updates");
                         } else {
-                            PA_ERROR("Failed to deregister system info updates, error: %d",
+                            TAF_PA_ERROR("Failed to deregister system info updates, error: %d",
                                     static_cast<int>(error));
                         }
                         deregisterPromisePtr->set_value();
                     }
                     catch (const std::future_error& e) {
-                        PA_ERROR("Future error in deRegister callback: %s", e.what());
+                        TAF_PA_ERROR("Future error in deRegister callback: %s", e.what());
                     }
                     catch (const std::exception& e) {
-                        PA_ERROR("Exception in deRegister callback: %s", e.what());
+                        TAF_PA_ERROR("Exception in deRegister callback: %s", e.what());
                     }
                     catch (...) {
-                        PA_ERROR("Unknown error in deRegister callback");
+                        TAF_PA_ERROR("Unknown error in deRegister callback");
                     }
                 });
 
@@ -426,94 +426,94 @@ void LocationPAController::PALocationClient::CleanUp()
                 auto deregisterFuture = deregisterPromisePtr->get_future();
                 if(deregisterFuture.wait_for(std::chrono::seconds(CLEANUP_TIMEOUT_SECONDS))
                         == std::future_status::ready) {
-                    PA_INFO("DeRegisterForSystemInfoUpdates completed successfully");
+                    TAF_PA_INFO("DeRegisterForSystemInfoUpdates completed successfully");
                 } else {
-                    PA_ERROR("Timeout waiting for deRegisterForSystemInfoUpdates to complete");
+                    TAF_PA_ERROR("Timeout waiting for deRegisterForSystemInfoUpdates to complete");
                 }
             } else {
-                PA_ERROR("DeRegisterForSystemInfoUpdates failed to initiate with status: %d",
+                TAF_PA_ERROR("DeRegisterForSystemInfoUpdates failed to initiate with status: %d",
                         static_cast<int>(deregisterStatus));
             }
         }
         catch (const std::exception& e) {
-            PA_ERROR("Exception during deRegisterForSystemInfoUpdates in cleanup: %s", e.what());
+            TAF_PA_ERROR("Exception during deRegisterForSystemInfoUpdates in cleanup: %s", e.what());
         }
     }
     else
     {
-        PA_INFO("locationManager_ is null");
+        TAF_PA_INFO("locationManager_ is null");
     }
 }
 
 taf_pa_location_NavigationSolutionType_t LocationPAController::PALocationClient:: convertTeluxToNavigationSolutionType(telux::loc::NavigationSolution naviSolution)
 {
-    PA_INFO("convertTeluxToNavigationSolutionType naviSolution-> %lu",naviSolution.to_ulong());
+    TAF_PA_INFO("convertTeluxToNavigationSolutionType naviSolution-> %lu",naviSolution.to_ulong());
     taf_pa_location_NavigationSolutionType_t navSolution = (taf_pa_location_NavigationSolutionType_t) 0;
 
     // Check if naviSolution is empty/invalid
     if(naviSolution.to_ulong() == 0) {
-        PA_ERROR("Invalid navigation solution type: value is 0");
+        TAF_PA_ERROR("Invalid navigation solution type: value is 0");
         return navSolution;  // Return 0 safely
     }
 
     if(naviSolution.to_ulong() & (1 << telux::loc::NAV_SBAS_SOLUTION_IONO))
     {
-        PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_IONO");
+        TAF_PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_IONO");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_SBAS_SOLUTION_IONO);
     }
     if(naviSolution.to_ulong() & (1<<telux::loc::NAV_SBAS_SOLUTION_FAST))
     {
-        PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_FAST");
+        TAF_PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_FAST");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_SBAS_SOLUTION_FAST);
     }
     if(naviSolution.to_ulong() & (1<<telux::loc::NAV_SBAS_SOLUTION_LONG))
     {
-        PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_LONG");
+        TAF_PA_DEBUG("telux::loc::NAV_SBAS_SOLUTION_LONG");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_SBAS_SOLUTION_LONG);
     }
     if(naviSolution.to_ulong() & (1<<telux::loc::NAV_SBAS_INTEGRITY))
     {
-        PA_DEBUG("telux::loc::NAV_SBAS_INTEGRITY");
+        TAF_PA_DEBUG("telux::loc::NAV_SBAS_INTEGRITY");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_SBAS_INTEGRITY);
     }
     if(naviSolution.to_ulong() & (1<<telux::loc::NAV_DGNSS_SOLUTION))
     {
-        PA_DEBUG("telux::loc::NAV_DGNSS_SOLUTION");
+        TAF_PA_DEBUG("telux::loc::NAV_DGNSS_SOLUTION");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_DGNSS_SOLUTION);
     }
     if(naviSolution.to_ulong() & (1<<telux::loc::NAV_RTK_SOLUTION))
     {
-        PA_DEBUG("telux::loc::NAV_RTK_SOLUTION");
+        TAF_PA_DEBUG("telux::loc::NAV_RTK_SOLUTION");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_RTK_SOLUTION);
     }
     if(naviSolution.to_ulong() & (1<<telux::loc::NAV_PPP_SOLUTION))
     {
-        PA_DEBUG("telux::loc::NAV_PPP_SOLUTION");
+        TAF_PA_DEBUG("telux::loc::NAV_PPP_SOLUTION");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_PPP_SOLUTION);
     }
     if(naviSolution.to_ulong() & (1<<telux::loc::NAV_RTK_FIXED_SOLUTION))
     {
-        PA_DEBUG("telux::loc::NAV_RTK_FIXED_SOLUTION");
+        TAF_PA_DEBUG("telux::loc::NAV_RTK_FIXED_SOLUTION");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_RTK_FIXED_SOLUTION);
     }
     if(naviSolution.to_ulong() & (1<<telux::loc::NAV_ONLY_SBAS_CORRECTED_SV_USED))
     {
-        PA_DEBUG("telux::loc::NAV_ONLY_SBAS_CORRECTED_SV_USED");
+        TAF_PA_DEBUG("telux::loc::NAV_ONLY_SBAS_CORRECTED_SV_USED");
         navSolution = static_cast<taf_pa_location_NavigationSolutionType_t>(
         navSolution | TAF_PA_LOCATION_NAV_ONLY_SBAS_CORRECTED_SV_USED);
     }
 
     // Log if no valid bits were found (but still return the value)
     if(navSolution == 0) {
-        PA_ERROR("Invalid navigation solution type: no recognized bits set in value %lu", naviSolution.to_ulong());
+        TAF_PA_ERROR("Invalid navigation solution type: no recognized bits set in value %lu", naviSolution.to_ulong());
     }
     return navSolution;
 }
@@ -528,7 +528,7 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
 
     if(!sdkLocationManager)
     {
-        PA_ERROR("Failed to get location manager instance");
+        TAF_PA_ERROR("Failed to get location manager instance");
         return ReusableIdGenerator::INVALID_LOCATION_ID;
     }
 
@@ -538,7 +538,7 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
 
     if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_INFO("Location manager subsystem is not ready (status: %d), waiting...",
+        TAF_PA_INFO("Location manager subsystem is not ready (status: %d), waiting...",
                static_cast<int>(serviceStatus));
 
         // Get with callback to wait for availability
@@ -554,19 +554,19 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
                     }
                 }
                 catch (const std::future_error& e) {
-                    PA_ERROR("Future error in callback: %s", e.what());
+                    TAF_PA_ERROR("Future error in callback: %s", e.what());
                 }
                 catch (const std::exception& e) {
-                    PA_ERROR("Exception in callback: %s", e.what());
+                    TAF_PA_ERROR("Exception in callback: %s", e.what());
                 }
                 catch (...) {
-                    PA_ERROR("Unknown error in callback.");
+                    TAF_PA_ERROR("Unknown error in callback.");
                 }
             });
 
         if (!sdkLocationManager)
         {
-            PA_ERROR("Failed to get location manager with callback");
+            TAF_PA_ERROR("Failed to get location manager with callback");
             return ReusableIdGenerator::INVALID_LOCATION_ID;
         }
 
@@ -576,7 +576,7 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
 
         if (std::future_status::timeout == waitStatus)
         {
-            PA_ERROR("Timeout waiting for location manager");
+            TAF_PA_ERROR("Timeout waiting for location manager");
             sdkLocationManager = nullptr;
             return ReusableIdGenerator::INVALID_LOCATION_ID;
         }
@@ -587,11 +587,11 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
             {
                 endTime = std::chrono::system_clock::now();
                 std::chrono::duration<double> elapsedTime = endTime - startTime;
-                PA_INFO("Elapsed Time for Subsystems to ready: %lf", elapsedTime.count());
+                TAF_PA_INFO("Elapsed Time for Subsystems to ready: %lf", elapsedTime.count());
             }
             else
             {
-                PA_ERROR("Unable to get location manager - service unavailable");
+                TAF_PA_ERROR("Unable to get location manager - service unavailable");
                 sdkLocationManager = nullptr;
                 return ReusableIdGenerator::INVALID_LOCATION_ID;
             }
@@ -599,12 +599,12 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
     }
     else
     {
-        PA_INFO("Location manager subsystem is already ready");
+        TAF_PA_INFO("Location manager subsystem is already ready");
     }
 
     taf_pa_location_LocationId newId = id_generator_.acquireId();
     if (newId == ReusableIdGenerator::INVALID_LOCATION_ID) {
-        PA_ERROR("Failed to acquire a new location ID");
+        TAF_PA_ERROR("Failed to acquire a new location ID");
         return ReusableIdGenerator::INVALID_LOCATION_ID;
     }
 
@@ -613,24 +613,24 @@ taf_pa_location_LocationId LocationPAController::CreateLocationClient()
 
     paLocationClient->Init();
 
-    PA_INFO("sdkLocationManager: %p", sdkLocationManager.get());
+    TAF_PA_INFO("sdkLocationManager: %p", sdkLocationManager.get());
 
     locationClients_[newId] = paLocationClient;
-    PA_INFO("Created location client for with ID %llu", newId);
+    TAF_PA_INFO("Created location client for with ID %llu", newId);
     return newId;
 }
 
-pa_result_t LocationPAController::ReleaseLocationClient(taf_pa_location_LocationId id)
+taf_pa_result_t LocationPAController::ReleaseLocationClient(taf_pa_location_LocationId id)
 {
-    PA_INFO("Release location Client with ID %llu", id);
+    TAF_PA_INFO("Release location Client with ID %llu", id);
 
     std::shared_ptr<LocationPAController::PALocationClient> clientPtr;
 
     try {
         auto it = locationClients_.find(id);
         if (it == locationClients_.end()) {
-            PA_ERROR("Invalid location ID (%llu) provided for release!", id);
-            return PA_BAD_PARAMETER;
+            TAF_PA_ERROR("Invalid location ID (%llu) provided for release!", id);
+            return TAF_PA_BAD_PARAMETER;
         }
 
         clientPtr = it->second;
@@ -638,19 +638,19 @@ pa_result_t LocationPAController::ReleaseLocationClient(taf_pa_location_Location
 
         id_generator_.releaseId(id);
 
-        PA_INFO("Client removed from map, now calling CleanUp() for client=%p", clientPtr.get());
+        TAF_PA_INFO("Client removed from map, now calling CleanUp() for client=%p", clientPtr.get());
 
         if (clientPtr) {
             clientPtr->CleanUp();
         }
     } catch (const std::exception& ex) {
-        PA_ERROR("Exception during CleanUp: %s", ex.what());
+        TAF_PA_ERROR("Exception during CleanUp: %s", ex.what());
     } catch (...) {
-        PA_ERROR("Unknown exception during CleanUp");
+        TAF_PA_ERROR("Unknown exception during CleanUp");
     }
 
-    PA_INFO("Location client with ID %llu released.", id);
-    return PA_OK;
+    TAF_PA_INFO("Location client with ID %llu released.", id);
+    return TAF_PA_OK;
 }
 
 std::shared_ptr<LocationPAController::PALocationClient>
@@ -659,29 +659,29 @@ LocationPAController::GetClientPtr(taf_pa_location_LocationId id) {
     if (it != locationClients_.end()) {
         return it->second;
     }
-    PA_ERROR("No Location client found for ID %llu", id);
+    TAF_PA_ERROR("No Location client found for ID %llu", id);
     return nullptr;
 }
 
-pa_result_t tafpa::location::taf_pa_location_CreateClient(taf_pa_location_LocationId* clientIdPtr) {
+taf_pa_result_t tafpa::location::taf_pa_location_CreateClient(taf_pa_location_LocationId* clientIdPtr) {
     auto paCtrl = LocationPAController::getInstance();
     taf_pa_location_LocationId id = paCtrl->CreateLocationClient();
     // CreateLocationClient() returns INVALID_LOCATION_ID (0) on failure
     if (id == ReusableIdGenerator::INVALID_LOCATION_ID) {
-        PA_ERROR("Failed to create location client: CreateLocationClient returned invalid ID");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to create location client: CreateLocationClient returned invalid ID");
+        return TAF_PA_FAULT;
     }
     if (clientIdPtr) *clientIdPtr = id;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::location::taf_pa_location_DeleteClient(taf_pa_location_LocationId locationId) {
-    PA_INFO("taf_pa_location_DeleteClient!!");
+taf_pa_result_t tafpa::location::taf_pa_location_DeleteClient(taf_pa_location_LocationId locationId) {
+    TAF_PA_INFO("taf_pa_location_DeleteClient!!");
     auto paCtrl = LocationPAController::getInstance();
     return paCtrl->ReleaseLocationClient(locationId);
 }
 
-pa_result_t tafpa::location::taf_pa_location_RegisterListener(
+taf_pa_result_t tafpa::location::taf_pa_location_RegisterListener(
     taf_pa_location_LocationId locationId,
     taf_pa_location_EventListener* eventListener,
     std::any context) {
@@ -689,49 +689,49 @@ pa_result_t tafpa::location::taf_pa_location_RegisterListener(
     auto paCtrl = LocationPAController::getInstance();
     std::shared_ptr<LocationPAController::PALocationClient> clientPtr = paCtrl->GetClientPtr(locationId);
     if (!clientPtr) {
-        PA_ERROR("Invalid location ID (%llu) provided!", locationId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid location ID (%llu) provided!", locationId);
+        return TAF_PA_BAD_PARAMETER;
     }
 
-    pa_result_t result = clientPtr->RegisterEventListener(locationId, eventListener, context);
-    if (result == PA_OK) {
-        PA_INFO("Register Event Listener successfully for ID %llu", locationId);
-        return PA_OK;
+    taf_pa_result_t result = clientPtr->RegisterEventListener(locationId, eventListener, context);
+    if (result == TAF_PA_OK) {
+        TAF_PA_INFO("Register Event Listener successfully for ID %llu", locationId);
+        return TAF_PA_OK;
     }
-    PA_ERROR("Failed to register event listener for ID %llu", locationId);
-    return PA_FAULT;
+    TAF_PA_ERROR("Failed to register event listener for ID %llu", locationId);
+    return TAF_PA_FAULT;
 }
 
-pa_result_t tafpa::location::taf_pa_location_registerDgnssEventListener(
+taf_pa_result_t tafpa::location::taf_pa_location_registerDgnssEventListener(
     taf_pa_location_DgnssEventListener* eventListener,std::any context) {
 
     auto paCtrl = LocationPAController::getInstance();
 
-    pa_result_t result = paCtrl->RegisterDgnssEventListener(eventListener, context);
-    if (result == PA_OK) {
-        PA_INFO("Register Dgnss Event Listener successfully ");
-        return PA_OK;
+    taf_pa_result_t result = paCtrl->RegisterDgnssEventListener(eventListener, context);
+    if (result == TAF_PA_OK) {
+        TAF_PA_INFO("Register Dgnss Event Listener successfully ");
+        return TAF_PA_OK;
     }
-    PA_ERROR("Failed to register Dgnss event listener");
-    return PA_FAULT;
+    TAF_PA_ERROR("Failed to register Dgnss event listener");
+    return TAF_PA_FAULT;
 }
 
-pa_result_t tafpa::location::taf_pa_location_deregisterDgnssEventListener(std::any context) {
+taf_pa_result_t tafpa::location::taf_pa_location_deregisterDgnssEventListener(std::any context) {
 
     auto paCtrl = LocationPAController::getInstance();
 
-    pa_result_t result = paCtrl->DeregisterDgnssEventListener(context);
-    if (result == PA_OK) {
-        PA_INFO("Deregister Dgnss Event Listener successfully ");
-        return PA_OK;
+    taf_pa_result_t result = paCtrl->DeregisterDgnssEventListener(context);
+    if (result == TAF_PA_OK) {
+        TAF_PA_INFO("Deregister Dgnss Event Listener successfully ");
+        return TAF_PA_OK;
     }
-    PA_ERROR("Failed to deregister Dgnss event listener");
-    return PA_FAULT;
+    TAF_PA_ERROR("Failed to deregister Dgnss event listener");
+    return TAF_PA_FAULT;
 }
 
-pa_result_t LocationPAController::initialize()
+taf_pa_result_t LocationPAController::initialize()
 {
-    PA_INFO("initialize!!");
+    TAF_PA_INFO("initialize!!");
     telux::common::Status status;
     status = telux::common::Status::SUCCESS;
     if(mLocationConfigurator == nullptr)
@@ -743,8 +743,8 @@ pa_result_t LocationPAController::initialize()
 
         if (!mLocationConfigurator)
         {
-            PA_CRIT("*** ERROR - mLocationConfigurator is NULL");
-            return PA_FAULT;
+            TAF_PA_CRIT("*** ERROR - mLocationConfigurator is NULL");
+            return TAF_PA_FAULT;
         }
 
         // Check service status using getServiceStatus()
@@ -752,7 +752,7 @@ pa_result_t LocationPAController::initialize()
 
         if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
         {
-            PA_INFO("Location configurator subsystem is not ready, waiting for it to be ready...");
+            TAF_PA_INFO("Location configurator subsystem is not ready, waiting for it to be ready...");
 
             // If not ready, get with callback to wait for availability
             auto prom = std::make_shared<std::promise<ServiceStatus>>();
@@ -768,13 +768,13 @@ pa_result_t LocationPAController::initialize()
                         }
                     }
                     catch (const std::future_error& e) {
-                        PA_ERROR("Future error in callback: %s", e.what());
+                        TAF_PA_ERROR("Future error in callback: %s", e.what());
                     }
                     catch (const std::exception& e) {
-                        PA_ERROR("Exception in callback: %s", e.what());
+                        TAF_PA_ERROR("Exception in callback: %s", e.what());
                     }
                     catch (...) {
-                        PA_ERROR("Unknown error in callback.");
+                        TAF_PA_ERROR("Unknown error in callback.");
                     }
                 });
 
@@ -784,9 +784,9 @@ pa_result_t LocationPAController::initialize()
 
             if (std::future_status::timeout == waitStatus)
             {
-                PA_ERROR("Timeout waiting for location configurator");
+                TAF_PA_ERROR("Timeout waiting for location configurator");
                 mLocationConfigurator = nullptr;
-                return PA_FAULT;
+                return TAF_PA_FAULT;
             }
             else
             {
@@ -794,12 +794,12 @@ pa_result_t LocationPAController::initialize()
                 if (serviceStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
                     endTime = std::chrono::system_clock::now();
                     std::chrono::duration<double> elapsedTime = endTime - startTime;
-                    PA_INFO("Elapsed Time for configuration subsystems to ready : %lf",
+                    TAF_PA_INFO("Elapsed Time for configuration subsystems to ready : %lf",
                             elapsedTime.count());
                 }
                 else
                 {
-                    PA_ERROR("ERROR - Unable to initialize Location configuration subsystem");
+                    TAF_PA_ERROR("ERROR - Unable to initialize Location configuration subsystem");
                     mLocationConfigurator = nullptr;
                     status = telux::common::Status::FAILED;
                 }
@@ -807,102 +807,102 @@ pa_result_t LocationPAController::initialize()
         }
         else
         {
-            PA_INFO("Location configurator subsystem is already ready.");
+            TAF_PA_INFO("Location configurator subsystem is already ready.");
         }
     }
     else
     {
-        PA_CRIT("Location configurator is already initialized");
+        TAF_PA_CRIT("Location configurator is already initialized");
     }
 
     if (status != telux::common::Status::SUCCESS) {
-        PA_ERROR("LocationConfigurator not available");
-        return PA_FAULT;
+        TAF_PA_ERROR("LocationConfigurator not available");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 telux::common::Status LocationPAController::RegisterDgnssManager()
 {
-    PA_INFO("RegisterDgnssManager");
+    TAF_PA_INFO("RegisterDgnssManager");
     auto status = telux::common::Status::FAILED;
     auto paCtrl = LocationPAController::getInstance();
 
     if(!paCtrl) {
-        PA_ERROR("Failed to get LocationPAController instance");
+        TAF_PA_ERROR("Failed to get LocationPAController instance");
         return status;
     }
-    PA_INFO("RegisterDgnssManager mDgnssManager: %p",mDgnssManager);
+    TAF_PA_INFO("RegisterDgnssManager mDgnssManager: %p",mDgnssManager);
     if(mDgnssManager != nullptr)
     {
         status = mDgnssManager->registerListener(shared_from_this());
         if(status == telux::common::Status::SUCCESS)
         {
-            PA_INFO("registerListener Dgnss listener!!");
+            TAF_PA_INFO("registerListener Dgnss listener!!");
         }
         else
         {
-            PA_ERROR("Failed to register Dgnss listener");
+            TAF_PA_ERROR("Failed to register Dgnss listener");
             return status;
         }
     }
     else
     {
-        PA_INFO("paCtrl->mDgnssManager is null");
+        TAF_PA_INFO("paCtrl->mDgnssManager is null");
     }
 
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_Init() {
-    PA_DEBUG("PA implementation.");
+taf_pa_result_t tafpa::location::taf_pa_location_Init() {
+    TAF_PA_DEBUG("PA implementation.");
 
     // Check if already initialized (idempotent pattern)
     if (gLocationPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Location platform adaptor already initialized");
-        return PA_OK;  // Idempotent - safe to call multiple times
+        TAF_PA_WARN("Location platform adaptor already initialized");
+        return TAF_PA_OK;  // Idempotent - safe to call multiple times
     }
 
     auto paCtrl = LocationPAController::getInstance();
-    pa_result_t res = paCtrl->initialize();
-    if (res == PA_OK) {
+    taf_pa_result_t res = paCtrl->initialize();
+    if (res == TAF_PA_OK) {
         gLocationPaInitialized.store(true, std::memory_order_release);
-        PA_INFO("Location platform adaptor initialization flag set to true.");
-        PA_INFO("Location Platform adapter initialization done.");
+        TAF_PA_INFO("Location platform adaptor initialization flag set to true.");
+        TAF_PA_INFO("Location Platform adapter initialization done.");
     } else {
-        PA_CRIT("Location Platform adapter initialization failed.");
+        TAF_PA_CRIT("Location Platform adapter initialization failed.");
     }
     return res;
 }
 
 telux::common::Status LocationPAController::PALocationClient::StartDetailedEngineReports(uint32_t optInterval, uint16_t engineType, taf_pa_location_GeneralCb  callback, uint32_t reportMask, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -912,62 +912,62 @@ telux::common::Status LocationPAController::PALocationClient::StartDetailedEngin
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_startDetailedEngineReports(taf_pa_location_LocationId clientId, uint32_t optInterval, uint16_t engineType, taf_pa_location_GeneralCb callback, uint32_t reportMask, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_startDetailedEngineReports(taf_pa_location_LocationId clientId, uint32_t optInterval, uint16_t engineType, taf_pa_location_GeneralCb callback, uint32_t reportMask, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
     std::shared_ptr<LocationPAController::PALocationClient> clientPtr = paCtrl->GetClientPtr(clientId);
     if (!clientPtr) {
-        PA_ERROR("Invalid location ID (%llu) provided!", clientId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid location ID (%llu) provided!", clientId);
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto status = clientPtr->StartDetailedEngineReports(optInterval, engineType, callback, reportMask, context);
     if(status != telux::common::Status::SUCCESS){
-        PA_ERROR("Location engine start failed with status code %d",static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("Location engine start failed with status code %d",static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
     return paCtrl->MapStatus(status);
 }
 
 telux::common::Status LocationPAController::PALocationClient::StopReports(taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -976,33 +976,33 @@ telux::common::Status LocationPAController::PALocationClient::StopReports(taf_pa
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_stopReports(taf_pa_location_LocationId clientId, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_stopReports(taf_pa_location_LocationId clientId, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
     std::shared_ptr<LocationPAController::PALocationClient> clientPtr = paCtrl->GetClientPtr(clientId);
     if (!clientPtr) {
-        PA_ERROR("Invalid location ID (%llu) provided!", clientId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid location ID (%llu) provided!", clientId);
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto status = clientPtr->StopReports(callback, context);
     if(status != telux::common::Status::SUCCESS){
-        PA_ERROR("Location engine start failed with status code %d",static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("Location engine start failed with status code %d",static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 uint32_t LocationPAController::PALocationClient::GetCapabilities()
@@ -1014,47 +1014,47 @@ uint32_t LocationPAController::PALocationClient::GetCapabilities()
     return sdkCapData;
 }
 
-pa_result_t tafpa::location::taf_pa_location_getCapabilities(taf_pa_location_LocationId clientId, uint32_t* capabilitiesPtr, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_getCapabilities(taf_pa_location_LocationId clientId, uint32_t* capabilitiesPtr, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
     std::shared_ptr<LocationPAController::PALocationClient> clientPtr = paCtrl->GetClientPtr(clientId);
     if (!clientPtr) {
-        PA_ERROR("Invalid location ID (%llu) provided!", clientId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid location ID (%llu) provided!", clientId);
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (capabilitiesPtr) *capabilitiesPtr = clientPtr->GetCapabilities();
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 telux::common::Status LocationPAController::ConfigureConstellations(std::vector<telux::loc::SvBlackListInfo> SvBlackList, taf_pa_location_GeneralCb callback, bool deviceReset, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1063,18 +1063,18 @@ telux::common::Status LocationPAController::ConfigureConstellations(std::vector<
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureConstellations(const std::vector<taf_pa_location_SvBlackListInfo_t>& svBlackListData, taf_pa_location_GeneralCb callback, bool deviceReset, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureConstellations(const std::vector<taf_pa_location_SvBlackListInfo_t>& svBlackListData, taf_pa_location_GeneralCb callback, bool deviceReset, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1095,31 +1095,31 @@ pa_result_t tafpa::location::taf_pa_location_configureConstellations(const std::
 
 telux::common::Status LocationPAController::DeleteAidingData(telux::loc::AidingData AidingData, taf_pa_location_GeneralCb callback,std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1128,18 +1128,18 @@ telux::common::Status LocationPAController::DeleteAidingData(telux::loc::AidingD
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_deleteAidingData(taf_pa_location_AidingDataType_t AidingData, taf_pa_location_GeneralCb callback,std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_deleteAidingData(taf_pa_location_AidingDataType_t AidingData, taf_pa_location_GeneralCb callback,std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1149,31 +1149,31 @@ pa_result_t tafpa::location::taf_pa_location_deleteAidingData(taf_pa_location_Ai
 
 telux::common::Status LocationPAController::DeleteAllAidingData(taf_pa_location_GeneralCb callback,std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1182,18 +1182,18 @@ telux::common::Status LocationPAController::DeleteAllAidingData(taf_pa_location_
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_deleteAllAidingData(taf_pa_location_GeneralCb callback,std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_deleteAllAidingData(taf_pa_location_GeneralCb callback,std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1203,31 +1203,31 @@ pa_result_t tafpa::location::taf_pa_location_deleteAllAidingData(taf_pa_location
 
 telux::common::Status LocationPAController::ConfigureMinSVElevation(uint8_t minElevation, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1236,18 +1236,18 @@ telux::common::Status LocationPAController::ConfigureMinSVElevation(uint8_t minE
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureMinSVElevation(uint8_t minElevation, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureMinSVElevation(uint8_t minElevation, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1257,7 +1257,7 @@ pa_result_t tafpa::location::taf_pa_location_configureMinSVElevation(uint8_t min
 
 telux::common::Status LocationPAController::RequestMinSVElevation(taf_pa_location_RequestMinSVElevationCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
     uint8_t minSVElevation;
     //Sdk Callback
@@ -1265,24 +1265,24 @@ telux::common::Status LocationPAController::RequestMinSVElevation(taf_pa_locatio
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
                 minSVElevation = minSVElevation_;
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1291,18 +1291,18 @@ telux::common::Status LocationPAController::RequestMinSVElevation(taf_pa_locatio
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,&minSVElevation,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_requestMinSVElevation(taf_pa_location_RequestMinSVElevationCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_requestMinSVElevation(taf_pa_location_RequestMinSVElevationCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1313,31 +1313,31 @@ pa_result_t tafpa::location::taf_pa_location_requestMinSVElevation(taf_pa_locati
 
 telux::common::Status LocationPAController::ConfigureNmeaTypes(telux::loc::NmeaSentenceConfig nmeaType, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1346,18 +1346,18 @@ telux::common::Status LocationPAController::ConfigureNmeaTypes(telux::loc::NmeaS
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureNmeaTypes(taf_pa_location_NmeaSentenceType_t nmeaType, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureNmeaTypes(taf_pa_location_NmeaSentenceType_t nmeaType, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1367,31 +1367,31 @@ pa_result_t tafpa::location::taf_pa_location_configureNmeaTypes(taf_pa_location_
 
 telux::common::Status LocationPAController::ConfigureDR(telux::loc::DREngineConfiguration drConfigData, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1400,18 +1400,18 @@ telux::common::Status LocationPAController::ConfigureDR(telux::loc::DREngineConf
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureDR(const taf_pa_location_DREngineConfiguration_t& drConfig, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureDR(const taf_pa_location_DREngineConfiguration_t& drConfig, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1433,31 +1433,31 @@ pa_result_t tafpa::location::taf_pa_location_configureDR(const taf_pa_location_D
 
 telux::common::Status LocationPAController::ConfigureEngineState(telux::loc::EngineType engineType, telux::loc::LocationEngineRunState engineState, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1466,18 +1466,18 @@ telux::common::Status LocationPAController::ConfigureEngineState(telux::loc::Eng
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureEngineState(taf_pa_location_EngineType_t engineType, taf_pa_location_LocationEngineRunState_t engineState, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureEngineState(taf_pa_location_EngineType_t engineType, taf_pa_location_LocationEngineRunState_t engineState, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1487,31 +1487,31 @@ pa_result_t tafpa::location::taf_pa_location_configureEngineState(taf_pa_locatio
 
 telux::common::Status LocationPAController::ConfigureRobustLocation(bool enableRobustloc, bool enableE911loc, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1520,18 +1520,18 @@ telux::common::Status LocationPAController::ConfigureRobustLocation(bool enableR
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureRobustLocation(bool enableRobustloc, bool enableE911loc, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureRobustLocation(bool enableRobustloc, bool enableE911loc, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1541,7 +1541,7 @@ pa_result_t tafpa::location::taf_pa_location_configureRobustLocation(bool enable
 
 telux::common::Status LocationPAController::RequestRobustLocation(taf_pa_location_RequestRobustLocationCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
     taf_pa_location_RobustLocationConfiguration_t rLConfig;
     //Sdk Callback
@@ -1562,24 +1562,24 @@ telux::common::Status LocationPAController::RequestRobustLocation(taf_pa_locatio
                     rLConfig.version.major = unsigned (rLConfig_.version.major);
                     rLConfig.version.minor = rLConfig_.version.minor;
                 }
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1588,18 +1588,18 @@ telux::common::Status LocationPAController::RequestRobustLocation(taf_pa_locatio
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,rLConfig, context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_requestRobustLocation(taf_pa_location_RequestRobustLocationCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_requestRobustLocation(taf_pa_location_RequestRobustLocationCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1609,31 +1609,31 @@ pa_result_t tafpa::location::taf_pa_location_requestRobustLocation(taf_pa_locati
 
 telux::common::Status LocationPAController::ConfigureSecondaryBand(telux::loc::ConstellationSet constellationSet, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1642,18 +1642,18 @@ telux::common::Status LocationPAController::ConfigureSecondaryBand(telux::loc::C
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureSecondaryBand(const std::unordered_set<taf_pa_location_GnssConstellationType_t>& constSet, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureSecondaryBand(const std::unordered_set<taf_pa_location_GnssConstellationType_t>& constSet, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1669,7 +1669,7 @@ pa_result_t tafpa::location::taf_pa_location_configureSecondaryBand(const std::u
 
 telux::common::Status LocationPAController::RequestSecondaryBandConfig(taf_pa_location_RequestSecondaryBandConfigCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
     std::set<taf_pa_location_GnssConstellationType_t> constSet;
     //Sdk Callback
@@ -1680,24 +1680,24 @@ telux::common::Status LocationPAController::RequestSecondaryBandConfig(taf_pa_lo
                 {
                     constSet.insert((taf_pa_location_GnssConstellationType_t) i);
                 }
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1706,18 +1706,18 @@ telux::common::Status LocationPAController::RequestSecondaryBandConfig(taf_pa_lo
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,constSet, context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_requestSecondaryBandConfig(taf_pa_location_RequestSecondaryBandConfigCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_requestSecondaryBandConfig(taf_pa_location_RequestSecondaryBandConfigCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1727,31 +1727,31 @@ pa_result_t tafpa::location::taf_pa_location_requestSecondaryBandConfig(taf_pa_l
 
 telux::common::Status LocationPAController::ConfigureLeverArm(LeverArmConfigInfo configInfo , taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1760,18 +1760,18 @@ telux::common::Status LocationPAController::ConfigureLeverArm(LeverArmConfigInfo
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureLeverArm(const taf_pa_location_LeverArmParams_t* leverArmConfigInfoPtr, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureLeverArm(const taf_pa_location_LeverArmParams_t* leverArmConfigInfoPtr, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1804,31 +1804,31 @@ pa_result_t tafpa::location::taf_pa_location_configureLeverArm(const taf_pa_loca
 
 telux::common::Status LocationPAController::ConfigureMinGpsWeek(uint16_t minGpsWeek, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1837,19 +1837,19 @@ telux::common::Status LocationPAController::ConfigureMinGpsWeek(uint16_t minGpsW
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
 
-pa_result_t tafpa::location::taf_pa_location_configureMinGpsWeek(uint16_t minGpsWeek, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureMinGpsWeek(uint16_t minGpsWeek, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1859,31 +1859,31 @@ pa_result_t tafpa::location::taf_pa_location_configureMinGpsWeek(uint16_t minGps
 
 telux::common::Status LocationPAController::ConfigureNmea(telux::loc::NmeaConfig nmeaConfig, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1892,18 +1892,18 @@ telux::common::Status LocationPAController::ConfigureNmea(telux::loc::NmeaConfig
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_configureNmea(const taf_pa_location_NmeaConfig_t& nmeaConfigData,  taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureNmea(const taf_pa_location_NmeaConfig_t& nmeaConfigData,  taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1918,7 +1918,7 @@ pa_result_t tafpa::location::taf_pa_location_configureNmea(const taf_pa_location
 
 telux::common::Status LocationPAController::RequestMinGpsWeek(taf_pa_location_RequestMinGpsWeekCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
     uint16_t minGpsWeek;
     //Sdk Callback
@@ -1926,24 +1926,24 @@ telux::common::Status LocationPAController::RequestMinGpsWeek(taf_pa_location_Re
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
                 minGpsWeek = minGpsWeek_;
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1952,18 +1952,18 @@ telux::common::Status LocationPAController::RequestMinGpsWeek(taf_pa_location_Re
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult,&minGpsWeek, context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_requestMinGpsWeek(taf_pa_location_RequestMinGpsWeekCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_requestMinGpsWeek(taf_pa_location_RequestMinGpsWeekCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -1973,7 +1973,7 @@ pa_result_t tafpa::location::taf_pa_location_requestMinGpsWeek(taf_pa_location_R
 
 telux::common::Status LocationPAController::RequestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
     taf_pa_location_XtraStatus_t XtraStatusData;
     //Sdk Callback
@@ -1997,24 +1997,24 @@ telux::common::Status LocationPAController::RequestXtraStatus(taf_pa_location_Re
                     XtraStatusData.xtraDataStatus = TAF_PA_LOCATION_STATUS_VALID;
                     break;
                 }
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -2023,18 +2023,18 @@ telux::common::Status LocationPAController::RequestXtraStatus(taf_pa_location_Re
         auto futResult = promisePtr->get_future();
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready){
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback){
                 callback(selfResult, XtraStatusData, context);
             }
         }else{
-            PA_ERROR("Timeout waiting for result..");
+            TAF_PA_ERROR("Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_requestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_requestXtraStatus(taf_pa_location_RequestXtraStatusCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
@@ -2044,7 +2044,7 @@ pa_result_t tafpa::location::taf_pa_location_requestXtraStatus(taf_pa_location_R
 
 void LocationPAController::PALocationClient::onGnssNmeaInfo(uint64_t timestamp, const std::string &nmea)
 {
-    PA_DEBUG( "**** onGnssNmeaInfo Information --> PA****" );
+    TAF_PA_DEBUG( "**** onGnssNmeaInfo Information --> PA****" );
 
     auto nmeaEvent = std::make_shared<taf_pa_location_NmeaInfoEvent_t>();
 
@@ -2061,37 +2061,37 @@ void LocationPAController::PALocationClient::onGnssNmeaInfo(uint64_t timestamp, 
         locListener1->onGnssNmeaInfo(locationId_,nmeaEvent,eventListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onGnssNmeaInfo");
+        TAF_PA_ERROR("unable to find event Listener for onGnssNmeaInfo");
     }
 }
 
 telux::common::Status LocationPAController::InjectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -2101,7 +2101,7 @@ telux::common::Status LocationPAController::InjectMerkleTreeInformation(const st
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready)
         {
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback)
             {
                 callback(selfResult,context);
@@ -2109,47 +2109,47 @@ telux::common::Status LocationPAController::InjectMerkleTreeInformation(const st
         }
         else
         {
-            PA_ERROR("InjectMerkleTreeInformation Timeout waiting for result..");
+            TAF_PA_ERROR("InjectMerkleTreeInformation Timeout waiting for result..");
         }
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_injectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_injectMerkleTreeInformation(const std::string merkleTreeInfo, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
-    PA_INFO("taf_pa_location_injectMerkleTreeInformation");
+    TAF_PA_INFO("taf_pa_location_injectMerkleTreeInformation");
     telux::common::Status status = paCtrl->InjectMerkleTreeInformation(merkleTreeInfo, callback, context);
     return paCtrl->MapStatus(status);
 }
 
 telux::common::Status LocationPAController::ConfigureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -2159,7 +2159,7 @@ telux::common::Status LocationPAController::ConfigureOsnma(bool enableOsnma, taf
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready)
         {
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback)
             {
                 callback(selfResult,context);
@@ -2167,46 +2167,46 @@ telux::common::Status LocationPAController::ConfigureOsnma(bool enableOsnma, taf
         }
         else
         {
-            PA_ERROR("configureOsnma Timeout waiting for result..");
+            TAF_PA_ERROR("configureOsnma Timeout waiting for result..");
         }
     }
     return status;
 }
-pa_result_t tafpa::location::taf_pa_location_configureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureOsnma(bool enableOsnma, taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
-    PA_INFO("taf_pa_location_configureOsnma");
+    TAF_PA_INFO("taf_pa_location_configureOsnma");
     telux::common::Status status = paCtrl->ConfigureOsnma(enableOsnma, callback, context);
     return paCtrl->MapStatus(status);
 }
 
 telux::common::Status LocationPAController::ConfigureEngineIntegrityRisk(telux::loc::EngineType engineType,uint32_t integrityRisk,taf_pa_location_GeneralCb callback, std::any context)
 {
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
     auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else{
-                pa_result_t res = paCtrl->MapErrorCode(error);
+                taf_pa_result_t res = paCtrl->MapErrorCode(error);
                 promisePtr->set_value(res);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
     telux::common::Status status = telux::common::Status::FAILED;
@@ -2216,7 +2216,7 @@ telux::common::Status LocationPAController::ConfigureEngineIntegrityRisk(telux::
         if(futResult.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT))
             == std::future_status::ready)
         {
-            pa_result_t selfResult = futResult.get();
+            taf_pa_result_t selfResult = futResult.get();
             if(callback)
             {
                 callback(selfResult,context);
@@ -2224,15 +2224,15 @@ telux::common::Status LocationPAController::ConfigureEngineIntegrityRisk(telux::
         }
         else
         {
-            PA_ERROR("configureEngineIntegrityRisk Timeout waiting for result..");
+            TAF_PA_ERROR("configureEngineIntegrityRisk Timeout waiting for result..");
         }
     }
     return status;
 }
-pa_result_t tafpa::location::taf_pa_location_configureEngineIntegrityRisk(taf_pa_location_EngineType_t engineType,uint32_t integrityRisk,taf_pa_location_GeneralCb callback, std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_configureEngineIntegrityRisk(taf_pa_location_EngineType_t engineType,uint32_t integrityRisk,taf_pa_location_GeneralCb callback, std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
-    PA_INFO("taf_pa_location_ConfigureEngineIntegrityRisk");
+    TAF_PA_INFO("taf_pa_location_ConfigureEngineIntegrityRisk");
     telux::common::Status status = paCtrl->ConfigureEngineIntegrityRisk((telux::loc::EngineType)engineType,integrityRisk,callback,context);
     return paCtrl->MapStatus(status);
 }
@@ -2241,9 +2241,9 @@ telux::common::Status LocationPAController::InjectCorrectionData(const uint8_t *
 {
     telux::common::Status status = telux::common::Status::FAILED;
     if (!mDgnssManager) {
-        PA_ERROR("DGNSS Manager not initialized");
+        TAF_PA_ERROR("DGNSS Manager not initialized");
         if(callback) {
-            callback(PA_FAULT, context);
+            callback(TAF_PA_FAULT, context);
         }
         return status;
     }
@@ -2253,30 +2253,30 @@ telux::common::Status LocationPAController::InjectCorrectionData(const uint8_t *
     {
         if(callback)
         {
-            callback(PA_OK,context);
+            callback(TAF_PA_OK,context);
         }
-        PA_INFO("Injecting correction data is success");
+        TAF_PA_INFO("Injecting correction data is success");
     }
     else
     {
-        PA_INFO("Injecting correction data is failed");
+        TAF_PA_INFO("Injecting correction data is failed");
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_injectCorrectionData(const uint8_t *injectionData,
+taf_pa_result_t tafpa::location::taf_pa_location_injectCorrectionData(const uint8_t *injectionData,
 uint32_t injectionDataSize, taf_pa_location_GeneralCb callback,std::any context)
 {
     if (!injectionData || injectionDataSize == 0) {
-        PA_ERROR("Invalid injection data: pointer is null or size is zero");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid injection data: pointer is null or size is zero");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto paCtrl = LocationPAController::getInstance();
 
     auto status = paCtrl->InjectCorrectionData(injectionData, injectionDataSize, callback,context);
     if(status != telux::common::Status::SUCCESS){
-        PA_ERROR("InjectCorrectionData failed with status code %d",static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("InjectCorrectionData failed with status code %d",static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
     return paCtrl->MapStatus(status);
 }
@@ -2287,9 +2287,9 @@ dgnssFormat, taf_pa_location_GeneralCb  callback,std::any context)
     telux::common::Status status = telux::common::Status::FAILED;
 
     if (!mDgnssManager) {
-        PA_ERROR("DGNSS Manager not initialized");
+        TAF_PA_ERROR("DGNSS Manager not initialized");
         if(callback) {
-            callback(PA_FAULT, context);
+            callback(TAF_PA_FAULT, context);
         }
         return status;
     }
@@ -2299,25 +2299,25 @@ dgnssFormat, taf_pa_location_GeneralCb  callback,std::any context)
     {
         if(callback)
         {
-            callback(PA_OK,context);
+            callback(TAF_PA_OK,context);
         }
-        PA_INFO("taf_pa_location_createDgnssSource is success");
+        TAF_PA_INFO("taf_pa_location_createDgnssSource is success");
     }
     else
     {
-        PA_INFO("taf_pa_location_createDgnssSource is failed");
+        TAF_PA_INFO("taf_pa_location_createDgnssSource is failed");
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_createDgnssSource(taf_pa_location_DgnssDataFormat_t dgnssFormat,taf_pa_location_GeneralCb callback,std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_createDgnssSource(taf_pa_location_DgnssDataFormat_t dgnssFormat,taf_pa_location_GeneralCb callback,std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
     auto status = paCtrl->CreateDgnssSource((telux::loc::DgnssDataFormat)dgnssFormat,callback,context);
     if(status != telux::common::Status::SUCCESS){
-        PA_ERROR("taf_pa_location_createDgnssSource failed with status code %d",static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("taf_pa_location_createDgnssSource failed with status code %d",static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
     return paCtrl->MapStatus(status);
 }
@@ -2328,9 +2328,9 @@ callback,std::any context)
     telux::common::Status status = telux::common::Status::FAILED;
 
     if (!mDgnssManager) {
-        PA_ERROR("DGNSS Manager not initialized");
+        TAF_PA_ERROR("DGNSS Manager not initialized");
         if(callback) {
-            callback(PA_FAULT, context);
+            callback(TAF_PA_FAULT, context);
         }
         return status;
     }
@@ -2340,25 +2340,25 @@ callback,std::any context)
     {
         if(callback)
         {
-            callback(PA_OK,context);
+            callback(TAF_PA_OK,context);
         }
-        PA_INFO("ReleaseDgnssSource is success");
+        TAF_PA_INFO("ReleaseDgnssSource is success");
     }
     else
     {
-        PA_INFO("ReleaseDgnssSource is failed");
+        TAF_PA_INFO("ReleaseDgnssSource is failed");
     }
     return status;
 }
 
-pa_result_t tafpa::location::taf_pa_location_releaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context)
+taf_pa_result_t tafpa::location::taf_pa_location_releaseDgnssSource(taf_pa_location_GeneralCb callback,std::any context)
 {
     auto paCtrl = LocationPAController::getInstance();
 
     auto status = paCtrl->ReleaseDgnssSource(callback,context);
     if(status != telux::common::Status::SUCCESS){
-        PA_ERROR("taf_pa_location_releaseDgnssSource failed with status code %d",static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("taf_pa_location_releaseDgnssSource failed with status code %d",static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
     return paCtrl->MapStatus(status);
 }
@@ -2366,14 +2366,14 @@ pa_result_t tafpa::location::taf_pa_location_releaseDgnssSource(taf_pa_location_
 telux::common::Status LocationPAController::InitializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,
 taf_pa_location_GeneralCb callback,std::any context)
 {
-    PA_INFO("InitializeDgnss!!");
+    TAF_PA_INFO("InitializeDgnss!!");
     telux::common::Status statusDgnss;
     telux::common::Status status;
     status = telux::common::Status::SUCCESS;
     statusDgnss = telux::common::Status::SUCCESS;
     auto paCtrl = LocationPAController::getInstance();
 
-    PA_INFO("InitializeDgnss!! mDgnssManager: %p",mDgnssManager);
+    TAF_PA_INFO("InitializeDgnss!! mDgnssManager: %p",mDgnssManager);
     if(mDgnssManager == nullptr)
     {
         auto promDgnss = std::make_shared<std::promise<ServiceStatus>>();
@@ -2383,25 +2383,25 @@ taf_pa_location_GeneralCb callback,std::any context)
                 try {
                     if (status == ServiceStatus::SERVICE_AVAILABLE) {
                         promDgnss->set_value(ServiceStatus::SERVICE_AVAILABLE);
-                        PA_INFO("SERVICE_AVAILABLE");
+                        TAF_PA_INFO("SERVICE_AVAILABLE");
                     } else {
                         promDgnss->set_value(ServiceStatus::SERVICE_UNAVAILABLE);
-                        PA_INFO("SERVICE_UNAVAILABLE");
+                        TAF_PA_INFO("SERVICE_UNAVAILABLE");
                     }
                 }
                 catch (const std::future_error& e) {
-                    PA_ERROR("Future error in callback: %s", e.what());
+                    TAF_PA_ERROR("Future error in callback: %s", e.what());
                 }
                 catch (const std::exception& e) {
-                    PA_ERROR("Exception in callback: %s", e.what());
+                    TAF_PA_ERROR("Exception in callback: %s", e.what());
                 }
                 catch (...) {
-                    PA_ERROR("Unknown error in callback.");
+                    TAF_PA_ERROR("Unknown error in callback.");
                 }
         });
         if (!mDgnssManager)
         {
-            PA_CRIT("*** ERROR - dgnssManager is NULL");
+            TAF_PA_CRIT("*** ERROR - dgnssManager is NULL");
             return telux::common::Status::FAILED;
         }
 
@@ -2409,14 +2409,14 @@ taf_pa_location_GeneralCb callback,std::any context)
         startTimeDgnss = std::chrono::system_clock::now();
         ServiceStatus dgnssMgrStatus = mDgnssManager->getServiceStatus();
         if(dgnssMgrStatus != ServiceStatus::SERVICE_AVAILABLE){
-            PA_INFO("Dgnss subsystem is not ready, Please wait");
+            TAF_PA_INFO("Dgnss subsystem is not ready, Please wait");
         }
         std::future<telux::common::ServiceStatus> initFutureDgnss = promDgnss->get_future();
         std::future_status waitStatusDgnss = initFutureDgnss.wait_for(std::chrono::seconds(5));
         telux::common::ServiceStatus serviceStatusDgnss;
         if (std::future_status::timeout == waitStatusDgnss)
         {
-            PA_ERROR("Timeout waiting for dgnss manager");
+            TAF_PA_ERROR("Timeout waiting for dgnss manager");
             mDgnssManager = nullptr;
             return telux::common::Status::FAILED;
         } else {
@@ -2424,9 +2424,9 @@ taf_pa_location_GeneralCb callback,std::any context)
             if (serviceStatusDgnss == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
                 endTimeDgnss = std::chrono::system_clock::now();
                 std::chrono::duration<double> elapsedTimeDgnss = endTimeDgnss - startTimeDgnss;
-                PA_INFO("Elapsed Time for dgnss subsystems to ready : %lf",elapsedTimeDgnss.count());
+                TAF_PA_INFO("Elapsed Time for dgnss subsystems to ready : %lf",elapsedTimeDgnss.count());
             }else{
-                PA_ERROR("ERROR - Unable to initialize dgnss manager subsystem");
+                TAF_PA_ERROR("ERROR - Unable to initialize dgnss manager subsystem");
                 mDgnssManager = nullptr;
                 statusDgnss = telux::common::Status::FAILED;
             }
@@ -2434,40 +2434,40 @@ taf_pa_location_GeneralCb callback,std::any context)
     }
     else
     {
-        PA_CRIT("dgnss manager is already initialized");
+        TAF_PA_CRIT("dgnss manager is already initialized");
         return telux::common::Status::FAILED;
     }
 
     if (statusDgnss != telux::common::Status::SUCCESS) {
-        PA_ERROR("dgnss manager not available");
+        TAF_PA_ERROR("dgnss manager not available");
         return telux::common::Status::FAILED;
     }
     if(callback)
     {
-        callback(PA_OK,context);
+        callback(TAF_PA_OK,context);
     }
     return telux::common::Status::SUCCESS;
 }
 
-pa_result_t tafpa::location::taf_pa_location_initializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,
+taf_pa_result_t tafpa::location::taf_pa_location_initializeDgnss(taf_pa_location_DgnssDataFormat_t dataFormat,
 taf_pa_location_GeneralCb callback,std::any context)
 {
-    PA_INFO("taf_pa_location_initializeDgnss");
+    TAF_PA_INFO("taf_pa_location_initializeDgnss");
     auto paCtrl = LocationPAController::getInstance();
 
     auto status = paCtrl->InitializeDgnss(dataFormat,callback,context);
     if(status != telux::common::Status::SUCCESS){
-        PA_ERROR("taf_pa_location_initializeDgnss failed with status code %d",static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("taf_pa_location_initializeDgnss failed with status code %d",static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
 
     auto resDgnss = paCtrl->RegisterDgnssManager();
     if (resDgnss == telux::common::Status::SUCCESS)
     {
-        PA_INFO("Dgnss manager registration is success.");
+        TAF_PA_INFO("Dgnss manager registration is success.");
     }
     else {
-        PA_ERROR("Dgnss manager registration is failed.");
+        TAF_PA_ERROR("Dgnss manager registration is failed.");
     }
 
     return paCtrl->MapStatus(resDgnss);
@@ -2476,22 +2476,22 @@ taf_pa_location_GeneralCb callback,std::any context)
 telux::common::Status LocationPAController::DeInitializeDgnss(taf_pa_location_GeneralCb callback,
 std::any context)
 {
-    PA_INFO("DeInitializeDgnss!!");
+    TAF_PA_INFO("DeInitializeDgnss!!");
 
     auto paCtrl = LocationPAController::getInstance();
     if (mDgnssManager)
     {
-        PA_INFO("InitializeDgnss!! mDgnssManager: %p",mDgnssManager);
+        TAF_PA_INFO("InitializeDgnss!! mDgnssManager: %p",mDgnssManager);
 
         // Deregister synchronously without callbacks
         auto status = mDgnssManager->deRegisterListener();
         if (status == telux::common::Status::SUCCESS)
         {
-            PA_INFO("Successfully deregistered Dgnss manager");
+            TAF_PA_INFO("Successfully deregistered Dgnss manager");
         }
         else
         {
-            PA_ERROR("Failed to deregister Dgnss %d", (int)status);
+            TAF_PA_ERROR("Failed to deregister Dgnss %d", (int)status);
             return telux::common::Status::FAILED;
         }
         // Clear the pointer
@@ -2499,25 +2499,25 @@ std::any context)
     }
     else
     {
-        PA_INFO("DeInitializeDgnss is already done");
+        TAF_PA_INFO("DeInitializeDgnss is already done");
     }
     if(callback)
     {
-        callback(PA_OK,context);
+        callback(TAF_PA_OK,context);
     }
     return telux::common::Status::SUCCESS;
 }
 
-pa_result_t tafpa::location::taf_pa_location_deInitializeDgnss(taf_pa_location_GeneralCb callback,
+taf_pa_result_t tafpa::location::taf_pa_location_deInitializeDgnss(taf_pa_location_GeneralCb callback,
 std::any context)
 {
-    PA_INFO("taf_pa_location_deInitializeDgnss");
+    TAF_PA_INFO("taf_pa_location_deInitializeDgnss");
     auto paCtrl = LocationPAController::getInstance();
 
     auto status = paCtrl->DeInitializeDgnss(callback,context);
     if(status != telux::common::Status::SUCCESS){
-        PA_ERROR("taf_pa_location_deInitializeDgnss failed with status code %d",static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("taf_pa_location_deInitializeDgnss failed with status code %d",static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
 
     return paCtrl->MapStatus(status);
@@ -2525,7 +2525,7 @@ std::any context)
 
 void LocationPAController::PALocationClient::onCapabilitiesInfo(const telux::loc::LocCapability capabilityInfo)
 {
-    PA_DEBUG( "**** onCapabilitiesInfo Information-->PA ****" );
+    TAF_PA_DEBUG( "**** onCapabilitiesInfo Information-->PA ****" );
 
     auto capabilityEvent = std::make_shared<taf_pa_location_CapabilityChangeEvent_t>();
 
@@ -2541,13 +2541,13 @@ void LocationPAController::PALocationClient::onCapabilitiesInfo(const telux::loc
         locListener2->onCapabilitiesInfo(locationId_,capabilityEvent,eventListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onCapabilitiesInfo");
+        TAF_PA_ERROR("unable to find event Listener for onCapabilitiesInfo");
     }
 }
 
 void LocationPAController::PALocationClient::onGnssSVInfo(const std::shared_ptr<telux::loc::IGnssSVInfo> &gnssSVInfo)
 {
-    PA_DEBUG( "**** onGnssSVInfo Information -->PA****" );
+    TAF_PA_DEBUG( "**** onGnssSVInfo Information -->PA****" );
 
     std::vector<std::shared_ptr<taf_pa_location_GnssSVInfo_t>> GnssSVInfo;
 
@@ -2578,13 +2578,13 @@ void LocationPAController::PALocationClient::onGnssSVInfo(const std::shared_ptr<
         locListener3->onGnssSVInfo(locationId_,GnssSVInfo,eventListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onGnssSVInfo");
+        TAF_PA_ERROR("unable to find event Listener for onGnssSVInfo");
     }
 }
 
 void LocationPAController::PALocationClient::onGnssSignalInfo(const std::shared_ptr<telux::loc::IGnssSignalInfo> &gnssDatainfo)
 {
-    PA_DEBUG( "**** onGnssSignalInfo Information -->PA****" );
+    TAF_PA_DEBUG( "**** onGnssSignalInfo Information -->PA****" );
 
     std::shared_ptr<taf_pa_location_GnssData_t> GnssDatainfo = std::make_shared<taf_pa_location_GnssData_t>();
 
@@ -2604,13 +2604,13 @@ void LocationPAController::PALocationClient::onGnssSignalInfo(const std::shared_
         locListener4->onGnssSignalInfo(locationId_,GnssDatainfo,eventListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onGnssSignalInfo");
+        TAF_PA_ERROR("unable to find event Listener for onGnssSignalInfo");
     }
 }
 
 void LocationPAController::PALocationClient::onXtraStatusUpdate(const telux::loc::XtraStatus xtraStatus)
 {
-    PA_DEBUG( "**** onXtraStatusUpdate Information -->PA****" );
+    TAF_PA_DEBUG( "**** onXtraStatusUpdate Information -->PA****" );
 
     auto onXtraStatusUpdateData = std::make_shared<taf_pa_location_XtraStatus_t>();
 
@@ -2628,59 +2628,59 @@ void LocationPAController::PALocationClient::onXtraStatusUpdate(const telux::loc
         locListener5->onXtraStatusUpdate(locationId_,onXtraStatusUpdateData,eventListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onXtraStatusUpdate");
+        TAF_PA_ERROR("unable to find event Listener for onXtraStatusUpdate");
     }
 }
 
 taf_pa_location_DgnssDataStatus_t LocationPAController::convertTeluxToDgnssDataStatus(DgnssStatus dgnssStatus)
 {
-    PA_INFO("convertTeluxToDgnssDataStatus");
+    TAF_PA_INFO("convertTeluxToDgnssDataStatus");
     switch(dgnssStatus)
     {
         case DgnssStatus::DATA_SOURCE_NOT_SUPPORTED:
         {
-            PA_DEBUG("telux::loc::DATA_SOURCE_NOT_SUPPORTED");
+            TAF_PA_DEBUG("telux::loc::DATA_SOURCE_NOT_SUPPORTED");
             return TAF_PA_LOCATION_DATA_SOURCE_NOT_SUPPORTED;
         }
         break;
         case DgnssStatus::DATA_FORMAT_NOT_SUPPORTED:
         {
-            PA_DEBUG("telux::loc::DATA_FORMAT_NOT_SUPPORTED");
+            TAF_PA_DEBUG("telux::loc::DATA_FORMAT_NOT_SUPPORTED");
             return TAF_PA_LOCATION_DATA_FORMAT_NOT_SUPPORTED;
         }
         break;
         case DgnssStatus::OTHER_SOURCE_IN_USE:
         {
-            PA_DEBUG("telux::loc::OTHER_SOURCE_IN_USE");
+            TAF_PA_DEBUG("telux::loc::OTHER_SOURCE_IN_USE");
             return TAF_PA_LOCATION_OTHER_SOURCE_IN_USE;
         }
         break;
         case DgnssStatus::MESSAGE_PARSE_ERROR:
         {
-            PA_DEBUG("telux::loc::MESSAGE_PARSE_ERROR");
+            TAF_PA_DEBUG("telux::loc::MESSAGE_PARSE_ERROR");
             return TAF_PA_LOCATION_MESSAGE_PARSE_ERROR;
         }
         break;
         case DgnssStatus::DATA_SOURCE_USABLE:
         {
-            PA_DEBUG("telux::loc::DATA_SOURCE_USABLE");
+            TAF_PA_DEBUG("telux::loc::DATA_SOURCE_USABLE");
             return TAF_PA_LOCATION_DATA_SOURCE_USABLE;
         }
         break;
         case DgnssStatus::DATA_SOURCE_NOT_USABLE :
         {
-            PA_DEBUG("telux::loc::DATA_SOURCE_NOT_USABLE");
+            TAF_PA_DEBUG("telux::loc::DATA_SOURCE_NOT_USABLE");
             return TAF_PA_LOCATION_DATA_SOURCE_NOT_USABLE;
         }
         break;
         case DgnssStatus::CDFW_STOP_SOURCE_INJECT :
         {
-            PA_DEBUG("telux::loc::CDFW_STOP_SOURCE_INJECT");
+            TAF_PA_DEBUG("telux::loc::CDFW_STOP_SOURCE_INJECT");
             return TAF_PA_LOCATION_CDFW_STOP_SOURCE_INJECT;
         }
         break;
         default:
-            PA_INFO("Invalid Dgnss data status");
+            TAF_PA_INFO("Invalid Dgnss data status");
             return TAF_PA_LOCATION_DATA_SOURCE_NOT_SUPPORTED;
         break;
     }
@@ -2688,14 +2688,14 @@ taf_pa_location_DgnssDataStatus_t LocationPAController::convertTeluxToDgnssDataS
 
 void LocationPAController::onDgnssStatusUpdate(DgnssStatus status)
 {
-    PA_DEBUG( "**** onDgnssStatusUpdate Information -->PA****" );
+    TAF_PA_DEBUG( "**** onDgnssStatusUpdate Information -->PA****" );
 
     // Guard against calls during/after deregistration
     std::lock_guard<std::mutex> lock(mutex_);
 
     // Guard against calls during/after deregistration
     if (!mDgnssManager) {
-        PA_INFO("Ignoring DGNSS status update - manager is null");
+        TAF_PA_INFO("Ignoring DGNSS status update - manager is null");
         return;
     }
 
@@ -2707,15 +2707,15 @@ void LocationPAController::onDgnssStatusUpdate(DgnssStatus status)
         dgnssListener_->onDgnssStatusUpdate(onDgnssStatusUpdateData,dgnssListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onDgnssStatusUpdate");
+        TAF_PA_ERROR("unable to find event Listener for onDgnssStatusUpdate");
     }
 }
 
 void LocationPAController::PALocationClient::onLocationSystemInfo(const telux::loc::LocationSystemInfo &locationSystemInfo)
 {
-    PA_DEBUG( "**** Location System Information ****" );
-    PA_DEBUG( "**** Location System Information locationSystemInfoValidity:%d",locationSystemInfo.valid);
-    PA_DEBUG( "**** Location System Information LeapSecondInfoValidity:%d",locationSystemInfo.info.valid);
+    TAF_PA_DEBUG( "**** Location System Information ****" );
+    TAF_PA_DEBUG( "**** Location System Information locationSystemInfoValidity:%d",locationSystemInfo.valid);
+    TAF_PA_DEBUG( "**** Location System Information LeapSecondInfoValidity:%d",locationSystemInfo.info.valid);
 
     std::shared_ptr<taf_pa_location_LocationSystemInfo_t> locSysInfoEvent = std::make_shared<taf_pa_location_LocationSystemInfo_t>();
 
@@ -2744,13 +2744,13 @@ void LocationPAController::PALocationClient::onLocationSystemInfo(const telux::l
         locListener6->onLocationSystemInfo(locationId_,locSysInfoEvent,eventListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onLocationSystemInfo");
+        TAF_PA_ERROR("unable to find event Listener for onLocationSystemInfo");
     }
 }
 
 void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(const std::vector<std::shared_ptr<telux::loc::ILocationInfoEx>> &locationEngineInfo)
 {
-    PA_DEBUG( "**** onDetailedEngineLocationUpdate Information -->PA****" );
+    TAF_PA_DEBUG( "**** onDetailedEngineLocationUpdate Information -->PA****" );
 
     std::vector<std::shared_ptr<taf_pa_location_LocEngineInfo_t>> LocationEngineInfo;
 
@@ -2770,13 +2770,13 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
         std::vector<float> mVerticalSpeedAccuracy;
         if(locationInfo->getVelocityEastNorthUp(mVerticalSpeed) == telux::common::Status::SUCCESS)
         {
-            PA_DEBUG("mVerticalSpeed size: %ld", mVerticalSpeed.size());
+            TAF_PA_DEBUG("mVerticalSpeed size: %ld", mVerticalSpeed.size());
             LocationEngineInfodata->verticalSpeed = mVerticalSpeed;
         }
         if(locationInfo->getVelocityUncertaintyEastNorthUp(mVerticalSpeedAccuracy) ==
                 telux::common::Status::SUCCESS)
         {
-            PA_DEBUG("mVerticalSpeedAccuracy size: %ld", mVerticalSpeedAccuracy.size());
+            TAF_PA_DEBUG("mVerticalSpeedAccuracy size: %ld", mVerticalSpeedAccuracy.size());
             LocationEngineInfodata->verticalSpeedAccuracy = mVerticalSpeedAccuracy;
         }
         LocationEngineInfodata->magneticDeviation = locationInfo->getMagneticDeviation();
@@ -2817,14 +2817,14 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
         LocationEngineInfodata->robustConformity = locationInfo->getConformityIndex();
         LocationEngineInfodata->confidencePercent = locationInfo->getCalibrationConfidencePercent();
         telux::loc::DrCalibrationStatus calibrationStatus = locationInfo->getCalibrationStatus();
-        PA_DEBUG("onDetailedEngineLocationUpdate calibrationStatus %d",(int)calibrationStatus);
+        TAF_PA_DEBUG("onDetailedEngineLocationUpdate calibrationStatus %d",(int)calibrationStatus);
         LocationEngineInfodata->calibrationStatus = (taf_pa_location_DrCalibrationStatusType_t) calibrationStatus;
         telux::loc::DrSolutionStatus solutionStatus = locationInfo->getSolutionStatus();
-        PA_DEBUG("DR solution status %d", (int)solutionStatus);
+        TAF_PA_DEBUG("DR solution status %d", (int)solutionStatus);
         LocationEngineInfodata->drSolutionStatus = (taf_pa_location_DrSolutionStatusType_t) solutionStatus;
         telux::loc::GnssKinematicsData GnssKinData = locationInfo->getBodyFrameData();
         telux::loc::KinematicDataValidity GnssKinDataValidity = GnssKinData.bodyFrameDataMask;
-        PA_DEBUG("onDetailedEngineLocationUpdate GnssKinDataValidity:%0x", GnssKinDataValidity);
+        TAF_PA_DEBUG("onDetailedEngineLocationUpdate GnssKinDataValidity:%0x", GnssKinDataValidity);
         LocationEngineInfodata->GnssKinematicsData.bodyFrameDataMask = (taf_pa_location_KinematicDataValidityType_t) GnssKinData.bodyFrameDataMask;
         LocationEngineInfodata->GnssKinematicsData.longAccel = GnssKinData.longAccel;
         LocationEngineInfodata->GnssKinematicsData.latAccel = GnssKinData.latAccel;
@@ -2863,26 +2863,26 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
 
         telux::loc::SbasCorrection correction = locationInfo->getSbasCorrection();
         std::string correctionString = correction.to_string();
-        PA_DEBUG("Bits Count:%d",(int)correction.count());
-        PA_DEBUG("correction:%s",correctionString.c_str());
+        TAF_PA_DEBUG("Bits Count:%d",(int)correction.count());
+        TAF_PA_DEBUG("correction:%s",correctionString.c_str());
         LocationEngineInfodata->sbasMask = correctionString;
         telux::loc::LocationInfoValidity validityMask = locationInfo->getLocationInfoValidity();
-        PA_DEBUG("LocationInfoValidity->validityMask: %u ",validityMask);
+        TAF_PA_DEBUG("LocationInfoValidity->validityMask: %u ",validityMask);
         LocationEngineInfodata->validityMask = (taf_pa_location_LocationValidityType_t) validityMask;
         telux::loc::LocationInfoExValidity validityExMask = locationInfo->getLocationInfoExValidity();
-        PA_DEBUG("LocationInfoExValidity->validityExMask: %d", (int)validityExMask);
+        TAF_PA_DEBUG("LocationInfoExValidity->validityExMask: %d", (int)validityExMask);
         LocationEngineInfodata->validityExMask = (taf_pa_location_LocationInfoExValidityType_t) validityExMask;
         telux::loc::PositioningEngine posEngineBits = locationInfo->getLocOutputEngMask();
-        PA_DEBUG("posEngineBits: %d", (int)posEngineBits);
+        TAF_PA_DEBUG("posEngineBits: %d", (int)posEngineBits);
         LocationEngineInfodata->engMask = (taf_pa_location_PositioningEngineType_t) posEngineBits;
         telux::loc::LocationAggregationType locEngineType = locationInfo->getLocOutputEngType();
-        PA_DEBUG("locEngineType: %d", (int)locEngineType);
+        TAF_PA_DEBUG("locEngineType: %d", (int)locEngineType);
         LocationEngineInfodata->locationEngType = (taf_pa_location_LocationAggregationType_t) locEngineType;
         telux::loc::LocationReliability HorLocReliability = locationInfo->getHorizontalReliability();
-        PA_DEBUG("HorLocReliability: %d",(int)HorLocReliability);
+        TAF_PA_DEBUG("HorLocReliability: %d",(int)HorLocReliability);
         LocationEngineInfodata->horiReliablity = (taf_pa_location_LocationReliability_t) HorLocReliability;
         telux::loc::LocationReliability vertLocReliability = locationInfo->getVerticalReliability();
-        PA_DEBUG("vertLocReliability: %d",(int)vertLocReliability);
+        TAF_PA_DEBUG("vertLocReliability: %d",(int)vertLocReliability);
         LocationEngineInfodata->vertReliablity = (taf_pa_location_LocationReliability_t) vertLocReliability;
         LocationEngineInfodata->azimuth = locationInfo->getHorizontalUncertaintyAzimuth();
         LocationEngineInfodata->eastDev = locationInfo->getEastStandardDeviation();
@@ -2890,7 +2890,7 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
         LocationEngineInfodata->realTime = locationInfo->getElapsedRealTime();
         LocationEngineInfodata->realTimeUnc = locationInfo->getElapsedRealTimeUncertainty();
         telux::loc::LocationTechnology techMask = locationInfo->getTechMask();
-        PA_DEBUG("techMask: %d",(int)techMask);
+        TAF_PA_DEBUG("techMask: %d",(int)techMask);
         LocationEngineInfodata->techMask = (taf_pa_location_LocationTechnologyType_t) techMask;
         LocationEngineInfodata->gPtpTime = locationInfo->getElapsedGptpTime();
         LocationEngineInfodata->gPtpTimeUnc = locationInfo->getElapsedGptpTimeUnc();
@@ -2905,31 +2905,31 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
         telux::loc::NavigationSolution navSol = locationInfo->getNavigationSolution();
         if (navSol.to_ulong() != 0) {
             LocationEngineInfodata->naviSolution = (taf_pa_location_NavigationSolutionType_t)convertTeluxToNavigationSolutionType(navSol);
-            PA_DEBUG("LocationEngineInfodata->naviSolution :%lu",LocationEngineInfodata->naviSolution);
+            TAF_PA_DEBUG("LocationEngineInfodata->naviSolution :%lu",LocationEngineInfodata->naviSolution);
         } else {
-            PA_ERROR("Received invalid navigation solution from locationInfo, setting to 0");
+            TAF_PA_ERROR("Received invalid navigation solution from locationInfo, setting to 0");
             LocationEngineInfodata->naviSolution = (taf_pa_location_NavigationSolutionType_t)0;
         }
-        PA_DEBUG("LocationEngineInfodata->naviSolution :%lu",LocationEngineInfodata->naviSolution);
+        TAF_PA_DEBUG("LocationEngineInfodata->naviSolution :%lu",LocationEngineInfodata->naviSolution);
         LocationEngineInfodata->dgnssStationIds = locationInfo->getDgnssStationIds();
-        PA_DEBUG("LocationEngineInfodata->dgnssStationIds : %u",
+        TAF_PA_DEBUG("LocationEngineInfodata->dgnssStationIds : %u",
                  LocationEngineInfodata->dgnssStationIds);
         LocationEngineInfodata->integrityRiskUsed = locationInfo->getIntegrityRiskUsed();
-        PA_DEBUG("LocationEngineInfodata->integrityRiskUsed -> %d",
+        TAF_PA_DEBUG("LocationEngineInfodata->integrityRiskUsed -> %d",
                  LocationEngineInfodata->integrityRiskUsed);
         LocationEngineInfodata->protectionlevelAlongTrack = locationInfo->getProtectionLevelAlongTrack();
-        PA_DEBUG("LocationEngineInfodata->protectionlevelAlongTrackd -> %lf",
+        TAF_PA_DEBUG("LocationEngineInfodata->protectionlevelAlongTrackd -> %lf",
                  LocationEngineInfodata->protectionlevelAlongTrack);
         LocationEngineInfodata->protectionlevelCrossTrack = locationInfo->getProtectionLevelCrossTrack();
-        PA_DEBUG(" LocationEngineInfodata->protectionlevelCrossTrack -> %lf", LocationEngineInfodata->protectionlevelCrossTrack);
+        TAF_PA_DEBUG(" LocationEngineInfodata->protectionlevelCrossTrack -> %lf", LocationEngineInfodata->protectionlevelCrossTrack);
         LocationEngineInfodata->protectionlevelVertical = locationInfo->getProtectionLevelVertical();
-        PA_DEBUG("LocationEngineInfodata->protectionlevelVertical -> %lf",
+        TAF_PA_DEBUG("LocationEngineInfodata->protectionlevelVertical -> %lf",
                  LocationEngineInfodata->protectionlevelVertical);
         LocationEngineInfodata->ageOfCorrections = locationInfo->getAgeOfCorrections();
-        PA_DEBUG(" LocationEngineInfodata->ageOfCorrections -> %lu",
+        TAF_PA_DEBUG(" LocationEngineInfodata->ageOfCorrections -> %lu",
                  LocationEngineInfodata->ageOfCorrections);
         LocationEngineInfodata->baselineLength = locationInfo->getBaselineLength();
-        PA_DEBUG("LocationEngineInfodata->baselineLength -> %lf",
+        TAF_PA_DEBUG("LocationEngineInfodata->baselineLength -> %lf",
                  LocationEngineInfodata->baselineLength);
         std::vector<telux::loc::GnssMeasurementInfo> measInfo = locationInfo->getmeasUsageInfo();
         for (const auto &info : measInfo) {
@@ -2954,18 +2954,18 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
         locListener7->onDetailedEngineLocationUpdate(locationId_, LocationEngineInfo, eventListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onEvent");
+        TAF_PA_ERROR("unable to find event Listener for onEvent");
     }
 
 }
 
-pa_result_t LocationPAController::deinitialize()
+taf_pa_result_t LocationPAController::deinitialize()
 {
-    PA_INFO("Starting location PA deinitialization...");
+    TAF_PA_INFO("Starting location PA deinitialization...");
 
     // Step 1: Release all location clients. Each ReleaseLocationClient() call removes the
     // client from the map and calls CleanUp() which deregisters SDK listeners.
-    PA_INFO("Releasing all location clients...");
+    TAF_PA_INFO("Releasing all location clients...");
     {
         // Collect IDs first to avoid iterator invalidation during erasure.
         std::vector<taf_pa_location_LocationId> clientIds;
@@ -2983,13 +2983,13 @@ pa_result_t LocationPAController::deinitialize()
     // Step 2: Deinitialize DGNSS manager if it is still active.
     if (mDgnssManager)
     {
-        PA_INFO("Deinitializing DGNSS manager during deinit...");
+        TAF_PA_INFO("Deinitializing DGNSS manager during deinit...");
         DeInitializeDgnss(nullptr, std::any{});
     }
 
     // Step 3: Clear DGNSS event listener and context under mutex so no further
     // callbacks are dispatched after this point.
-    PA_INFO("Clearing dgnssListener_ and dgnssListenerContext_");
+    TAF_PA_INFO("Clearing dgnssListener_ and dgnssListenerContext_");
     {
         std::lock_guard<std::mutex> lock(mutex_);
         dgnssListener_ = nullptr;
@@ -2997,42 +2997,42 @@ pa_result_t LocationPAController::deinitialize()
     }
 
     // Step 4: Reset location configurator shared pointer.
-    PA_INFO("Resetting mLocationConfigurator");
+    TAF_PA_INFO("Resetting mLocationConfigurator");
     mLocationConfigurator.reset();
 
-    PA_INFO("Location PA deinitialization complete.");
-    return PA_OK;
+    TAF_PA_INFO("Location PA deinitialization complete.");
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::location::taf_pa_location_Deinit()
+taf_pa_result_t tafpa::location::taf_pa_location_Deinit()
 {
-    PA_DEBUG("PA implementation.");
+    TAF_PA_DEBUG("PA implementation.");
 
     // Check if initialized before attempting deinit
     if (!gLocationPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return TAF_PA_FAULT;
     }
 
     auto paCtrl = LocationPAController::getInstance();
-    pa_result_t res = paCtrl->deinitialize();
-    if (res == PA_OK)
+    taf_pa_result_t res = paCtrl->deinitialize();
+    if (res == TAF_PA_OK)
     {
         gLocationPaInitialized.store(false, std::memory_order_release);
-        PA_INFO("Location platform adaptor initialization flag reset to false.");
-        PA_INFO("Location Platform adapter deinitialization done.");
+        TAF_PA_INFO("Location platform adaptor initialization flag reset to false.");
+        TAF_PA_INFO("Location Platform adapter deinitialization done.");
     }
     else
     {
-        PA_ERROR("Location Platform adapter deinitialization failed.");
+        TAF_PA_ERROR("Location Platform adapter deinitialization failed.");
     }
     return res;
 }
 
 void LocationPAController::PALocationClient::onGnssMeasurementsInfo(const telux::loc::GnssMeasurements &measurementInfo)
 {
-    PA_DEBUG( "**** onGnssMeasurementsInfo Information -->PA****" );
+    TAF_PA_DEBUG( "**** onGnssMeasurementsInfo Information -->PA****" );
 
     std::shared_ptr<taf_pa_location_GnssMeasurements_t> measurementsInfo = std::make_shared<taf_pa_location_GnssMeasurements_t>();
 
@@ -3059,7 +3059,7 @@ void LocationPAController::PALocationClient::onGnssMeasurementsInfo(const telux:
 
     std::vector<telux::loc::GnssMeasurementsData> measData = measurementInfo.measurements;
 
-    PA_DEBUG("measData.size() : %d", (int)measData.size());
+    TAF_PA_DEBUG("measData.size() : %d", (int)measData.size());
 
     measurementsInfo->measurements.clear();
     measurementsInfo->measurements.reserve(measData.size());
@@ -3107,7 +3107,7 @@ void LocationPAController::PALocationClient::onGnssMeasurementsInfo(const telux:
         locListener8->onGnssMeasurementsInfo(locationId_,measurementsInfo,eventListenerContext_);
     }
     else{
-        PA_ERROR("unable to find event Listener for onGnssMeasurementsInfo");
+        TAF_PA_ERROR("unable to find event Listener for onGnssMeasurementsInfo");
     }
 
 }

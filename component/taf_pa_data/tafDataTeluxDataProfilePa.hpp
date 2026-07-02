@@ -172,32 +172,32 @@ namespace data
 
         void Init(taf::pa::data::SlotCount_e slotCount);
         void Deinit();
-        pa_result_t PaGetSubsysState(taf::pa::data::SlotId_e slotId, SubsystemState_e &sState);
-        pa_result_t SetSubsysState
+        taf_pa_result_t PaGetSubsysState(taf::pa::data::SlotId_e slotId, SubsystemState_e &sState);
+        taf_pa_result_t SetSubsysState
         (
             taf::pa::data::SlotId_e slotId,
             SubsystemState_e sState,
             bool bSendEvent=false
         );
-        pa_result_t PaRegisterProfileCallbacks();
-        pa_result_t PaDeregisterProfileCallbacks();
-        pa_result_t PaListProfiles( taf::pa::data::PhoneId_e phoneId,
+        taf_pa_result_t PaRegisterProfileCallbacks();
+        taf_pa_result_t PaDeregisterProfileCallbacks();
+        taf_pa_result_t PaListProfiles( taf::pa::data::PhoneId_e phoneId,
                                     taf_pa_data_profile_GetAllAsyncCb callback,
                                     void *contextPtr);
-        pa_result_t PaGetProfileInfo(PhoneId_e phoneId, ProfileInfo_t &profileInfo);
-        pa_result_t PaCreateProfile(
+        taf_pa_result_t PaGetProfileInfo(PhoneId_e phoneId, ProfileInfo_t &profileInfo);
+        taf_pa_result_t PaCreateProfile(
             PhoneId_e phoneId,
             const ProfileInfo_t &profileInfo,
             ProfileId_e &profileId);
-        pa_result_t PaUpdateProfile(PhoneId_e phoneId, const ProfileInfo_t &profileInfo);
-        pa_result_t PaDeleteProfile(PhoneId_e phoneId, const ProfileInfo_t &profileInfo);
-        pa_result_t PaAddProfileEventsCallback
+        taf_pa_result_t PaUpdateProfile(PhoneId_e phoneId, const ProfileInfo_t &profileInfo);
+        taf_pa_result_t PaDeleteProfile(PhoneId_e phoneId, const ProfileInfo_t &profileInfo);
+        taf_pa_result_t PaAddProfileEventsCallback
         (
             taf_pa_data_ProfileEventsCb callBack,
             std::shared_ptr<void> context,
             uint16_t &id
         );
-        pa_result_t PaRemoveProfileEventsCallback(uint16_t id);
+        taf_pa_result_t PaRemoveProfileEventsCallback(uint16_t id);
         // Handle profile events from onProfileUpdate
         void PaUpdateProfileEventInfo
         (
@@ -280,8 +280,8 @@ namespace data
 
         //Functions
         void initDataProfileManagers();
-        pa_result_t deInitDataProfileManagers();
-        pa_result_t getProfileDetails
+        taf_pa_result_t deInitDataProfileManagers();
+        taf_pa_result_t getProfileDetails
         (
             SlotId slotId,
             int profileId,
