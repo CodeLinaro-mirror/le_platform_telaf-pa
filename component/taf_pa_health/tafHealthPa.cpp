@@ -72,7 +72,7 @@ std::shared_ptr<tafHmsListenerPA> stateListener;
 std::shared_ptr<ModemStatusPA> modemStatus = std::make_shared<ModemStatusPA>();
 
 
-pa_result_t taf_pa_health_PhoneInit(void)
+taf_pa_result_t taf_pa_health_PhoneInit(void)
 {
     if (!modemStatus->phoneManager_)
     {
@@ -86,20 +86,20 @@ pa_result_t taf_pa_health_PhoneInit(void)
                 }
                 catch (const std::future_error &e)
                 {
-                    PA_ERROR("Promise already satisfied: %s", e.what());
+                    TAF_PA_ERROR("Promise already satisfied: %s", e.what());
                 }
             });
 
         if (!tempManager)
         {
-            PA_ERROR("ERROR - Failed to get Phone Manager");
-            return PA_FAULT;
+            TAF_PA_ERROR("ERROR - Failed to get Phone Manager");
+            return TAF_PA_FAULT;
         }
 
         const auto statusNow = tempManager->getServiceStatus();
         if (statusNow != telux::common::ServiceStatus::SERVICE_AVAILABLE)
         {
-            PA_INFO("Phone Manager subsystem is not ready, please wait");
+            TAF_PA_INFO("Phone Manager subsystem is not ready, please wait");
         }
 
         auto fut = prom->get_future();
@@ -109,29 +109,29 @@ pa_result_t taf_pa_health_PhoneInit(void)
             auto status = fut.get(); // Wait until available
             if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
             {
-                PA_ERROR("ERROR - Unable to initialize telephony subsystem");
-                return PA_FAULT;
+                TAF_PA_ERROR("ERROR - Unable to initialize telephony subsystem");
+                return TAF_PA_FAULT;
             }
-            PA_INFO("Phone Manager subsystem is ready.");
+            TAF_PA_INFO("Phone Manager subsystem is ready.");
             modemStatus->phoneManager_ = tempManager;
             g_health_initialized.store(true, std::memory_order_release);
         }
         else
         {
-            PA_ERROR("Timeout for waiting status callback");
-            return PA_FAULT;
+            TAF_PA_ERROR("Timeout for waiting status callback");
+            return TAF_PA_FAULT;
         }
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_health_ReqPhoneOperatingMode() {
+taf_pa_result_t taf_pa_health_ReqPhoneOperatingMode() {
     if (!modemStatus->phoneManager_) {
-        PA_ERROR("reqsOperatingMode called before phoneInit");
-        return PA_FAULT;
+        TAF_PA_ERROR("reqsOperatingMode called before phoneInit");
+        return TAF_PA_FAULT;
     }
     modemStatus->phoneManager_->requestOperatingMode(modemStatus->shared_from_this());
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 ModemOperationalStatusPA MapOperationStatus(telux::common::OperationalStatus status) {
@@ -182,7 +182,7 @@ void tafHmsListenerPA:: onStateChange(telux::common::SubsystemInfo subsystemInfo
     }
 }
 
-pa_result_t taf_pa_health_ModemNotificationInit(void)
+taf_pa_result_t taf_pa_health_ModemNotificationInit(void)
 {
     telux::common::ServiceStatus serviceStatus;
     std::promise<telux::common::ServiceStatus> p{};
@@ -194,8 +194,8 @@ pa_result_t taf_pa_health_ModemNotificationInit(void)
         p.set_value(srvStatus);
     });
     if (!subsystemMgr) {
-        PA_ERROR("Couldn't get the subsystemMgr");
-        return PA_FAULT;
+        TAF_PA_ERROR("Couldn't get the subsystemMgr");
+        return TAF_PA_FAULT;
     }
 
     auto future = p.get_future();
@@ -203,83 +203,83 @@ pa_result_t taf_pa_health_ModemNotificationInit(void)
             == std::future_status::ready)
     {
         serviceStatus = future.get();
-        PA_INFO("serviceStatus get the callback waiting");
+        TAF_PA_INFO("serviceStatus get the callback waiting");
         if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-            PA_ERROR("ISubsystemManager unavailable");
-            return PA_FAULT;
+            TAF_PA_ERROR("ISubsystemManager unavailable");
+            return TAF_PA_FAULT;
         }
     }
     else
     {
-        PA_ERROR("Timeout waiting for serviceStatus callback");
-        return PA_FAULT;
+        TAF_PA_ERROR("Timeout waiting for serviceStatus callback");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_health_RegModemStatusUpdateHandler
+taf_pa_result_t taf_pa_health_RegModemStatusUpdateHandler
 (
     taf_pa_health_ModemStatusUpdateHandler_t handlerFunc
 )
 {
     if (handlerFunc == nullptr)
     {
-        PA_ERROR("Parameter is NULL");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Parameter is NULL");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (ModemStatusUpdateHandlerPtr != nullptr)
     {
-        PA_ERROR("Modem Status Change handler already registered.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Modem Status Change handler already registered.");
+        return TAF_PA_FAULT;
     }
 
     {
         std::lock_guard<std::mutex> lock(healthHandlerMutex);
         ModemStatusUpdateHandlerPtr = handlerFunc;
     }
-    PA_INFO("Modem Status Change Handler registered.");
-    return PA_OK;
+    TAF_PA_INFO("Modem Status Change Handler registered.");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_health_RegModemOperationModeUpdateHandler
+taf_pa_result_t taf_pa_health_RegModemOperationModeUpdateHandler
 (
     taf_pa_health_ModemOperatingModeUpdateHandler_t handlerFunc
 )
 {
     if (handlerFunc == nullptr)
     {
-        PA_ERROR("Parameter is NULL");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Parameter is NULL");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (ModemOperationModeUpdateHandlerPtr != nullptr)
     {
-        PA_ERROR("Modem Operation Mode Change handler already registered.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Modem Operation Mode Change handler already registered.");
+        return TAF_PA_FAULT;
     }
 
     {
         std::lock_guard<std::mutex> lock(healthHandlerMutex);
         ModemOperationModeUpdateHandlerPtr = handlerFunc;
     }
-    PA_INFO("Modem Operation Mode Change Handler registered.");
-    return PA_OK;
+    TAF_PA_INFO("Modem Operation Mode Change Handler registered.");
+    return TAF_PA_OK;
 }
 
 
-pa_result_t taf_pa_health_DeregModemListener(void)
+taf_pa_result_t taf_pa_health_DeregModemListener(void)
 {
     if (!subsystemMgr)
     {
-        PA_WARN("Subsystem manager not initialized, nothing to deregister.");
-        return PA_OK;
+        TAF_PA_WARN("Subsystem manager not initialized, nothing to deregister.");
+        return TAF_PA_OK;
     }
 
     if (!stateListener)
     {
-        PA_WARN("State listener not registered, nothing to deregister.");
-        return PA_OK;
+        TAF_PA_WARN("State listener not registered, nothing to deregister.");
+        return TAF_PA_OK;
     }
 
     // Reconstruct the same subsystem info list used during registration.
@@ -293,17 +293,17 @@ pa_result_t taf_pa_health_DeregModemListener(void)
         subsystemMgr->deRegisterListener(stateListener);
     if (ec != telux::common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to deregister modem listener. ErrorCode: %d",
+        TAF_PA_ERROR("Failed to deregister modem listener. ErrorCode: %d",
                  static_cast<int>(ec));
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     stateListener.reset();
-    PA_INFO("Modem listener deregistered.");
-    return PA_OK;
+    TAF_PA_INFO("Modem listener deregistered.");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_health_RegModemListener(void)
+taf_pa_result_t taf_pa_health_RegModemListener(void)
 {
     telux::common::ErrorCode ec;
     telux::common::SubsystemInfo subsysInfo{};
@@ -315,12 +315,12 @@ pa_result_t taf_pa_health_RegModemListener(void)
     listOfSubsystems.push_back(subsysInfo);
     ec = subsystemMgr->registerListener(stateListener, listOfSubsystems);
     if (ec != telux::common::ErrorCode::SUCCESS) {
-        PA_ERROR("Can't register listener, err ");
-        return PA_FAULT;
+        TAF_PA_ERROR("Can't register listener, err ");
+        return TAF_PA_FAULT;
     }
-    PA_INFO("registerListener ok");
+    TAF_PA_INFO("registerListener ok");
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 static std::string OperatingModeToString(telux::tel::OperatingMode operatingMode)
@@ -341,10 +341,10 @@ static std::string OperatingModeToString(telux::tel::OperatingMode operatingMode
 void ModemStatusPA::operatingModeResponse(telux::tel::OperatingMode operatingMode,
                                         telux::common::ErrorCode error)
 {
-    pa_result_t status = PA_FAULT;
+    taf_pa_result_t status = TAF_PA_FAULT;
     if (error == telux::common::ErrorCode::SUCCESS)
     {
-        status = PA_OK;
+        status = TAF_PA_OK;
         switch (operatingMode)
         {
             case telux::tel::OperatingMode::ONLINE:
@@ -355,13 +355,13 @@ void ModemStatusPA::operatingModeResponse(telux::tel::OperatingMode operatingMod
             case telux::tel::OperatingMode::RESETTING:
             case telux::tel::OperatingMode::SHUTTING_DOWN:
             default:
-                PA_DEBUG("Operating Mode is: %s", OperatingModeToString(operatingMode).c_str());
+                TAF_PA_DEBUG("Operating Mode is: %s", OperatingModeToString(operatingMode).c_str());
                 break;
         }
     }
     else
     {
-        PA_ERROR("Operating Mode unknown, errorCode: %d", static_cast<int>(error));
+        TAF_PA_ERROR("Operating Mode unknown, errorCode: %d", static_cast<int>(error));
     }
 
     taf_pa_health_ModemOperatingModeUpdateHandler_t modeHandler = nullptr;
@@ -376,52 +376,52 @@ void ModemStatusPA::operatingModeResponse(telux::tel::OperatingMode operatingMod
     }
 }
 
-pa_result_t taf_pa_health_Deinit(void)
+taf_pa_result_t taf_pa_health_Deinit(void)
 {
-    PA_INFO("Starting health PA deinitialization...");
+    TAF_PA_INFO("Starting health PA deinitialization...");
 
     // Check if initialization was successful before proceeding with deinitialization
     if (!g_health_initialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return TAF_PA_FAULT;
     }
 
     // Step 1: Deregister modem listener from subsystem manager
-    pa_result_t result = taf_pa_health_DeregModemListener();
-    if (result != PA_OK)
+    taf_pa_result_t result = taf_pa_health_DeregModemListener();
+    if (result != TAF_PA_OK)
     {
-        PA_ERROR("Failed to deregister modem listener during deinit.");
+        TAF_PA_ERROR("Failed to deregister modem listener during deinit.");
         // Continue cleanup even if deregistration failed
     }
 
     // Step 2: Reset subsystem manager shared pointer
-    PA_INFO("Resetting subsystemMgr");
+    TAF_PA_INFO("Resetting subsystemMgr");
     subsystemMgr.reset();
 
     // Step 3: Reset phone manager shared pointer (with null check)
     if (modemStatus)
     {
-        PA_INFO("Resetting phoneManager_");
+        TAF_PA_INFO("Resetting phoneManager_");
         modemStatus->phoneManager_.reset();
     }
     else
     {
-        PA_WARN("modemStatus is null, skipping phoneManager_ reset");
+        TAF_PA_WARN("modemStatus is null, skipping phoneManager_ reset");
     }
 
     // Step 4: Clear function pointer callbacks so no further notifications are dispatched.
     // Hold healthHandlerMutex so the clears are mutually exclusive with any in-flight
     // SB callback (onStateChange / operatingModeResponse) that reads the same pointers
     // under the same mutex.
-    PA_INFO("Clearing ModemStatusUpdateHandlerPtr and ModemOperationModeUpdateHandlerPtr");
+    TAF_PA_INFO("Clearing ModemStatusUpdateHandlerPtr and ModemOperationModeUpdateHandlerPtr");
     {
         std::lock_guard<std::mutex> lock(healthHandlerMutex);
         ModemStatusUpdateHandlerPtr = nullptr;
         ModemOperationModeUpdateHandlerPtr = nullptr;
     }
 
-    PA_INFO("Health PA deinitialization complete.");
+    TAF_PA_INFO("Health PA deinitialization complete.");
     g_health_initialized.store(false, std::memory_order_release);
-    return PA_OK;
+    return TAF_PA_OK;
 }

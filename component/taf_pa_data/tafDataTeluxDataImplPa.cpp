@@ -57,19 +57,19 @@ void taf::pa::data::TafPaTeluxData::Init()
  */
 void taf::pa::data::TafPaTeluxData::Deinit()
 {
-    pa_result_t result = deInitDataServingSystemManagers();
-    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result, "deInitDataServingSystemManagers failed");
+    taf_pa_result_t result = deInitDataServingSystemManagers();
+    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "deInitDataServingSystemManagers failed");
 }
 
 void taf::pa::data::TafPaTeluxData::initPhoneManager()
 {
-    PA_INFO("Initialize phone manager");
+    TAF_PA_INFO("Initialize phone manager");
     auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
 
     phoneManager_ = phoneFactory.getPhoneManager();
     if (!phoneManager_)
     {
-        PA_ERROR("Failed to get Phone Manager instance");
+        TAF_PA_ERROR("Failed to get Phone Manager instance");
         return;
     }
 
@@ -77,7 +77,7 @@ void taf::pa::data::TafPaTeluxData::initPhoneManager()
 
     if (phoneManagerStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_INFO("Phone Manager subsystem is not ready, waiting for it to be ready...");
+        TAF_PA_INFO("Phone Manager subsystem is not ready, waiting for it to be ready...");
 
         auto phoneMgrPromPtr =
             std::make_shared<std::promise<telux::common::ServiceStatus>>();
@@ -85,7 +85,7 @@ void taf::pa::data::TafPaTeluxData::initPhoneManager()
         phoneManager_ = phoneFactory.getPhoneManager(
             [phoneMgrPromPtr](telux::common::ServiceStatus status)
             {
-                PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
+                TAF_PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
                 try {
                     if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
                         phoneMgrPromPtr->set_value(
@@ -95,15 +95,15 @@ void taf::pa::data::TafPaTeluxData::initPhoneManager()
                             telux::common::ServiceStatus::SERVICE_FAILED);
                     }
                 } catch (const std::exception &e) {
-                    PA_ERROR("Exception setting phone manager promise: %s", e.what());
+                    TAF_PA_ERROR("Exception setting phone manager promise: %s", e.what());
                 } catch (...) {
-                    PA_ERROR("Unknown error setting phone manager promise");
+                    TAF_PA_ERROR("Unknown error setting phone manager promise");
                 }
             });
 
         if (!phoneManager_)
         {
-            PA_ERROR("Failed to get Phone Manager instance with init callback");
+            TAF_PA_ERROR("Failed to get Phone Manager instance with init callback");
             return;
         }
 
@@ -114,7 +114,7 @@ void taf::pa::data::TafPaTeluxData::initPhoneManager()
 
         if (std::future_status::timeout == waitStatus)
         {
-            PA_ERROR("Timeout waiting for Phone Manager subsystem");
+            TAF_PA_ERROR("Timeout waiting for Phone Manager subsystem");
             return;
         }
         else
@@ -123,33 +123,33 @@ void taf::pa::data::TafPaTeluxData::initPhoneManager()
         }
     }
 
-    PA_INFO("Phone Manager status: %d", TO_INT(phoneManagerStatus));
+    TAF_PA_INFO("Phone Manager status: %d", TO_INT(phoneManagerStatus));
 
     if (telux::common::ServiceStatus::SERVICE_AVAILABLE == phoneManagerStatus)
     {
         dataPhoneMngrInitState_ = SubsystemState_e::AVAILABLE;
-        PA_INFO("Phone manager initialized.");
+        TAF_PA_INFO("Phone manager initialized.");
     }
     else
     {
-        PA_ERROR("Phone Manager subsystem not available. Status: %d", TO_INT(phoneManagerStatus));
+        TAF_PA_ERROR("Phone Manager subsystem not available. Status: %d", TO_INT(phoneManagerStatus));
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::GetServinSystemInitState
+taf_pa_result_t taf::pa::data::TafPaTeluxData::GetServinSystemInitState
 (
     taf::pa::data::SlotId_e slotId,
     taf::pa::data::SubsystemState_e &sState
 )
 {
     std::shared_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
-    PA_INFO("Serving system init state for slot id[%d]: %d", slotId,
+    TAF_PA_INFO("Serving system init state for slot id[%d]: %d", slotId,
                                             servingSystemManagersInitStateMap_[slotId]);
     sState = servingSystemManagersInitStateMap_[slotId];
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::SetServingSystemInitState
+taf_pa_result_t taf::pa::data::TafPaTeluxData::SetServingSystemInitState
 (
     taf::pa::data::SlotId_e slotId,
     taf::pa::data::SubsystemState_e sState,
@@ -160,19 +160,19 @@ pa_result_t taf::pa::data::TafPaTeluxData::SetServingSystemInitState
         std::unique_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
         servingSystemManagersInitStateMap_[slotId] = sState;
     }
-    PA_INFO("Serving system init state for slot id[%d]: %d", slotId, TO_INT(sState));
+    TAF_PA_INFO("Serving system init state for slot id[%d]: %d", slotId, TO_INT(sState));
 
     if (bSendEvent)
     {
-        PA_INFO("Send event to clients.");
+        TAF_PA_INFO("Send event to clients.");
         SubsystemEvent_t event;
-        pa_result_t result = PaGetPhoneIdFromSlotId(slotId, event.phoneId);
-        TAF_PA_ERROR_IF_RET_VAL(PA_OK != result, result, "PaGetPhoneIdFromSlotId err: %d", result);
+        taf_pa_result_t result = PaGetPhoneIdFromSlotId(slotId, event.phoneId);
+        TAF_PA_ERROR_IF_RET_VAL(TAF_PA_OK != result, result, "PaGetPhoneIdFromSlotId err: %d", result);
         event.subsystem      = Subsystem_e::SERVING_SYSTEM_MANAGER;
         event.subsystemState = sState;
         SendSubsystemEventToClients(event);
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 void taf::pa::data::TafPaTeluxData::checkAndUpdateSlotCount()
@@ -181,7 +181,7 @@ void taf::pa::data::TafPaTeluxData::checkAndUpdateSlotCount()
     {
         bMultiSimSupported_ = true;
     }
-    PA_INFO("Multi-SIM supported: %s", (bMultiSimSupported_ ? "true" : "false"));
+    TAF_PA_INFO("Multi-SIM supported: %s", (bMultiSimSupported_ ? "true" : "false"));
 
     if (bMultiSimSupported_)
     {
@@ -192,26 +192,26 @@ void taf::pa::data::TafPaTeluxData::checkAndUpdateSlotCount()
         slotCount_ = taf::pa::data::SlotCount_e::ONE;
     }
 
-    PA_INFO("Sim slot count : %d", TO_INT(slotCount_));
+    TAF_PA_INFO("Sim slot count : %d", TO_INT(slotCount_));
 
     // Update the phone IDs
     telux::common::Status status = phoneManager_->getPhoneIds(phoneIds_);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to get phone IDs. Status: %d. Set to 1", TO_INT(status));
+        TAF_PA_ERROR("Failed to get phone IDs. Status: %d. Set to 1", TO_INT(status));
         phoneIds_.clear();
         phoneIds_.push_back(1); // Set to 1 if failed to get phone IDs.
     }
-    PA_DEBUG ("Number of phones: %zu", phoneIds_.size());
+    TAF_PA_DEBUG ("Number of phones: %zu", phoneIds_.size());
     for (auto phoneId : phoneIds_)
     {
-        PA_DEBUG ("Phone ID: %d", phoneId);
+        TAF_PA_DEBUG ("Phone ID: %d", phoneId);
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::RegisterDataServingSystemListeners()
+taf_pa_result_t taf::pa::data::TafPaTeluxData::RegisterDataServingSystemListeners()
 {
-    PA_INFO("Registering Data Serving System listeners.");
+    TAF_PA_INFO("Registering Data Serving System listeners.");
     bool allSuccess = true;
     std::vector<int> failedSlots;
 
@@ -226,52 +226,52 @@ pa_result_t taf::pa::data::TafPaTeluxData::RegisterDataServingSystemListeners()
             }
             if (SubsystemState_e::AVAILABLE != subsysState)
             {
-                PA_ERROR("Subsystem not initialized for slot id: %d", slotId);
+                TAF_PA_ERROR("Subsystem not initialized for slot id: %d", slotId);
                 allSuccess = false;
                 failedSlots.push_back(slotId);
                 // Go to the next slot if available
                 continue;
             }
             telux::common::Status status = telux::common::Status::SUCCESS;
-            PA_INFO("Registering SSL for slot %d", slotId);
+            TAF_PA_INFO("Registering SSL for slot %d", slotId);
             status = dataServingSystemManagersMap_[(SlotId)slotId]->registerListener(
                                                     dataServingSystemListenersMap_[(SlotId)slotId]);
             if (telux::common::Status::SUCCESS == status)
             {
-                PA_INFO("Serving system SSL for slot ID %d registered.", slotId);
+                TAF_PA_INFO("Serving system SSL for slot ID %d registered.", slotId);
                 bDataSSLRegisteredMap_[(SlotId)slotId] = true;
             }
             else
             {
-                PA_ERROR("Register SSL for slot ID %d failed: %d", slotId, TO_INT(status));
+                TAF_PA_ERROR("Register SSL for slot ID %d failed: %d", slotId, TO_INT(status));
                 allSuccess = false;
                 failedSlots.push_back(slotId);
             }
         }
         else
         {
-            PA_INFO("SSL for slot %d already registered.", slotId);
+            TAF_PA_INFO("SSL for slot %d already registered.", slotId);
         }
     }
     if (!allSuccess)
     {
-        PA_ERROR("=== Registration Failed ===");
-        PA_ERROR("Failed to register listeners for %zu slot(s)", failedSlots.size());
+        TAF_PA_ERROR("=== Registration Failed ===");
+        TAF_PA_ERROR("Failed to register listeners for %zu slot(s)", failedSlots.size());
         for (auto slot : failedSlots)
         {
-            PA_ERROR("  - Slot %d: REGISTRATION FAILED", slot);
+            TAF_PA_ERROR("  - Slot %d: REGISTRATION FAILED", slot);
         }
-        PA_ERROR("============================");
-        return PA_FAULT;
+        TAF_PA_ERROR("============================");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("All serving system listeners successfully registered");
-    return PA_OK;
+    TAF_PA_INFO("All serving system listeners successfully registered");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::DeregisterDataServingSystemListeners()
+taf_pa_result_t taf::pa::data::TafPaTeluxData::DeregisterDataServingSystemListeners()
 {
-    PA_INFO("Unregistering Data Serving System listeners.");
+    TAF_PA_INFO("Unregistering Data Serving System listeners.");
 
     bool allSuccess = true;
     std::vector<int> failedSlots;
@@ -280,18 +280,18 @@ pa_result_t taf::pa::data::TafPaTeluxData::DeregisterDataServingSystemListeners(
     {
         if (true == bDataSSLRegisteredMap_[(SlotId)slotId])
         {
-            PA_INFO("Deregistering SSL for slot %d", slotId);
+            TAF_PA_INFO("Deregistering SSL for slot %d", slotId);
             telux::common::Status status = dataServingSystemManagersMap_[(SlotId)slotId]->
                 deregisterListener(dataServingSystemListenersMap_[(SlotId)slotId]);
 
             if (telux::common::Status::SUCCESS == status)
             {
-                PA_INFO("Serving system SSL for slot ID %d unregistered.", slotId);
+                TAF_PA_INFO("Serving system SSL for slot ID %d unregistered.", slotId);
                 bDataSSLRegisteredMap_[(SlotId)slotId] = false;
             }
             else
             {
-                PA_ERROR("FAILED to unregister SSL for slot ID %d. Status: %d",
+                TAF_PA_ERROR("FAILED to unregister SSL for slot ID %d. Status: %d",
                          slotId, TO_INT(status));
                 failedSlots.push_back(slotId);
                 allSuccess = false;
@@ -299,24 +299,24 @@ pa_result_t taf::pa::data::TafPaTeluxData::DeregisterDataServingSystemListeners(
         }
         else
         {
-            PA_INFO("SSL for slot %d not registered.", slotId);
+            TAF_PA_INFO("SSL for slot %d not registered.", slotId);
         }
     }
 
     if (!allSuccess)
     {
-        PA_ERROR("=== Deregistration Failed ===");
-        PA_ERROR("Failed to deregister listeners for %zu slot(s)", failedSlots.size());
+        TAF_PA_ERROR("=== Deregistration Failed ===");
+        TAF_PA_ERROR("Failed to deregister listeners for %zu slot(s)", failedSlots.size());
         for (auto slot : failedSlots)
         {
-            PA_ERROR("  - Slot %d: DEREGISTRATION FAILED", slot);
+            TAF_PA_ERROR("  - Slot %d: DEREGISTRATION FAILED", slot);
         }
-        PA_ERROR("============================");
-        return PA_FAULT;
+        TAF_PA_ERROR("============================");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("All serving system listeners successfully deregistered");
-    return PA_OK;
+    TAF_PA_INFO("All serving system listeners successfully deregistered");
+    return TAF_PA_OK;
 }
 
 /**
@@ -332,7 +332,7 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
     std::vector<int> unavailableSlots;
     std::vector<int> successfulSlots;
 
-    PA_INFO("Starting data serving system manager initialization for %d slot(s)", TO_INT(slotCount_));
+    TAF_PA_INFO("Starting data serving system manager initialization for %d slot(s)", TO_INT(slotCount_));
 
     for (auto slotId = 1; slotId <= TO_INT(slotCount_); slotId++)
     {
@@ -346,12 +346,12 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
         }
         if (taf::pa::data::SubsystemState_e::AVAILABLE == initCheckState)
         {
-            PA_INFO("Data serving system manager already initialized for slot ID %d.", slotId);
+            TAF_PA_INFO("Data serving system manager already initialized for slot ID %d.", slotId);
             successfulSlots.push_back(slotId);
             continue;
         }
 
-        PA_INFO("Initializing data serving system manager for slot %d...", slotId);
+        TAF_PA_INFO("Initializing data serving system manager for slot %d...", slotId);
 
         // Initialize the data serving system manager for each slot
         // Create shared state for synchronization using condition variable
@@ -369,8 +369,8 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
             (SlotId)slotId, [state, slotId](telux::common::ServiceStatus svcStatus)
             {
                 SET_SDK_THREAD_NAME();
-                PA_INFO("getServingSystemManager callback for slot ID: %d", TO_INT(slotId));
-                PA_INFO("Data ServingSystem subsystem status: %d", TO_INT(svcStatus));
+                TAF_PA_INFO("getServingSystemManager callback for slot ID: %d", TO_INT(slotId));
+                TAF_PA_INFO("Data ServingSystem subsystem status: %d", TO_INT(svcStatus));
 
                 {
                     std::lock_guard<std::mutex> lock(state->mtx);
@@ -382,7 +382,7 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
 
         if (!dataSSMgr)
         {
-            PA_ERROR("Failed to get Data Serving System manager for slot %d", slotId);
+            TAF_PA_ERROR("Failed to get Data Serving System manager for slot %d", slotId);
             SetServingSystemInitState(paSlotId, SubsystemState_e::FAILED);
             failedSlots.push_back(slotId);
             // Continue processing other slots instead of returning
@@ -391,7 +391,7 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
 
         // Wait for the callback with timeout
         telux::common::ServiceStatus dataServSysMgrStatus;
-        PA_INFO("Waiting for Data Serving System subsystem to be ready for slot %d...", slotId);
+        TAF_PA_INFO("Waiting for Data Serving System subsystem to be ready for slot %d...", slotId);
 
         {
             std::unique_lock<std::mutex> lock(state->mtx);
@@ -403,7 +403,7 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
 
             if (!success)
             {
-                PA_ERROR("Timeout waiting for Data Serving System subsystem for slot %d", slotId);
+                TAF_PA_ERROR("Timeout waiting for Data Serving System subsystem for slot %d", slotId);
                 SetServingSystemInitState(paSlotId, SubsystemState_e::FAILED);
                 failedSlots.push_back(slotId);
                 // Continue processing other slots instead of returning
@@ -413,12 +413,12 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
             dataServSysMgrStatus = state->status;
         }
 
-        PA_INFO("DSS for slot %d status: %d", slotId, TO_INT(dataServSysMgrStatus));
+        TAF_PA_INFO("DSS for slot %d status: %d", slotId, TO_INT(dataServSysMgrStatus));
 
         // Handle different service status outcomes
         if (telux::common::ServiceStatus::SERVICE_AVAILABLE == dataServSysMgrStatus)
         {
-            PA_INFO("DSS for slot %d: AVAILABLE", slotId);
+            TAF_PA_INFO("DSS for slot %d: AVAILABLE", slotId);
             // Store the manager in the map with slot Id as index
             dataServingSystemManagersMap_.emplace((SlotId)slotId, dataSSMgr);
 
@@ -429,11 +429,11 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
             // Update that the SSL manager is initialized.
             SetServingSystemInitState(paSlotId, SubsystemState_e::AVAILABLE);
             successfulSlots.push_back(slotId);
-            PA_INFO("Data Serving System subsystem initialization for slot %d complete", slotId);
+            TAF_PA_INFO("Data Serving System subsystem initialization for slot %d complete", slotId);
         }
         else if (telux::common::ServiceStatus::SERVICE_UNAVAILABLE == dataServSysMgrStatus)
         {
-            PA_WARN("DSS for slot %d: UNAVAILABLE (temporary)", slotId);
+            TAF_PA_WARN("DSS for slot %d: UNAVAILABLE (temporary)", slotId);
             // Mark as unavailable but don't set FAILED state - this is temporary
             // The service may become available later
             unavailableSlots.push_back(slotId);
@@ -443,7 +443,7 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
         else
         {
             // Unknown/error status
-            PA_ERROR("Failed to init Data Serving subsystem for slot %d with status: %d",
+            TAF_PA_ERROR("Failed to init Data Serving subsystem for slot %d with status: %d",
                      slotId, TO_INT(dataServSysMgrStatus));
             SetServingSystemInitState(paSlotId, SubsystemState_e::FAILED);
             failedSlots.push_back(slotId);
@@ -453,59 +453,59 @@ void taf::pa::data::TafPaTeluxData::initDataServingSystemManagers()
     }
 
     // Log summary of initialization results
-    PA_INFO("=== Data Serving System Manager Initialization Summary ===");
-    PA_INFO("Total slots: %d", TO_INT(slotCount_));
-    PA_INFO("Successfully initialized: %zu slot(s)", successfulSlots.size());
+    TAF_PA_INFO("=== Data Serving System Manager Initialization Summary ===");
+    TAF_PA_INFO("Total slots: %d", TO_INT(slotCount_));
+    TAF_PA_INFO("Successfully initialized: %zu slot(s)", successfulSlots.size());
     if (!successfulSlots.empty())
     {
         for (auto slot : successfulSlots)
         {
-            PA_INFO("  - Slot %d: AVAILABLE", slot);
+            TAF_PA_INFO("  - Slot %d: AVAILABLE", slot);
         }
     }
 
     if (!unavailableSlots.empty())
     {
-        PA_WARN("Temporarily unavailable: %zu slot(s)", unavailableSlots.size());
+        TAF_PA_WARN("Temporarily unavailable: %zu slot(s)", unavailableSlots.size());
         for (auto slot : unavailableSlots)
         {
-            PA_WARN("  - Slot %d: UNAVAILABLE (may retry later)", slot);
+            TAF_PA_WARN("  - Slot %d: UNAVAILABLE (may retry later)", slot);
         }
     }
 
     if (!failedSlots.empty())
     {
-        PA_ERROR("Failed to initialize: %zu slot(s)", failedSlots.size());
+        TAF_PA_ERROR("Failed to initialize: %zu slot(s)", failedSlots.size());
         for (auto slot : failedSlots)
         {
-            PA_ERROR("  - Slot %d: FAILED", slot);
+            TAF_PA_ERROR("  - Slot %d: FAILED", slot);
         }
     }
-    PA_INFO("===========================================================");
+    TAF_PA_INFO("===========================================================");
 
     return;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::deInitDataServingSystemManagers()
+taf_pa_result_t taf::pa::data::TafPaTeluxData::deInitDataServingSystemManagers()
 {
-    PA_INFO("Starting data serving system managers deinitialization...");
+    TAF_PA_INFO("Starting data serving system managers deinitialization...");
 
     // Deregister callbacks with error checking
-    pa_result_t result = DeregisterDataServingSystemListeners();
-    if (PA_OK != result)
+    taf_pa_result_t result = DeregisterDataServingSystemListeners();
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("CRITICAL: Failed to deregister serving system listeners!");
-        PA_ERROR("Cannot safely proceed with cleanup - callbacks may still be active");
-        PA_ERROR("This could lead to crashes if SDK invokes callbacks after cleanup");
-        return PA_FAULT; // Do NOT clear maps if deregistration failed
+        TAF_PA_ERROR("CRITICAL: Failed to deregister serving system listeners!");
+        TAF_PA_ERROR("Cannot safely proceed with cleanup - callbacks may still be active");
+        TAF_PA_ERROR("This could lead to crashes if SDK invokes callbacks after cleanup");
+        return TAF_PA_FAULT; // Do NOT clear maps if deregistration failed
     }
 
-    PA_INFO("Callbacks successfully deregistered, proceeding with cleanup...");
+    TAF_PA_INFO("Callbacks successfully deregistered, proceeding with cleanup...");
 
-    PA_INFO("Clear dataServingSystemListenersMap_");
+    TAF_PA_INFO("Clear dataServingSystemListenersMap_");
     dataServingSystemListenersMap_.clear();
 
-    PA_INFO("Clear dataServingSystemManagersMap_");
+    TAF_PA_INFO("Clear dataServingSystemManagersMap_");
     dataServingSystemManagersMap_.clear();
 
     {
@@ -515,66 +515,41 @@ pa_result_t taf::pa::data::TafPaTeluxData::deInitDataServingSystemManagers()
     }
 
     // Clear subsystem state change event callbacks
-    PA_INFO("Clear subsystemEventsCallbacks_");
+    TAF_PA_INFO("Clear subsystemEventsCallbacks_");
     {
         std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
         subsystemEventsCallbacks_.clear();
     }
 
     // Clear roaming event callbacks
-    PA_INFO("Clear roamingEventsCallbacks_");
+    TAF_PA_INFO("Clear roamingEventsCallbacks_");
     {
         std::lock_guard<std::mutex> lock(roamingEventsCbksMtx_);
         roamingEventsCallbacks_.clear();
     }
 
     // Clear phone IDs vector and serving-system listener registration tracking map
-    PA_INFO("Clear phoneIds_ and bDataSSLRegisteredMap_");
+    TAF_PA_INFO("Clear phoneIds_ and bDataSSLRegisteredMap_");
     phoneIds_.clear();
     bDataSSLRegisteredMap_.clear();
 
     // Reset phone manager shared pointer and its init state so that any post-deinit
     // call that checks dataPhoneMngrInitState_ will correctly see FAILED.
-    PA_INFO("Reset phoneManager_ and dataPhoneMngrInitState_");
+    TAF_PA_INFO("Reset phoneManager_ and dataPhoneMngrInitState_");
     phoneManager_.reset();
     dataPhoneMngrInitState_ = SubsystemState_e::FAILED;
 
-    // Clear subsystem state change event callbacks
-    PA_INFO("Clear subsystemEventsCallbacks_");
-    {
-        std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
-        subsystemEventsCallbacks_.clear();
-    }
-
-    // Clear roaming event callbacks
-    PA_INFO("Clear roamingEventsCallbacks_");
-    {
-        std::lock_guard<std::mutex> lock(roamingEventsCbksMtx_);
-        roamingEventsCallbacks_.clear();
-    }
-
-    // Clear phone IDs vector and serving-system listener registration tracking map
-    PA_INFO("Clear phoneIds_ and bDataSSLRegisteredMap_");
-    phoneIds_.clear();
-    bDataSSLRegisteredMap_.clear();
-
-    // Reset phone manager shared pointer and its init state so that any post-deinit
-    // call that checks dataPhoneMngrInitState_ will correctly see FAILED.
-    PA_INFO("Reset phoneManager_ and dataPhoneMngrInitState_");
-    phoneManager_.reset();
-    dataPhoneMngrInitState_ = SubsystemState_e::FAILED;
-
-    PA_INFO("Data serving system managers deinitialization complete");
-    return PA_OK;
+    TAF_PA_INFO("Data serving system managers deinitialization complete");
+    return TAF_PA_OK;
 }
 
 taf::pa::data::SubsystemState_e taf::pa::data::TafPaTeluxData::PaGetPhoneManagerInitState()
 {
-    PA_DEBUG("Phone Manager state : %d", dataPhoneMngrInitState_);
+    TAF_PA_DEBUG("Phone Manager state : %d", dataPhoneMngrInitState_);
     return dataPhoneMngrInitState_;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaGetServingSystemInitState
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaGetServingSystemInitState
 (
     taf::pa::data::SlotId_e slotId,
     taf::pa::data::SubsystemState_e &sState
@@ -583,48 +558,48 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetServingSystemInitState
     // Initialize to FAILED state
     sState = taf::pa::data::SubsystemState_e::FAILED;
 
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
     {
         std::shared_lock<std::shared_mutex> lock(servingSystemStateMapMtx_);
         sState = servingSystemManagersInitStateMap_[slotId];
     }
-    PA_DEBUG("Serving system init state for slot id[%d]: %d", slotId,TO_INT(sState));
-    return PA_OK;
+    TAF_PA_DEBUG("Serving system init state for slot id[%d]: %d", slotId,TO_INT(sState));
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaGetSimSlotCount(taf::pa::data::SlotCount_e &count)
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaGetSimSlotCount(taf::pa::data::SlotCount_e &count)
 {
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
     count = slotCount_;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaGetPhoneIds
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaGetPhoneIds
 (
     std::vector<taf::pa::data::PhoneId_e> &phoneIds
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
     phoneIds.clear();
     for (int id : phoneIds_)
     {
-        PA_DEBUG("Phone Id: %d", id);
+        TAF_PA_DEBUG("Phone Id: %d", id);
         phoneIds.push_back(static_cast<taf::pa::data::PhoneId_e>(id));
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaGetPhoneIdFromSlotId
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaGetPhoneIdFromSlotId
 (
     const taf::pa::data::SlotId_e slotId,
     taf::pa::data::PhoneId_e &phoneID
 )
 {
 
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
 
     // Use cached phoneIds_ vector instead of SDK API to avoid timing issues
@@ -632,65 +607,65 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetPhoneIdFromSlotId
     int slotIdInt = static_cast<int>(slotId);
     if (slotIdInt < 1 || slotIdInt > static_cast<int>(phoneIds_.size()))
     {
-        PA_ERROR("Invalid slot ID %d (valid range: 1-%zu)", slotIdInt, phoneIds_.size());
+        TAF_PA_ERROR("Invalid slot ID %d (valid range: 1-%zu)", slotIdInt, phoneIds_.size());
         phoneID = static_cast<taf::pa::data::PhoneId_e>(255); // UNKNOWN
-        return PA_BAD_PARAMETER;
+        return TAF_PA_BAD_PARAMETER;
     }
 
     // Map slot ID to phoneIds_ vector index (slot 1 -> index 0, slot 2 -> index 1)
     phoneID = static_cast<taf::pa::data::PhoneId_e>(phoneIds_[slotIdInt - 1]);
-    PA_DEBUG("Slot ID %d = Phone Id: %d (from cached phoneIds_)", slotIdInt, TO_INT(phoneID));
-    return PA_OK;
+    TAF_PA_DEBUG("Slot ID %d = Phone Id: %d (from cached phoneIds_)", slotIdInt, TO_INT(phoneID));
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaGetPhoneIdFromSlotId
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaGetPhoneIdFromSlotId
 (
     const SlotId slotId,
     PhoneId_e &phoneID
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
 
     // Use cached phoneIds_ vector instead of SDK API to avoid timing issues
     // during initialization when SDK mapping may not be ready yet
     if (slotId < 1 || slotId > static_cast<int>(phoneIds_.size()))
     {
-        PA_ERROR("Invalid slot ID %d (valid range: 1-%zu)", slotId, phoneIds_.size());
+        TAF_PA_ERROR("Invalid slot ID %d (valid range: 1-%zu)", slotId, phoneIds_.size());
         phoneID = static_cast<taf::pa::data::PhoneId_e>(255); // UNKNOWN
-        return PA_BAD_PARAMETER;
+        return TAF_PA_BAD_PARAMETER;
     }
 
     // Map slot ID to phoneIds_ vector index (slot 1 -> index 0, slot 2 -> index 1)
     phoneID = static_cast<taf::pa::data::PhoneId_e>(phoneIds_[slotId - 1]);
-    PA_DEBUG("Slot ID %d = Phone Id: %d (from cached phoneIds_)", slotId, TO_INT(phoneID));
-    return PA_OK;
+    TAF_PA_DEBUG("Slot ID %d = Phone Id: %d (from cached phoneIds_)", slotId, TO_INT(phoneID));
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaGetSlotIdFromPhoneId
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaGetSlotIdFromPhoneId
 (
     const taf::pa::data::PhoneId_e phoneID,
     taf::pa::data::SlotId_e &slotID
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
     slotID = static_cast<taf::pa::data::SlotId_e> (
                                     phoneManager_->getSlotIdFromPhoneId(static_cast<int>(phoneID)));
-    PA_DEBUG("Phone Id: %d = Slot ID %d", TO_INT(phoneID), TO_INT(slotID));
-    return PA_OK;
+    TAF_PA_DEBUG("Phone Id: %d = Slot ID %d", TO_INT(phoneID), TO_INT(slotID));
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaAddSubsystemStateChangeCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaAddSubsystemStateChangeCallback
 (
     taf_pa_data_SubsystemStateChangeCb callBack,
     std::shared_ptr<void> context,
     uint16_t &id
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, TAF_PA_BAD_PARAMETER, "callBack is NULL!");
 
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
     // Lock
     std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
@@ -706,18 +681,18 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaAddSubsystemStateChangeCallback
     // Increment the ID.
     subsystemEventsCallbackId_++;
 
-    PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
-    PA_INFO("Number of registered callbacks: %zu", subsystemEventsCallbacks_.size());
+    TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+    TAF_PA_INFO("Number of registered callbacks: %zu", subsystemEventsCallbacks_.size());
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaRemoveSubsystemStateChangeCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaRemoveSubsystemStateChangeCallback
 (
     uint16_t id
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
     // Lock
     std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
@@ -726,13 +701,13 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaRemoveSubsystemStateChangeCallback
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p", id, cbk);
+            TAF_PA_INFO("Id: %d, Cbk: %p", id, cbk);
             subsystemEventsCallbacks_.erase(cbk);
-            return PA_OK;
+            return TAF_PA_OK;
         }
     }
-    PA_WARN("Callback not found. Id: %d", id);
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Callback not found. Id: %d", id);
+    return TAF_PA_NOT_FOUND;
 }
 
 void taf::pa::data::TafPaTeluxData::SendSubsystemEventToClients
@@ -740,7 +715,7 @@ void taf::pa::data::TafPaTeluxData::SendSubsystemEventToClients
     const SubsystemEvent_t &eventInfo
 )
 {
-    PA_DEBUG("Calling registered callbacks...");
+    TAF_PA_DEBUG("Calling registered callbacks...");
     std::vector<SubsystemEventsCallbackEntry_t> localCbksCopy;
     {
         // Use exclusive lock to serialize event delivery and prevent race conditions
@@ -753,22 +728,22 @@ void taf::pa::data::TafPaTeluxData::SendSubsystemEventToClients
     {
         try
         {
-            PA_DEBUG("Calling callback: %d", cbk.id);
+            TAF_PA_DEBUG("Calling callback: %d", cbk.id);
             cbk.callBack(eventInfo.phoneId, eventInfo.subsystem, eventInfo.subsystemState,
                                                                                      cbk.context);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+            TAF_PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown exception in callback %d", cbk.id);
+            TAF_PA_ERROR("Unknown exception in callback %d", cbk.id);
         }
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaAddRoamingEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaAddRoamingEventsCallback
 (
     taf_pa_data_RoamingEventsCb callBack,
     ///< [IN] The callback function.
@@ -778,9 +753,9 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaAddRoamingEventsCallback
     ///< [OUT] The ID of the registered callback.
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, TAF_PA_BAD_PARAMETER, "callBack is NULL!");
     // Lock
     std::lock_guard<std::mutex> lock(roamingEventsCbksMtx_);
     // Add the callback
@@ -790,18 +765,18 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaAddRoamingEventsCallback
     id = roamingEventsCallbackId_;
     // Increment the ID.
     roamingEventsCallbackId_++;
-    PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
-    PA_INFO("Number of registered callbacks: %zu", roamingEventsCallbacks_.size());
-    return PA_OK;
+    TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+    TAF_PA_INFO("Number of registered callbacks: %zu", roamingEventsCallbacks_.size());
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaRemoveRoamingEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaRemoveRoamingEventsCallback
 (
     uint16_t id
     ///< [IN] The ID of the registered callback.
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
     // Lock
     std::lock_guard<std::mutex> lock(roamingEventsCbksMtx_);
@@ -810,13 +785,13 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaRemoveRoamingEventsCallback
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p", id, cbk);
+            TAF_PA_INFO("Id: %d, Cbk: %p", id, cbk);
             roamingEventsCallbacks_.erase(cbk);
-            return PA_OK;
+            return TAF_PA_OK;
         }
     }
-    PA_WARN("Callback not found. Id: %d", id);
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Callback not found. Id: %d", id);
+    return TAF_PA_NOT_FOUND;
 }
 
 void taf::pa::data::TafPaTeluxData::SendRoamingEventInfoToClients
@@ -824,7 +799,7 @@ void taf::pa::data::TafPaTeluxData::SendRoamingEventInfoToClients
     const taf::pa::data::RoamingStatus_t &eventInfo
 )
 {
-    PA_DEBUG("Calling registered callbacks...");
+    TAF_PA_DEBUG("Calling registered callbacks...");
     std::vector<RoamingEventsCallbackEntry_t> localCbksCopy;
     {
         // Lock and get a copy of the callbacks.
@@ -835,21 +810,21 @@ void taf::pa::data::TafPaTeluxData::SendRoamingEventInfoToClients
     {
         try
         {
-            PA_DEBUG("Calling callback: %d", cbk.id);
+            TAF_PA_DEBUG("Calling callback: %d", cbk.id);
             cbk.callBack(eventInfo, cbk.context);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+            TAF_PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown exception in callback %d", cbk.id);
+            TAF_PA_ERROR("Unknown exception in callback %d", cbk.id);
         }
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
 (
     const PhoneId_e phoneId,
     RoamingStatus_t &roamingStatus
@@ -858,35 +833,35 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
     taf::pa::data::SlotId_e slotIDpa;
     telux::common::Status status;
 
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != dataPhoneMngrInitState_, TAF_PA_FAULT,
                                                               "PA phone manager not initialized.");
 
     // Atomically check and set the flag to prevent race condition
     bool expected = false;
     if (!bGetRoamingStatusInProgress_.compare_exchange_strong(expected, true))
     {
-        PA_ERROR("Get roaming status already in progress for phone id: %d", TO_INT(phoneId));
-        return PA_BUSY;
+        TAF_PA_ERROR("Get roaming status already in progress for phone id: %d", TO_INT(phoneId));
+        return TAF_PA_BUSY;
     }
 
-    pa_result_t result = PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
-    if (PA_OK != result)
+    taf_pa_result_t result = PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
         // Reset the flag since we're returning early
         bGetRoamingStatusInProgress_.store(false);
         return result;
     }
-    PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
+    TAF_PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
 
     if (dataServingSystemManagersMap_.find(slotId) == dataServingSystemManagersMap_.end())
     {
-        PA_ERROR("Serving system manager is not init for slot %d", TO_INT(slotId));
+        TAF_PA_ERROR("Serving system manager is not init for slot %d", TO_INT(slotId));
         // Reset the flag since we're returning early
         bGetRoamingStatusInProgress_.store(false);
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     // Create shared promise to ensure it outlives this function scope
@@ -910,7 +885,7 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
                             }
                             catch (const std::future_error& e)
                             {
-                                PA_ERROR("Future error in callback: %s", e.what());
+                                TAF_PA_ERROR("Future error in callback: %s", e.what());
                                 // Try to set promise to unblock waiting thread
                                 try { promisePtr->set_value(std::make_pair
                                     (telux::data::RoamingStatus(),
@@ -918,14 +893,14 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
                             }
                             catch (const std::exception& e)
                             {
-                                PA_ERROR("Exception in callback: %s", e.what());
+                                TAF_PA_ERROR("Exception in callback: %s", e.what());
                                 try { promisePtr->set_value(std::make_pair
                                     (telux::data::RoamingStatus(),
                                     telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
                             }
                             catch (...)
                             {
-                                PA_ERROR("Unknown error in requestRoamingStatus callback.");
+                                TAF_PA_ERROR("Unknown error in requestRoamingStatus callback.");
                                 try { promisePtr->set_value(std::make_pair
                                     (telux::data::RoamingStatus(),
                                     telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
@@ -934,36 +909,36 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
                     );
     if (telux::common::Status::SUCCESS != status)
     {
-        PA_ERROR("requestRoamingStatus failed. Status: %d", TO_INT(status));
+        TAF_PA_ERROR("requestRoamingStatus failed. Status: %d", TO_INT(status));
         // Reset the in progress flag
         bGetRoamingStatusInProgress_.store(false);
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    PA_DEBUG("Waiting for callback...");
+    TAF_PA_DEBUG("Waiting for callback...");
 
     std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("requestRoamingStatusCb promise timeout");
+        TAF_PA_ERROR("requestRoamingStatusCb promise timeout");
         // Reset the in progress flag
         bGetRoamingStatusInProgress_.store(false);
-        return PA_TIMEOUT;
+        return TAF_PA_TIMEOUT;
     }
 
     // Wait for the response
     std::pair<telux::data::RoamingStatus, telux::common::ErrorCode> futRsp;
-    FUTURE_GET_RET_VAL(fut, futRsp, PA_FAULT);
+    FUTURE_GET_RET_VAL(fut, futRsp, TAF_PA_FAULT);
     telux::common::ErrorCode futResult = futRsp.second;
     if (telux::common::ErrorCode::SUCCESS != futResult)
     {
-        PA_ERROR("requestRoamingStatusCb failed. Status: %d", TO_INT(futResult));
+        TAF_PA_ERROR("requestRoamingStatusCb failed. Status: %d", TO_INT(futResult));
         // Reset the in progress flag
         bGetRoamingStatusInProgress_.store(false);
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
-    PA_DEBUG("success.");
+    TAF_PA_DEBUG("success.");
     roamingStatus.isRoaming = futRsp.first.isRoaming;
     roamingStatus.type      = taf::pa::data::Utils::ConvertRoamingType(futRsp.first.type);
     roamingStatus.slotId    = slotIDpa;
@@ -971,10 +946,10 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
 
     // Reset the in progress flag
     bGetRoamingStatusInProgress_.store(false);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxData::PaGetServiceStatus
+taf_pa_result_t taf::pa::data::TafPaTeluxData::PaGetServiceStatus
 (
     const taf::pa::data::SlotId_e slotId,
     telux::data::ServiceStatus &serviceStatus
@@ -985,8 +960,8 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetServiceStatus
 
     if (dataServingSystemManagersMap_.find(teluxSlotId) == dataServingSystemManagersMap_.end())
     {
-        PA_ERROR("Serving system manager is not init for slot %d", TO_INT(slotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Serving system manager is not init for slot %d", TO_INT(slotId));
+        return TAF_PA_FAULT;
     }
 
     // Create shared promise to ensure it outlives this function scope
@@ -1010,7 +985,7 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetServiceStatus
                             }
                             catch (const std::future_error& e)
                             {
-                                PA_ERROR("Future error in requestServiceStatus callback: %s",
+                                TAF_PA_ERROR("Future error in requestServiceStatus callback: %s",
                                          e.what());
                                 try { promisePtr->set_value(std::make_pair(
                                     telux::data::ServiceStatus{},
@@ -1018,7 +993,7 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetServiceStatus
                             }
                             catch (const std::exception& e)
                             {
-                                PA_ERROR("Exception in requestServiceStatus callback: %s",
+                                TAF_PA_ERROR("Exception in requestServiceStatus callback: %s",
                                          e.what());
                                 try { promisePtr->set_value(std::make_pair(
                                     telux::data::ServiceStatus{},
@@ -1026,7 +1001,7 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetServiceStatus
                             }
                             catch (...)
                             {
-                                PA_ERROR("Unknown error in requestServiceStatus callback.");
+                                TAF_PA_ERROR("Unknown error in requestServiceStatus callback.");
                                 try { promisePtr->set_value(std::make_pair(
                                     telux::data::ServiceStatus{},
                                     telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
@@ -1035,28 +1010,28 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetServiceStatus
                     );
     if (telux::common::Status::SUCCESS != status)
     {
-        PA_ERROR("requestServiceStatus failed. Status: %d", TO_INT(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("requestServiceStatus failed. Status: %d", TO_INT(status));
+        return TAF_PA_FAULT;
     }
 
-    PA_DEBUG("Waiting for requestServiceStatus callback...");
+    TAF_PA_DEBUG("Waiting for requestServiceStatus callback...");
 
     std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("requestServiceStatus promise timeout");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("requestServiceStatus promise timeout");
+        return TAF_PA_TIMEOUT;
     }
 
     std::pair<telux::data::ServiceStatus, telux::common::ErrorCode> futRsp;
-    FUTURE_GET_RET_VAL(fut, futRsp, PA_FAULT);
+    FUTURE_GET_RET_VAL(fut, futRsp, TAF_PA_FAULT);
     if (telux::common::ErrorCode::SUCCESS != futRsp.second)
     {
-        PA_ERROR("requestServiceStatus callback failed. ErrorCode: %d", TO_INT(futRsp.second));
-        return PA_FAULT;
+        TAF_PA_ERROR("requestServiceStatus callback failed. ErrorCode: %d", TO_INT(futRsp.second));
+        return TAF_PA_FAULT;
     }
 
     serviceStatus = futRsp.first;
-    return PA_OK;
+    return TAF_PA_OK;
 }

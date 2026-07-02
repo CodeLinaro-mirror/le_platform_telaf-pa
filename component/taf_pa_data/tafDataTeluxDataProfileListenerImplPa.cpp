@@ -22,19 +22,19 @@ void taf::pa::data::TafPaTeluxDataProfileListener::onServiceStatusChange
     switch (status)
     {
     case telux::common::ServiceStatus::SERVICE_AVAILABLE:
-        PA_INFO("Profile Manager for Slot ID %d: AVAILABLE", slotId_);
+        TAF_PA_INFO("Profile Manager for Slot ID %d: AVAILABLE", slotId_);
         sState = SubsystemState_e::AVAILABLE;
         break;
     case telux::common::ServiceStatus::SERVICE_UNAVAILABLE:
-        PA_ERROR("Profile Manager for Slot ID %d: UNAVAILABLE", slotId_);
+        TAF_PA_ERROR("Profile Manager for Slot ID %d: UNAVAILABLE", slotId_);
         sState = SubsystemState_e::UNAVAILABLE;
         break;
     case telux::common::ServiceStatus::SERVICE_FAILED:
-        PA_ERROR("Profile Manager for Slot ID %d: FAILED", slotId_);
+        TAF_PA_ERROR("Profile Manager for Slot ID %d: FAILED", slotId_);
         sState = SubsystemState_e::FAILED;
         break;
     default:
-        PA_WARN("Profile Manager for Slot ID %d: status unknown", slotId_);
+        TAF_PA_WARN("Profile Manager for Slot ID %d: status unknown", slotId_);
         sState = SubsystemState_e::FAILED;
         break;
     };
@@ -51,7 +51,7 @@ void taf::pa::data::TafPaTeluxDataProfileListener::onProfileUpdate
 {
     SET_SDK_THREAD_NAME();
 
-    PA_INFO("Slot: %d, Profile: %d, TechPref: %s, Event: %s", slotId_, profileId,
+    TAF_PA_INFO("Slot: %d, Profile: %d, TechPref: %s, Event: %s", slotId_, profileId,
             taf::pa::data::Utils::TechPreferenceToString(techPreference),
             taf::pa::data::Utils::ProfileChangeEventToString(event));
 

@@ -35,8 +35,8 @@ public:
         return deviceInfoManager_;
     }
 
-        pa_result_t initialize();
-        pa_result_t deinitialize();
+        taf_pa_result_t initialize();
+        taf_pa_result_t deinitialize();
 
     class DeviceInfoListener : public telux::platform::IDeviceInfoListener
     {
@@ -63,15 +63,15 @@ private:
 void DeviceInfoPAController::DeviceInfoListener::onServiceStatusChange(telux::common::ServiceStatus serviceStatus)
 {
     if (serviceStatus == ServiceStatus::SERVICE_UNAVAILABLE) {
-        PA_INFO("Service Status : UNAVAILABLE");
+        TAF_PA_INFO("Service Status : UNAVAILABLE");
     } else if (serviceStatus == ServiceStatus::SERVICE_AVAILABLE) {
-        PA_INFO("Service Status : AVAILABLE");
+        TAF_PA_INFO("Service Status : AVAILABLE");
     }
 }
 
-pa_result_t DeviceInfoPAController::initialize()
+taf_pa_result_t DeviceInfoPAController::initialize()
 {
-    PA_INFO("initialize!!");
+    TAF_PA_INFO("initialize!!");
     auto& platformFactory = PlatformFactory::getInstance();
 
     auto prom = std::make_shared<std::promise<ServiceStatus>>();
@@ -86,161 +86,161 @@ pa_result_t DeviceInfoPAController::initialize()
             }
         }
         catch (const std::future_error& e) {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e) {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...) {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
 
     deviceInfoManager_ = platformFactory.getDeviceInfoManager(cb);
     if (deviceInfoManager_ == nullptr) {
-        PA_ERROR("Failed to get Device Info Manager instance");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to get Device Info Manager instance");
+        return TAF_PA_FAULT;
     }
 
     startTime = std::chrono::system_clock::now();
     ServiceStatus devInfoMgrStatus = deviceInfoManager_->getServiceStatus();
     if(devInfoMgrStatus != ServiceStatus::SERVICE_AVAILABLE) {
-        PA_INFO( "DevInfoManager subsystem is not ready, Please wait");
+        TAF_PA_INFO( "DevInfoManager subsystem is not ready, Please wait");
     }
 
     auto initFuture = prom->get_future();
     auto waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
     //  Exit the application, if SDK is unable to initialize deviceinfo subsystems
     if (waitStatus == std::future_status::timeout) {
-        PA_CRIT("*** ERROR - Timeout to get device info manager ready");
-        return PA_TIMEOUT;
+        TAF_PA_CRIT("*** ERROR - Timeout to get device info manager ready");
+        return TAF_PA_TIMEOUT;
     }
     else{
         devInfoMgrStatus = initFuture.get();
         if (devInfoMgrStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
             endTime = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsedTime = endTime - startTime;
-            PA_INFO("Elapsed Time for DevInfoManager Subsystems to ready : %lf",elapsedTime.count());
+            TAF_PA_INFO("Elapsed Time for DevInfoManager Subsystems to ready : %lf",elapsedTime.count());
         } else {
-            PA_CRIT("ERROR - Unable to initialize DevInfoManager subsystem");
-            return PA_FAULT;
+            TAF_PA_CRIT("ERROR - Unable to initialize DevInfoManager subsystem");
+            return TAF_PA_FAULT;
         }
     }
-    PA_INFO("Obtained Platform manager!!");
+    TAF_PA_INFO("Obtained Platform manager!!");
     // Register for Device information service status change
     devinfoServiceStatusListener_ = std::make_shared<DeviceInfoListener>(this);
     telux::common::Status status
         = deviceInfoManager_->registerListener(devinfoServiceStatusListener_);
     if (status != telux::common::Status::SUCCESS) {
-        PA_ERROR("Failed to register for service state change ");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to register for service state change ");
+        return TAF_PA_FAULT;
     }
 
     // Mark initialization as complete
     gDeviceinfoPaInitialized.store(true, std::memory_order_release);
-    PA_INFO("DeviceInfo PA initialization flag set to true.");
+    TAF_PA_INFO("DeviceInfo PA initialization flag set to true.");
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t DeviceInfoPAController::deinitialize()
+taf_pa_result_t DeviceInfoPAController::deinitialize()
 {
     // Check if Init() was called before Deinit()
     if (!gDeviceinfoPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Starting DeviceInfo PA deinitialization...");
+    TAF_PA_INFO("Starting DeviceInfo PA deinitialization...");
 
     // Step 1: Deregister the service status listener from the device info manager
     // before releasing any state, so no further SDK callbacks arrive.
     if (deviceInfoManager_ && devinfoServiceStatusListener_)
     {
-        PA_INFO("Deregistering devinfoServiceStatusListener_ from deviceInfoManager_");
+        TAF_PA_INFO("Deregistering devinfoServiceStatusListener_ from deviceInfoManager_");
         telux::common::Status status =
             deviceInfoManager_->deregisterListener(devinfoServiceStatusListener_);
         if (status != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("Failed to deregister device info service status listener. Status: %d",
+            TAF_PA_ERROR("Failed to deregister device info service status listener. Status: %d",
                      static_cast<int>(status));
         }
         devinfoServiceStatusListener_.reset();
     }
 
     // Step 2: Reset device info manager shared pointer
-    PA_INFO("Resetting deviceInfoManager_");
+    TAF_PA_INFO("Resetting deviceInfoManager_");
     deviceInfoManager_.reset();
 
     // Reset initialization flag
     gDeviceinfoPaInitialized.store(false, std::memory_order_release);
-    PA_INFO("DeviceInfo PA initialization flag reset to false.");
+    TAF_PA_INFO("DeviceInfo PA initialization flag reset to false.");
 
-    PA_INFO("DeviceInfo PA deinitialization complete");
-    return PA_OK;
+    TAF_PA_INFO("DeviceInfo PA deinitialization complete");
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_GetIMEI(char* imeiPtr, size_t numElements)
+taf_pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_GetIMEI(char* imeiPtr, size_t numElements)
 {
     if (imeiPtr == nullptr || numElements == 0) {
-        PA_ERROR("Invalid parameters: imeiPtr is null or numElements is 0");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid parameters: imeiPtr is null or numElements is 0");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto pACtrl = DeviceInfoPAController::getInstance();
     auto deviceInfoMgr = pACtrl->getDeviceInfoManager();
 
     if (deviceInfoMgr == nullptr) {
-        PA_ERROR("Device Info Manager is not initialized");
-        return PA_FAULT;
+        TAF_PA_ERROR("Device Info Manager is not initialized");
+        return TAF_PA_FAULT;
     }
 
     std::string imei = "";
     telux::common::Status status = deviceInfoMgr->getIMEI(imei);
 
     if(status != Status::SUCCESS){
-        PA_ERROR("request for IMEI failed(status = %d)", static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("request for IMEI failed(status = %d)", static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
 
     std::memcpy(imeiPtr, imei.c_str(), numElements + 1);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_Init()
+taf_pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_Init()
 {
     auto pACtrl = DeviceInfoPAController::getInstance();
 
-    PA_INFO("taf_pa_deviceinfo_Init!!");
+    TAF_PA_INFO("taf_pa_deviceinfo_Init!!");
 
-    pa_result_t result = pACtrl->initialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->initialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("DeviceInfo platform adapter initialization is done");
+        TAF_PA_INFO("DeviceInfo platform adapter initialization is done");
     }
     else
     {
-        PA_CRIT("Failed to initialize DeviceInfo platform adapter, ret: %d", result);
+        TAF_PA_CRIT("Failed to initialize DeviceInfo platform adapter, ret: %d", result);
     }
 
     return result;
 }
 
-pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_Deinit()
+taf_pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_Deinit()
 {
     auto pACtrl = DeviceInfoPAController::getInstance();
 
-    PA_INFO("taf_pa_deviceinfo_Deinit!!");
+    TAF_PA_INFO("taf_pa_deviceinfo_Deinit!!");
 
-    pa_result_t result = pACtrl->deinitialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->deinitialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("DeviceInfo platform adapter deinitialization is done");
+        TAF_PA_INFO("DeviceInfo platform adapter deinitialization is done");
     }
     else
     {
-        PA_ERROR("Failed to deinitialize DeviceInfo platform adapter, ret: %d", result);
+        TAF_PA_ERROR("Failed to deinitialize DeviceInfo platform adapter, ret: %d", result);
     }
 
     return result;

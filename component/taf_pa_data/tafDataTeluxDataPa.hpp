@@ -74,33 +74,33 @@ class TafPaTeluxData
 
         // External APIs implementation
         SubsystemState_e PaGetPhoneManagerInitState();
-        pa_result_t PaGetServingSystemInitState
+        taf_pa_result_t PaGetServingSystemInitState
         (
             taf::pa::data::SlotId_e slotId,
             taf::pa::data::SubsystemState_e &sState
         );
-        pa_result_t PaGetSimSlotCount(taf::pa::data::SlotCount_e &count);
-        pa_result_t PaGetPhoneIds(std::vector<taf::pa::data::PhoneId_e> &phoneIds);
-        pa_result_t PaGetPhoneIdFromSlotId
+        taf_pa_result_t PaGetSimSlotCount(taf::pa::data::SlotCount_e &count);
+        taf_pa_result_t PaGetPhoneIds(std::vector<taf::pa::data::PhoneId_e> &phoneIds);
+        taf_pa_result_t PaGetPhoneIdFromSlotId
         (
             const taf::pa::data::SlotId_e slotID,
             taf::pa::data::PhoneId_e &phoneID
         );
-        pa_result_t PaGetPhoneIdFromSlotId
+        taf_pa_result_t PaGetPhoneIdFromSlotId
         (
             const SlotId slotID,
             PhoneId_e &phoneID
         );
-        pa_result_t PaGetSlotIdFromPhoneId
+        taf_pa_result_t PaGetSlotIdFromPhoneId
         (
             const taf::pa::data::PhoneId_e phoneID,
             taf::pa::data::SlotId_e &slotID
         );
 
-        pa_result_t RegisterDataServingSystemListeners();
-        pa_result_t DeregisterDataServingSystemListeners();
+        taf_pa_result_t RegisterDataServingSystemListeners();
+        taf_pa_result_t DeregisterDataServingSystemListeners();
 
-        pa_result_t PaAddSubsystemStateChangeCallback(
+        taf_pa_result_t PaAddSubsystemStateChangeCallback(
             taf_pa_data_SubsystemStateChangeCb callBack,
             ///< [IN] The callback function.
             std::shared_ptr<void> context,
@@ -108,21 +108,21 @@ class TafPaTeluxData
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        pa_result_t PaRemoveSubsystemStateChangeCallback(
+        taf_pa_result_t PaRemoveSubsystemStateChangeCallback(
             uint16_t id
             ///< [IN] The ID of the registered callback.
         );
         void SendSubsystemEventToClients(const SubsystemEvent_t &eventInfo);
 
-        pa_result_t PaGetRoamingStatus(const PhoneId_e phoneId, RoamingStatus_t &roamingStatus);
+        taf_pa_result_t PaGetRoamingStatus(const PhoneId_e phoneId, RoamingStatus_t &roamingStatus);
 
-        pa_result_t PaGetServiceStatus
+        taf_pa_result_t PaGetServiceStatus
         (
             const taf::pa::data::SlotId_e slotId,
             telux::data::ServiceStatus &serviceStatus
         );
 
-        pa_result_t PaAddRoamingEventsCallback
+        taf_pa_result_t PaAddRoamingEventsCallback
         (
             taf_pa_data_RoamingEventsCb callBack,
             ///< [IN] The callback function.
@@ -131,17 +131,17 @@ class TafPaTeluxData
             uint16_t &id
             ///< [OUT] The ID of the registered callback.
         );
-        pa_result_t PaRemoveRoamingEventsCallback
+        taf_pa_result_t PaRemoveRoamingEventsCallback
         (
             uint16_t id
             ///< [IN] The ID of the registered callback.
         );
 
-        pa_result_t GetServinSystemInitState
+        taf_pa_result_t GetServinSystemInitState
         (
             taf::pa::data::SlotId_e slotId, SubsystemState_e &sState
         );
-        pa_result_t SetServingSystemInitState
+        taf_pa_result_t SetServingSystemInitState
         (
             taf::pa::data::SlotId_e slotId,
             SubsystemState_e sState,
@@ -155,7 +155,7 @@ class TafPaTeluxData
         // Data
         void initPhoneManager();
         void initDataServingSystemManagers();
-        pa_result_t deInitDataServingSystemManagers();
+        taf_pa_result_t deInitDataServingSystemManagers();
 
         taf::pa::data::SlotCount_e slotCount_ = taf::pa::data::SlotCount_e::ONE; // 1
 

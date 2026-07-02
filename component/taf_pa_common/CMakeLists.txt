@@ -10,8 +10,6 @@ set(OUTPUT_NAME Component_${TARGET_NAME})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
-add_subdirectory(stub)
-
 add_library(${TARGET_NAME} SHARED tafCommonPa.cpp)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
@@ -22,7 +20,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 
 target_include_directories(${TARGET_NAME}
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/stub/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../stub/include
 )
 
 # Direct link to taf_prop_common is intentionally omitted; resolved at runtime via dlopen.

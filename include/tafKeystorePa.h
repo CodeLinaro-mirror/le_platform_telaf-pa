@@ -446,11 +446,11 @@ typedef void (*taf_pa_ks_KeySharingHandler_t)
  * PA initialization.
  *
  * @return
- *      LE_OK if successful.
- *      LE_FAULT if there was some other error.
+ *      TAF_PA_OK if successful.
+ *      TAF_PA_FAULT if there was some other error.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_Init
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_Init
 (
     void
 );
@@ -462,7 +462,7 @@ PA_SHARED pa_result_t taf_pa_ks_Init
  * @return
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_Deinit
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_Deinit
 (
     void
 );
@@ -474,7 +474,7 @@ PA_SHARED pa_result_t taf_pa_ks_Deinit
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GenerateRsaEncKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GenerateRsaEncKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -495,7 +495,7 @@ PA_SHARED pa_result_t taf_pa_ks_GenerateRsaEncKey
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GenerateRsaSigKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GenerateRsaSigKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -516,7 +516,7 @@ PA_SHARED pa_result_t taf_pa_ks_GenerateRsaSigKey
  * The impData must be PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GenerateEcdsaKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GenerateEcdsaKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -537,7 +537,7 @@ PA_SHARED pa_result_t taf_pa_ks_GenerateEcdsaKey
  * The impData must be raw key bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GenerateAesKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GenerateAesKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -558,7 +558,7 @@ PA_SHARED pa_result_t taf_pa_ks_GenerateAesKey
  * Currently only digest DIGEST_SHA2_256 is supported. The impData must be raw key bytes if provided
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GenerateHmacKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GenerateHmacKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -577,7 +577,7 @@ PA_SHARED pa_result_t taf_pa_ks_GenerateHmacKey
  * Export a key into specified key data format.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_ExportKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_ExportKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -592,7 +592,7 @@ PA_SHARED pa_result_t taf_pa_ks_ExportKey
  * Share a key.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_ShareKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_ShareKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -606,7 +606,7 @@ PA_SHARED pa_result_t taf_pa_ks_ShareKey
  * Cancel key sharing to an application.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_CancelKeySharing
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_CancelKeySharing
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -618,7 +618,7 @@ PA_SHARED pa_result_t taf_pa_ks_CancelKeySharing
  * Delete a key file by key name.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_DeleteKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_DeleteKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef        ///< [IN] Key file reference
@@ -629,7 +629,7 @@ PA_SHARED pa_result_t taf_pa_ks_DeleteKey
  * Get a key file reference by key name.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GetKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GetKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -641,7 +641,7 @@ PA_SHARED pa_result_t taf_pa_ks_GetKey
  * Get a key file reference of a shared key by key name and app name.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GetSharedKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GetSharedKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -654,7 +654,7 @@ PA_SHARED pa_result_t taf_pa_ks_GetSharedKey
  * Get a shared app list for a shared key.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GetSharedAppList
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GetSharedAppList
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -666,7 +666,7 @@ PA_SHARED pa_result_t taf_pa_ks_GetSharedAppList
  * Get key usage
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_GetKeyUsage
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_GetKeyUsage
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -678,7 +678,7 @@ PA_SHARED pa_result_t taf_pa_ks_GetKeyUsage
  * Start the session for the given crypto operation.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_CryptoSessionStart
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_CryptoSessionStart
 (
     int clientSessionFd,                      ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t     keyFileRef,       ///< [IN] Key file reference
@@ -696,7 +696,7 @@ PA_SHARED pa_result_t taf_pa_ks_CryptoSessionStart
  * This API can be called for multiple times but must before CryptoSessionProcess API.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_CryptoSessionProcessAead
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_CryptoSessionProcessAead
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] Data buffer to hold the AEAD data
@@ -711,7 +711,7 @@ PA_SHARED pa_result_t taf_pa_ks_CryptoSessionProcessAead
  * CryptoEndSession API is called.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_CryptoSessionProcess
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_CryptoSessionProcess
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] InputData can be one of below 4 cases:
@@ -732,7 +732,7 @@ PA_SHARED pa_result_t taf_pa_ks_CryptoSessionProcess
  * Finalizes and stop a crypto operation session started with CryptoStartSession API.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_CryptoSessionEnd
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_CryptoSessionEnd
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] Signature to verify for verification session
@@ -751,7 +751,7 @@ PA_SHARED pa_result_t taf_pa_ks_CryptoSessionEnd
  * Abort crypto operation session started with CryptoStartSession API.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_CryptoSessionAbort
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_CryptoSessionAbort
 (
     uint64_t                opHandle      ///< [IN] Cyrpto operation handle
 );
@@ -761,7 +761,7 @@ PA_SHARED pa_result_t taf_pa_ks_CryptoSessionAbort
  * Register Key creation handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_RegKeyCreationHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_RegKeyCreationHandler
 (
     taf_pa_ks_KeyCreationHandler_t handlerFunc
 );
@@ -771,7 +771,7 @@ PA_SHARED pa_result_t taf_pa_ks_RegKeyCreationHandler
  * Register Key sharing state change handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_ks_RegKeySharingHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_ks_RegKeySharingHandler
 (
     taf_pa_ks_KeySharingHandler_t handlerFunc
 );

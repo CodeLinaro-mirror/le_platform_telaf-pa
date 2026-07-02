@@ -17,11 +17,6 @@
 extern "C" {
 #endif
 
-#define TAF_PA_SIM_RESULT_OK 0
-#define TAF_PA_SIM_RESULT_FAULT -6
-#define TAF_PA_SIM_RESULT_TIMEOUT -8
-#define TAF_PA_SIM_RESULT_BAD_PARAMETER -15
-#define TAF_PA_SIM_RESULT_UNSUPPORTED -18
 
 #define MAX_SIM_PATH 10
 #define MAX_SIM_REFRESH_FILES 100
@@ -165,7 +160,7 @@ typedef struct
 {
     taf_pa_sim_Id_t simId;
     taf_pa_sim_LockResponse_t responseType;
-    pa_result_t    result;
+    taf_pa_result_t    result;
 }telaf_pa_sim_pa_response_event_t;
 
 struct taf_pa_sim_Iccid_t
@@ -182,28 +177,28 @@ struct taf_pa_sim_ResponseInfo_t
 {
     taf_pa_sim_Id_t simId;
     taf_pa_sim_LockResponse_t responseType;
-    pa_result_t    result;
+    taf_pa_result_t    result;
 };
 struct taf_pa_sim_UnlockCardResponseInfo_t
 {
     taf_pa_sim_Id_t simId;
     taf_pa_sim_LockResponse_t responseType;
-    pa_result_t    result;
+    taf_pa_result_t    result;
 };
 struct taf_pa_sim_UnlockCardPukResponseInfo_t
 {
     taf_pa_sim_Id_t simId;
     taf_pa_sim_LockResponse_t responseType;
-    pa_result_t    result;
+    taf_pa_result_t    result;
 };
 struct taf_pa_sim_CardLockResponseInfo_t
 {
     taf_pa_sim_Id_t simId;
     taf_pa_sim_LockResponse_t responseType;
-    pa_result_t    result;
+    taf_pa_result_t    result;
 };
 
-using taf_pa_sim_GeneralCb = std::function<void(pa_result_t result, std::any context)>;
+using taf_pa_sim_GeneralCb = std::function<void(taf_pa_result_t result, std::any context)>;
 
 using taf_pa_sim_onSubscriptionInfoChanged =
       std::function<void(const std::shared_ptr<taf_pa_sim_Iccid_t>& iccidDataInfo)>;
@@ -276,14 +271,14 @@ typedef struct
 } taf_pa_sim_ProfileInfo_t;
 
 // Number of profiles for a given slot
-PA_SHARED pa_result_t taf_pa_sim_GetProfileNum
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetProfileNum
 (
     taf_pa_sim_SlotId_t slot,
     uint8_t* profileNumPtr
 );
 
 // Get profile info by slot and index
-PA_SHARED pa_result_t taf_pa_sim_GetProfile
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetProfile
 (
     taf_pa_sim_SlotId_t slot,
     uint8_t index,
@@ -291,7 +286,7 @@ PA_SHARED pa_result_t taf_pa_sim_GetProfile
 );
 
 // Set active profile (also enables profile by default)
-PA_SHARED pa_result_t taf_pa_sim_SetActiveProfile
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_SetActiveProfile
 (
     taf_pa_sim_SlotId_t slot,
     taf_pa_sim_ProfileId_t profileId
@@ -302,7 +297,7 @@ PA_SHARED pa_result_t taf_pa_sim_SetActiveProfile
  *  PA refresh register.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_RefreshRegister
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_RefreshRegister
 (
     taf_pa_sim_SessionType_t sessionType,
     uint32_t filesLen,
@@ -314,7 +309,7 @@ PA_SHARED pa_result_t taf_pa_sim_RefreshRegister
  *  PA refresh unregister.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_RefreshUnregister
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_RefreshUnregister
 (
     taf_pa_sim_SessionType_t sessionType,
     uint32_t filesLen,
@@ -326,7 +321,7 @@ PA_SHARED pa_result_t taf_pa_sim_RefreshUnregister
  *  PA refresh ok.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_RefreshOk
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_RefreshOk
 (
     taf_pa_sim_SessionType_t sessionType,
     bool* refreshAllow
@@ -337,7 +332,7 @@ PA_SHARED pa_result_t taf_pa_sim_RefreshOk
  *  PA refresh complete.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_RefreshComplete
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_RefreshComplete
 (
    taf_pa_sim_SessionType_t sessionType
 );
@@ -347,7 +342,7 @@ PA_SHARED pa_result_t taf_pa_sim_RefreshComplete
  * Add handler for SIM refresh
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_AddRefreshChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_AddRefreshChangeHandler
 (
     taf_pa_sim_RefreshChangeHandlerFunc_t handlerFuncPtr,
     void* contextPtr,
@@ -359,7 +354,7 @@ PA_SHARED pa_result_t taf_pa_sim_AddRefreshChangeHandler
  * Remove handler for SIM refresh
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_RemoveRefreshChangeHandler
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_RemoveRefreshChangeHandler
 (
    taf_pa_sim_RefreshChangeHandlerRef_t handlerRef ///< [IN] Handler reference.
 );
@@ -369,12 +364,12 @@ PA_SHARED pa_result_t taf_pa_sim_RemoveRefreshChangeHandler
  * Initialize PA SIM
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_Init
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_Init
 (
 
 );
 
-PA_SHARED pa_result_t taf_pa_sim_Deinit
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_Deinit
 (
 
 );
@@ -385,11 +380,11 @@ PA_SHARED pa_result_t taf_pa_sim_Deinit
  * Register subscription, card and multi sim listeners.
  *
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_RegisterListeners
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_RegisterListeners
 (
 
 );
@@ -399,11 +394,11 @@ PA_SHARED pa_result_t taf_pa_sim_RegisterListeners
  * Deregister subscription, card and multi sim listeners.
  *
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_DeregisterListeners
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_DeregisterListeners
 (
 
 );
@@ -412,12 +407,12 @@ PA_SHARED pa_result_t taf_pa_sim_DeregisterListeners
 /**
  * Get Iccid.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetIccid
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetIccid
 (
     taf_pa_sim_Id_t simId,
     std::string& iccIdStr
@@ -427,12 +422,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetIccid
 /**
  * Get subscriber phone number.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetSubscriberPhoneNumber
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetSubscriberPhoneNumber
 (
     taf_pa_sim_Id_t simId,
     std::string& phoneNumber
@@ -442,12 +437,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetSubscriberPhoneNumber
 /**
  * Get IMSI.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetImsi
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetImsi
 (
     taf_pa_sim_Id_t simId,
     std::string& imsi
@@ -457,12 +452,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetImsi
 /**
  * Get carrier name.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetCarrierName
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetCarrierName
 (
     taf_pa_sim_Id_t simId,
     std::string& nameString
@@ -472,13 +467,13 @@ PA_SHARED pa_result_t taf_pa_sim_GetCarrierName
 /**
  * Get home network MCC/MNC.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  * @deprecated This function is deprecated. Use taf_pa_sim_GetHomeNetworkMccMncStr instead.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetHomeNetworkMccMnc
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetHomeNetworkMccMnc
 (
     taf_pa_sim_Id_t simId,
     int* mcc,
@@ -489,12 +484,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetHomeNetworkMccMnc
 /**
  * Get home network MCC/MNC.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetHomeNetworkMccMncStr
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetHomeNetworkMccMncStr
 (
     taf_pa_sim_Id_t simId,
     std::string& mcc,
@@ -505,12 +500,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetHomeNetworkMccMncStr
 /**
  * Get slot count.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_getSlotCount
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_getSlotCount
 (
     int* count
 );
@@ -519,12 +514,12 @@ PA_SHARED pa_result_t taf_pa_sim_getSlotCount
 /**
  * Get sim state.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetState
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetState
 (
     taf_pa_sim_Id_t simId,
     taf_pa_sim_States_t* state
@@ -535,12 +530,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetState
 /**
  * Set power state.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_SetPower
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_SetPower
 (
     taf_pa_sim_Id_t simId,
     taf_pa_sim_power_state_t powerState
@@ -550,12 +545,12 @@ PA_SHARED pa_result_t taf_pa_sim_SetPower
 /**
  * Check if multisim sub system is ready or not.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_IsSubsystemReady
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_IsSubsystemReady
 (
     bool* isReady
 );
@@ -564,12 +559,12 @@ PA_SHARED pa_result_t taf_pa_sim_IsSubsystemReady
 /**
  * Select sim slot.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_selectSimSlot
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_selectSimSlot
 (
     taf_pa_sim_Id_t simId
 );
@@ -578,12 +573,12 @@ PA_SHARED pa_result_t taf_pa_sim_selectSimSlot
 /**
  * Change sim card pin.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_ChangeCardPin
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_ChangeCardPin
 (
     taf_pa_sim_LockType_t lockType,
     const char* oldpinPtr,
@@ -596,12 +591,12 @@ PA_SHARED pa_result_t taf_pa_sim_ChangeCardPin
 /**
  * Unlock sim card by pin.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_UnlockCardByPin
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_UnlockCardByPin
 (
     taf_pa_sim_LockType_t lockType,
     const char* pinPtr,
@@ -613,12 +608,12 @@ PA_SHARED pa_result_t taf_pa_sim_UnlockCardByPin
 /**
  * Unlock sim card by Puk.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_UnlockCardByPuk
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_UnlockCardByPuk
 (
     taf_pa_sim_LockType_t lockType,
     const char* pukPtr,
@@ -631,12 +626,12 @@ PA_SHARED pa_result_t taf_pa_sim_UnlockCardByPuk
 /**
  * Set SIM card lock.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_SetCardLock
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_SetCardLock
 (
     taf_pa_sim_LockType_t lockType,
     const char* pinPtr,
@@ -648,12 +643,12 @@ PA_SHARED pa_result_t taf_pa_sim_SetCardLock
 /**
  * Unlocks the SIM card and disables the lock request of PIN1/PIN2.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_SetCardUnLock
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_SetCardUnLock
 (
     taf_pa_sim_LockType_t lockType,
     const char* pinPtr,
@@ -665,12 +660,12 @@ PA_SHARED pa_result_t taf_pa_sim_SetCardUnLock
 /**
  * Get SIM app types.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetAppTypes
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetAppTypes
 (
     taf_pa_sim_AppType_t* appTypePtr,
     size_t* appTypeNumElementsPtr
@@ -680,12 +675,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetAppTypes
 /**
  * Open logical channel.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_OpenLogicalChannel
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_OpenLogicalChannel
 (
     taf_pa_sim_AppType_t appType,
     uint8_t* channelPtr,
@@ -697,12 +692,12 @@ PA_SHARED pa_result_t taf_pa_sim_OpenLogicalChannel
 /**
  * Open logical channel by Aid.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_OpenLogicalChannelByAid
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_OpenLogicalChannelByAid
 (
     const char* aid,
     uint8_t* channelIdPtr,
@@ -715,12 +710,12 @@ PA_SHARED pa_result_t taf_pa_sim_OpenLogicalChannelByAid
 /**
  * Close logical channel.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_CloseLogicalChannel
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_CloseLogicalChannel
 (
     uint8_t channelId,
     taf_pa_sim_GeneralCb callback,
@@ -731,12 +726,12 @@ PA_SHARED pa_result_t taf_pa_sim_CloseLogicalChannel
 /**
  * Send APDU on channel.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_SendApduOnLogicalChannel
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_SendApduOnLogicalChannel
 (
     uint8_t channel,
     uint8_t* responseApduPtr,
@@ -752,12 +747,12 @@ PA_SHARED pa_result_t taf_pa_sim_SendApduOnLogicalChannel
 /**
  * Send APDU.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_SendApdu
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_SendApdu
 (
     uint8_t* responseApduPtr,
     size_t* responseApduNumElementsPtr,
@@ -772,12 +767,12 @@ PA_SHARED pa_result_t taf_pa_sim_SendApdu
 /**
  * Send Command.
  * @return
- *  - TAF_PA_SIM_RESULT_OK on success
- *  - TAF_PA_SIM_RESULT_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_ExchangeSimIO
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_ExchangeSimIO
 (
     taf_pa_sim_Command_t command,
     uint8_t *p1, uint8_t *p2,
@@ -794,12 +789,12 @@ PA_SHARED pa_result_t taf_pa_sim_ExchangeSimIO
 /**
  * Register event listeners.
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //----------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_RegisterEventListener
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_RegisterEventListener
 (
     taf_pa_sim_EventListener* eventListener,
     std::any context
@@ -809,12 +804,12 @@ PA_SHARED pa_result_t taf_pa_sim_RegisterEventListener
 /**
  * Get remaining PIN retries.
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //----------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetRemainingPINTries
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetRemainingPINTries
 (
     taf_pa_sim_Id_t simId,
     int32_t* retryCount
@@ -824,12 +819,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetRemainingPINTries
 /**
  * Get remaining PUK tries.
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //----------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sim_GetRemainingPukTries
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_GetRemainingPukTries
 (
     taf_pa_sim_Id_t simId,
     uint32_t*  remainingPukTries
@@ -839,12 +834,12 @@ PA_SHARED pa_result_t taf_pa_sim_GetRemainingPukTries
 /**
  * Get EID string.
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  *
  */
 //----------------------------------------------------------------------------------------------
-PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetEID
+TAF_PA_SHARED TAF_PA_WEAK taf_pa_result_t taf_pa_sim_GetEID
 (
     taf_pa_sim_Id_t simId,
     std::string&  eidStr

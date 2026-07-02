@@ -38,15 +38,15 @@ public:
         return PhoneManager_;
     }
 
-    pa_result_t MapStatus(telux::common::Status status);
-    pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
-    pa_result_t ConvertMsd(ECallMsdData& msdData,const taf_pa_ecall_msd_data_t& msd);
+    taf_pa_result_t MapStatus(telux::common::Status status);
+    taf_pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
+    taf_pa_result_t ConvertMsd(ECallMsdData& msdData,const taf_pa_ecall_msd_data_t& msd);
     taf_pa_ecall_dir_t directionToPaDirection(telux::tel::CallDirection direction);
     taf_pa_ecall_termination_t convertToPaTermination(telux::tel::CallEndCause endCause);
     taf_pa_ecall_call_status_t stateToEvent(telux::tel::CallState state);
-    pa_result_t initialize();
-    pa_result_t deinitialize();
-    pa_result_t InitializeSDKSubsystem();
+    taf_pa_result_t initialize();
+    taf_pa_result_t deinitialize();
+    taf_pa_result_t InitializeSDKSubsystem();
 
     uint8_t getPhoneListSize(){
         return static_cast<uint8_t>(Phones.size());
@@ -56,7 +56,7 @@ public:
         return Phones[index];
     }
 
-    pa_result_t registerListener(const taf_pa_ecall_event_listener_t* eventListener,
+    taf_pa_result_t registerListener(const taf_pa_ecall_event_listener_t* eventListener,
         std::any context)
     {
         if (eventListener != nullptr)
@@ -67,11 +67,11 @@ public:
         }
         else
         {
-            PA_ERROR("Listener is NULL");
-            return PA_NOT_FOUND;
+            TAF_PA_ERROR("Listener is NULL");
+            return TAF_PA_NOT_FOUND;
         }
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
 
     EcallPaController() = default;
@@ -133,9 +133,9 @@ public:
                 // are still in use, even if the NB thread has already returned and released
                 // its shared_ptr (e.g. on an early-failure path).
                 auto self = shared_from_this();
-                PA_INFO("Command response trigger %d",(int)error);
+                TAF_PA_INFO("Command response trigger %d",(int)error);
                 auto paCtrl =  EcallPaController::getInstance();
-                pa_result_t result = paCtrl->MapErrorCode(error);
+                taf_pa_result_t result = paCtrl->MapErrorCode(error);
                 if(callback_)
                 {
                     callback_(result,ctxPtr_);
@@ -148,15 +148,15 @@ public:
                 }
                 catch (const std::future_error &e)
                 {
-                    PA_ERROR("Future error while setting command promise: %s", e.what());
+                    TAF_PA_ERROR("Future error while setting command promise: %s", e.what());
                 }
                 catch (const std::exception &e)
                 {
-                    PA_ERROR("Exception while setting command promise: %s", e.what());
+                    TAF_PA_ERROR("Exception while setting command promise: %s", e.what());
                 }
                 catch (...)
                 {
-                    PA_ERROR("Unknown error while setting command promise");
+                    TAF_PA_ERROR("Unknown error while setting command promise");
                 }
         }
 
@@ -190,9 +190,9 @@ public:
                 // are still in use, even if the NB thread has already returned and released
                 // its shared_ptr (e.g. on an early-failure path).
                 auto self = shared_from_this();
-                PA_INFO("Call response trigger %d",(int)error);
+                TAF_PA_INFO("Call response trigger %d",(int)error);
                 auto paCtrl = EcallPaController::getInstance();
-                pa_result_t result = paCtrl->MapErrorCode(error);
+                taf_pa_result_t result = paCtrl->MapErrorCode(error);
                 std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
                 std::make_shared<taf_pa_ecall_CallInfo_t>();
                 callInfo->phoneId = icall->getPhoneId();
@@ -212,15 +212,15 @@ public:
                 }
                 catch (const std::future_error &e)
                 {
-                    PA_ERROR("Future error while setting make-call promise: %s", e.what());
+                    TAF_PA_ERROR("Future error while setting make-call promise: %s", e.what());
                 }
                 catch (const std::exception &e)
                 {
-                    PA_ERROR("Exception while setting make-call promise: %s", e.what());
+                    TAF_PA_ERROR("Exception while setting make-call promise: %s", e.what());
                 }
                 catch (...)
                 {
-                    PA_ERROR("Unknown error while setting make-call promise");
+                    TAF_PA_ERROR("Unknown error while setting make-call promise");
                 }
         }
 
@@ -262,8 +262,8 @@ void EcallPaController::tafPaECallModemEvtListener::onStateChange(telux::common:
     info->subsystems = subsystemInfo.subsystems;
     if(newOperationalStatus == telux::common::OperationalStatus::OPERATIONAL){
         auto paCtrl = EcallPaController::getInstance();
-        if(paCtrl->InitializeSDKSubsystem() == PA_OK){
-            PA_INFO("Subsystem intialize after reboot");
+        if(paCtrl->InitializeSDKSubsystem() == TAF_PA_OK){
+            TAF_PA_INFO("Subsystem intialize after reboot");
         }
     }
     if(controller_)
@@ -306,13 +306,13 @@ void EcallPaController::tafPaECallListener::onIncomingCall(std::shared_ptr<telux
     auto paCtrl = EcallPaController::getInstance();
 
     if (!icall) {
-        PA_ERROR("Null icall received");
+        TAF_PA_ERROR("Null icall received");
         return;
     }
 
     if (icall->getCallDirection() != telux::tel::CallDirection::INCOMING)
     {
-        PA_ERROR("eCall is not incoming type: %d", (int)icall->getCallDirection());
+        TAF_PA_ERROR("eCall is not incoming type: %d", (int)icall->getCallDirection());
         return;
     }
 
@@ -335,11 +335,11 @@ void EcallPaController::tafPaECallListener::onIncomingCall(std::shared_ptr<telux
             callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
             callInfo->remotePartyNumber = icall->getRemotePartyNumber();
             callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
-            listener->onIncomingCall(callInfo, PA_OK, context);
+            listener->onIncomingCall(callInfo, TAF_PA_OK, context);
         }
         else
         {
-            PA_ERROR("No listener is registered!, skip state");
+            TAF_PA_ERROR("No listener is registered!, skip state");
         }
     }
 }
@@ -349,7 +349,7 @@ void EcallPaController::tafPaECallListener::onCallInfoChange(
 {
     auto paCtrl = EcallPaController::getInstance();
     if (!icall) {
-        PA_ERROR("Null icall received");
+        TAF_PA_ERROR("Null icall received");
         return;
     }
     if(controller_)
@@ -371,11 +371,11 @@ void EcallPaController::tafPaECallListener::onCallInfoChange(
             callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
             callInfo->remotePartyNumber = icall->getRemotePartyNumber();
             callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
-            listener->onCallInfoChange(callInfo, PA_OK, context);
+            listener->onCallInfoChange(callInfo, TAF_PA_OK, context);
         }
         else
         {
-            PA_ERROR("No listener is registered!, skip state");
+            TAF_PA_ERROR("No listener is registered!, skip state");
         }
     }
 
@@ -384,7 +384,7 @@ void EcallPaController::tafPaECallListener::onCallInfoChange(
 void EcallPaController::tafPaECallListener::onECallMsdTransmissionStatus(
     int phoneId, telux::tel::ECallMsdTransmissionStatus msdTransmissionStatus)
 {
-    PA_INFO("onECallMsdTransmissionStatus response trigger with phone id %d",phoneId);
+    TAF_PA_INFO("onECallMsdTransmissionStatus response trigger with phone id %d",phoneId);
     taf_pa_ecall_msd_status_t msdStatus =
         static_cast<taf_pa_ecall_msd_status_t>(static_cast<int>(msdTransmissionStatus));
     if(controller_)
@@ -411,7 +411,7 @@ void EcallPaController::tafPaECallListener::onEmergencyNetworkScanFail(int phone
 
 void EcallPaController::tafPaECallListener::onECallHlapTimerEvent(int phoneId,
      ECallHlapTimerEvents timerEvents){
-    PA_INFO("onECallHlapTimerEvent response trigger with phone id %d",phoneId);
+    TAF_PA_INFO("onECallHlapTimerEvent response trigger with phone id %d",phoneId);
     std::shared_ptr<taf_pa_ecall_hlap_timer_events_t> event =
         std::make_shared<taf_pa_ecall_hlap_timer_events_t>();
     event->t2 = static_cast<taf_pa_ecall_hlap_event_t>(static_cast<int>(timerEvents.t2));
@@ -437,7 +437,7 @@ void EcallPaController::tafPaECallListener::onECallHlapTimerEvent(int phoneId,
 
 void EcallPaController::tafPaECallListener::OnMsdUpdateRequest(int phoneId)
 {
-    PA_INFO("OnMsdUpdateRequest response trigger with phone id %d",phoneId);
+    TAF_PA_INFO("OnMsdUpdateRequest response trigger with phone id %d",phoneId);
     if(controller_)
     {
         const taf_pa_ecall_event_listener_t* listener = nullptr;
@@ -456,7 +456,7 @@ void EcallPaController::tafPaECallListener::OnMsdUpdateRequest(int phoneId)
 void EcallPaController::tafPaECallListener::onECallRedial(int phoneId,
     ECallRedialInfo info)
 {
-    PA_INFO("onECallRedial response trigger with phone id %d",phoneId);
+    TAF_PA_INFO("onECallRedial response trigger with phone id %d",phoneId);
     std::shared_ptr<taf_pa_ecall_redial_info_t> redialInfo =
         std::make_shared<taf_pa_ecall_redial_info_t>();
     redialInfo->willEcallRedial = info.willECallRedial;
@@ -476,15 +476,15 @@ void EcallPaController::tafPaECallListener::onECallRedial(int phoneId,
     }
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_RegisterListener(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_RegisterListener(
     const taf_pa_ecall_event_listener_t* eventListener,
     std::any context
 )
 {
     auto paCtrl = EcallPaController::getInstance();
-    pa_result_t res = paCtrl->registerListener(eventListener ,context);
-    if(res != PA_OK){
-        PA_ERROR("unable to register listener");
+    taf_pa_result_t res = paCtrl->registerListener(eventListener ,context);
+    if(res != TAF_PA_OK){
+        TAF_PA_ERROR("unable to register listener");
     }
     return res;
 }
@@ -908,7 +908,7 @@ taf_pa_ecall_termination_t EcallPaController::convertToPaTermination(
     }
 }
 
-pa_result_t EcallPaController::InitializeSDKSubsystem()
+taf_pa_result_t EcallPaController::InitializeSDKSubsystem()
 {
     //  Get the PhoneFactory and PhoneManager instances.
     auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
@@ -917,23 +917,23 @@ pa_result_t EcallPaController::InitializeSDKSubsystem()
     CallManager_ = phoneFactory.getCallManager([prom](telux::common::ServiceStatus status)
     {
 	    try{
-            PA_INFO("Getting status: %d from call manager", (int)status);
+            TAF_PA_INFO("Getting status: %d from call manager", (int)status);
             // If the status is SERVICE_UNAVAILABLE, the call manager will also update the status through initCB
             if (status != telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
             {
                 prom->set_value(status);
             }
         }catch (const std::future_error &e) {
-            PA_ERROR("Future error in call manager callback: %s", e.what());
+            TAF_PA_ERROR("Future error in call manager callback: %s", e.what());
         } catch (const std::exception &e) {
-            PA_ERROR("Exception in call manager callback: %s", e.what());
+            TAF_PA_ERROR("Exception in call manager callback: %s", e.what());
         } catch (...) {
-            PA_ERROR("Unknown error in call manager callback.");
+            TAF_PA_ERROR("Unknown error in call manager callback.");
         }
    });
     if (!CallManager_)
     {
-        PA_CRIT("Can't get call manager");
+        TAF_PA_CRIT("Can't get call manager");
     }
 
     std::future<telux::common::ServiceStatus> initFuture = prom->get_future();
@@ -941,14 +941,14 @@ pa_result_t EcallPaController::InitializeSDKSubsystem()
     telux::common::ServiceStatus serviceStatus;
     if (std::future_status::timeout == waitStatus)
     {
-        PA_CRIT ("Timeout waiting for susbsytem");
+        TAF_PA_CRIT ("Timeout waiting for susbsytem");
     }
     else
     {
         serviceStatus = initFuture.get();
         if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
         {
-            PA_CRIT(" *** ERROR - Unable to initialize call subsystem");
+            TAF_PA_CRIT(" *** ERROR - Unable to initialize call subsystem");
         }
     }
 
@@ -956,40 +956,40 @@ pa_result_t EcallPaController::InitializeSDKSubsystem()
    PhoneManager_ = PhoneFactory::getInstance().getPhoneManager([phoneMgrProm] (telux::common::ServiceStatus status)
    {
         try{
-	        PA_INFO("Getting status: %d from phone manager", (int)status);
+	        TAF_PA_INFO("Getting status: %d from phone manager", (int)status);
             // If the status is SERVICE_UNAVAILABLE, the call manager will also update the status through initCB
             if (status != telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
             {
                 phoneMgrProm->set_value(status);
             }
         } catch (const std::future_error &e) {
-            PA_ERROR("Future error in phone manager callback: %s", e.what());
+            TAF_PA_ERROR("Future error in phone manager callback: %s", e.what());
         } catch (const std::exception &e) {
-            PA_ERROR("Exception in phone manager callback: %s", e.what());
+            TAF_PA_ERROR("Exception in phone manager callback: %s", e.what());
         } catch (...) {
-            PA_ERROR("Unknown error in phone manager callback.");
+            TAF_PA_ERROR("Unknown error in phone manager callback.");
         }
     });
     if (!PhoneManager_)
     {
-        PA_CRIT("Can't get phone manager");
+        TAF_PA_CRIT("Can't get phone manager");
     }
 
     telux::common::ServiceStatus phoneMgrStatus = PhoneManager_->getServiceStatus();
     if (phoneMgrStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-        PA_INFO("telephony subsystem is not ready, wait for it to be ready");
+        TAF_PA_INFO("telephony subsystem is not ready, wait for it to be ready");
         std::future<telux::common::ServiceStatus> initFuture = phoneMgrProm->get_future();
         std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
         if (std::future_status::timeout == waitStatus)
         {
-            PA_CRIT("Timeout waiting for susbsytem");
+            TAF_PA_CRIT("Timeout waiting for susbsytem");
         }
         else
         {
             serviceStatus = initFuture.get();
             if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
             {
-                PA_CRIT(" *** ERROR - Unable to initialize phone subsystem");
+                TAF_PA_CRIT(" *** ERROR - Unable to initialize phone subsystem");
             }
         }
     }
@@ -1007,15 +1007,15 @@ pa_result_t EcallPaController::InitializeSDKSubsystem()
             }
         }
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t EcallPaController::initialize()
+taf_pa_result_t EcallPaController::initialize()
 {
 
     auto paCtrl =  EcallPaController::getInstance();
-    if(paCtrl->InitializeSDKSubsystem() == PA_OK){
-        PA_INFO("phone and call manager intialize");
+    if(paCtrl->InitializeSDKSubsystem() == TAF_PA_OK){
+        TAF_PA_INFO("phone and call manager intialize");
     }
     auto &subsystemFact = telux::platform::SubsystemFactory::getInstance();
     auto subsystemMgrprom = std::make_shared<std::promise<telux::common::ServiceStatus>>();
@@ -1023,32 +1023,32 @@ pa_result_t EcallPaController::initialize()
     subsystemMgr_ = subsystemFact.getSubsystemManager([subsystemMgrprom](telux::common::ServiceStatus srvStatus)
     {
         try{
-            PA_INFO("Getting status: %d from subsystem manager", (int)srvStatus);
+            TAF_PA_INFO("Getting status: %d from subsystem manager", (int)srvStatus);
             subsystemMgrprom->set_value(srvStatus);
         }catch (const std::future_error &e) {
-            PA_ERROR("Future error in subsystem manager callback: %s", e.what());
+            TAF_PA_ERROR("Future error in subsystem manager callback: %s", e.what());
         } catch (const std::exception &e) {
-            PA_ERROR("Exception in subsystem manager callback: %s", e.what());
+            TAF_PA_ERROR("Exception in subsystem manager callback: %s", e.what());
         } catch (...) {
-            PA_ERROR("Unknown error in subsystem manager callback.");
+            TAF_PA_ERROR("Unknown error in subsystem manager callback.");
         }
     });
 
     if (!subsystemMgr_) {
-        PA_ERROR("Couldn't get the subsystemMgr");
+        TAF_PA_ERROR("Couldn't get the subsystemMgr");
     }
 
     std::future<telux::common::ServiceStatus> initFuture = subsystemMgrprom->get_future();
     std::future_status waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("Timeout waiting for subsystem");
+        TAF_PA_ERROR("Timeout waiting for subsystem");
     }
     else
     {
         telux::common::ServiceStatus serviceStatus = initFuture.get();
         if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-            PA_ERROR("*** ERROR - Unable to initialize subsystem");
+            TAF_PA_ERROR("*** ERROR - Unable to initialize subsystem");
         } else {
             telux::common::SubsystemInfo subsysInfo{};
             std::vector<telux::common::SubsystemInfo> listOfSubsystems;
@@ -1060,7 +1060,7 @@ pa_result_t EcallPaController::initialize()
             telux::common::ErrorCode ec = subsystemMgr_->registerListener(ecallModemListener_,
                 listOfSubsystems);
             if (ec!= telux::common::ErrorCode::SUCCESS) {
-                PA_ERROR("Can't register listener for modem event!\n");
+                TAF_PA_ERROR("Can't register listener for modem event!\n");
             }
         }
     }
@@ -1068,83 +1068,83 @@ pa_result_t EcallPaController::initialize()
     ecallListener_ =  std::make_shared<tafPaECallListener>(this);
     Status ret = CallManager_->registerListener(ecallListener_);
     if(ret != Status::SUCCESS){
-        PA_ERROR("Failed to register call listener");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to register call listener");
+        return TAF_PA_FAULT;
     }
     ecallPhoneListener_ = std::make_shared<tafPaECallPhoneListener>(this);
     ret = PhoneManager_->registerListener(ecallPhoneListener_);
     if(ret != Status::SUCCESS){
-        PA_ERROR("Failed to register phone listener");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to register phone listener");
+        return TAF_PA_FAULT;
     }
     isInitialized_.store(true, std::memory_order_release);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t EcallPaController::MapStatus(telux::common::Status status){
+taf_pa_result_t EcallPaController::MapStatus(telux::common::Status status){
     switch (status) {
         case telux::common::Status::SUCCESS:
-            PA_INFO("Operation processed successfully");
-            return PA_OK;
+            TAF_PA_INFO("Operation processed successfully");
+            return TAF_PA_OK;
         case telux::common::Status::FAILED:
-            PA_INFO("Operation processing failed");
-            return PA_FAULT;
+            TAF_PA_INFO("Operation processing failed");
+            return TAF_PA_FAULT;
         case telux::common::Status::INVALIDPARAM:
-            PA_INFO("Input parameters are invalid");
-            return PA_BAD_PARAMETER;
+            TAF_PA_INFO("Input parameters are invalid");
+            return TAF_PA_BAD_PARAMETER;
         case telux::common::Status::NOTALLOWED:
-            PA_INFO("Operation not allowed");
-            return PA_NOT_PERMITTED;
+            TAF_PA_INFO("Operation not allowed");
+            return TAF_PA_NOT_PERMITTED;
         case telux::common::Status::NOTIMPLEMENTED:
-            PA_INFO("Feature not supported");
-            return PA_NOT_IMPLEMENTED;
+            TAF_PA_INFO("Feature not implemented");
+            return TAF_PA_NOT_IMPLEMENTED;
         case telux::common::Status::CONNECTIONLOST:
-            PA_INFO("Connection to Socket server lost");
-            return PA_COMM_ERROR;
+            TAF_PA_INFO("Connection to Socket server lost");
+            return TAF_PA_COMM_ERROR;
         case telux::common::Status::EXPIRED:
-            PA_INFO("Operation has expired");
-            return PA_TIMEOUT;
+            TAF_PA_INFO("Operation has expired");
+            return TAF_PA_TIMEOUT;
         case telux::common::Status::NOTSUPPORTED:
-            PA_INFO("Not supported on target platform");
-            return PA_UNSUPPORTED;
+            TAF_PA_INFO("Not supported on target platform");
+            return TAF_PA_UNSUPPORTED;
         default:
-            return PA_FAULT;
+            return TAF_PA_FAULT;
     }
 }
 
-pa_result_t EcallPaController::MapErrorCode(telux::common::ErrorCode errorCode)
+taf_pa_result_t EcallPaController::MapErrorCode(telux::common::ErrorCode errorCode)
 {
      switch (errorCode) {
         case telux::common::ErrorCode::SUCCESS:
-            PA_INFO("Operation processed successfully");
-            return PA_OK;
+            TAF_PA_INFO("Operation processed successfully");
+            return TAF_PA_OK;
         case telux::common::ErrorCode::GENERIC_FAILURE:
-            PA_ERROR("Operation processing failed");
-            return PA_FAULT;
+            TAF_PA_ERROR("Operation processing failed");
+            return TAF_PA_FAULT;
         case telux::common::ErrorCode::INVALID_ARGUMENTS:
-            PA_ERROR("Input parameters are invalid");
-            return PA_BAD_PARAMETER;
+            TAF_PA_ERROR("Input parameters are invalid");
+            return TAF_PA_BAD_PARAMETER;
         case telux::common::ErrorCode::OPERATION_NOT_ALLOWED:
-            PA_ERROR("Operation not allowed");
-            return PA_NOT_PERMITTED;
+            TAF_PA_ERROR("Operation not allowed");
+            return TAF_PA_NOT_PERMITTED;
         case telux::common::ErrorCode::TIMEOUT_ERROR:
-            PA_ERROR("TimeOut Error");
-            return PA_TIMEOUT;
+            TAF_PA_ERROR("TimeOut Error");
+            return TAF_PA_TIMEOUT;
         case telux::common::ErrorCode::INFO_UNAVAILABLE:
-            PA_ERROR("Information not available");
-            return PA_UNAVAILABLE;
+            TAF_PA_ERROR("Information not available");
+            return TAF_PA_UNAVAILABLE;
         case telux::common::ErrorCode::SUBSYSTEM_UNAVAILABLE:
-            PA_ERROR("Subsystem Not Available");
-            return PA_UNAVAILABLE;
+            TAF_PA_ERROR("Subsystem Not Available");
+            return TAF_PA_UNAVAILABLE;
         case telux::common::ErrorCode::REQUEST_NOT_SUPPORTED:
-            PA_ERROR("Request Not supported");
-            return PA_UNSUPPORTED;
+            TAF_PA_ERROR("Request Not supported");
+            return TAF_PA_UNSUPPORTED;
         default:
-            return PA_FAULT;
+            return TAF_PA_FAULT;
     }
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_SetOpMode(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_SetOpMode(
     uint8_t phoneId,
     taf_pa_ecall_mode_t mode,
     taf_pa_ecall_CommandCb callback,
@@ -1154,24 +1154,24 @@ pa_result_t tafpa::ecall::taf_pa_ecall_SetOpMode(
     auto paCtrl =  EcallPaController::getInstance();
     int8_t listSize = paCtrl->getPhoneListSize();
     if (phoneId > listSize) {
-        PA_ERROR("No phone found corresponding to phoneId: %d\n", phoneId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("No phone found corresponding to phoneId: %d\n", phoneId);
+        return TAF_PA_BAD_PARAMETER;
 
     }
     auto phonePtr = paCtrl->getPhone(phoneId-1);
     if(!phonePtr){
-        PA_ERROR("Invalid phone Id. No corresponding phone found");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid phone Id. No corresponding phone found");
+        return TAF_PA_BAD_PARAMETER;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto cb = [phonePtr,paCtrl,callback,context](telux::common::ErrorCode errorCode)
     {
-        PA_INFO("taf_pa_ecall_SetOpMode response trigger %d",(int)errorCode);
+        TAF_PA_INFO("taf_pa_ecall_SetOpMode response trigger %d",(int)errorCode);
         if(callback){
-            pa_result_t res = paCtrl->MapErrorCode(errorCode);
+            taf_pa_result_t res = paCtrl->MapErrorCode(errorCode);
             callback(res,context);
         }
     };
@@ -1183,18 +1183,18 @@ pa_result_t tafpa::ecall::taf_pa_ecall_SetOpMode(
         sdkMode = telux::tel::ECallMode::NORMAL;
     }
     else{
-        PA_ERROR("iNVALID MODE %d\n",(int)mode);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("iNVALID MODE %d\n",(int)mode);
+        return TAF_PA_BAD_PARAMETER;
     }
     auto ret = phonePtr->setECallOperatingMode(sdkMode,cb);
     if(ret != telux::common::Status::SUCCESS) {
-        PA_ERROR("Set eCall operating mode %d request Failed in phoneId: %d\n",
+        TAF_PA_ERROR("Set eCall operating mode %d request Failed in phoneId: %d\n",
             (int) sdkMode, phoneId);
     }
     return paCtrl->MapStatus(ret);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_GetOpMode(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_GetOpMode(
     uint8_t phoneId,
     taf_pa_ecall_GetModeCb callback,
     std::any context
@@ -1203,26 +1203,26 @@ pa_result_t tafpa::ecall::taf_pa_ecall_GetOpMode(
     auto paCtrl =  EcallPaController::getInstance();
     int8_t listSize = paCtrl->getPhoneListSize();
     if (phoneId > listSize) {
-        PA_ERROR("No phone found corresponding to phoneId: %d\n", phoneId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("No phone found corresponding to phoneId: %d\n", phoneId);
+        return TAF_PA_BAD_PARAMETER;
 
     }
     auto phonePtr = paCtrl->getPhone(phoneId-1);
     if(!phonePtr){
-        PA_ERROR("Invalid phone Id. No corresponding phone found");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid phone Id. No corresponding phone found");
+        return TAF_PA_BAD_PARAMETER;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto promisePtr = std::make_shared<std::promise<telux::common::ErrorCode>>();
     auto cb = [promisePtr,phonePtr,paCtrl,callback,context](telux::tel::ECallMode mode ,telux::common::ErrorCode errorCode)
     {
         if(callback)
         {
-            PA_INFO("taf_pa_ecall_GetOpMode response trigger %d",(int)errorCode);
-            pa_result_t res = paCtrl->MapErrorCode(errorCode);
+            TAF_PA_INFO("taf_pa_ecall_GetOpMode response trigger %d",(int)errorCode);
+            taf_pa_result_t res = paCtrl->MapErrorCode(errorCode);
                 promisePtr->set_value(errorCode);
             if(mode == telux::tel::ECallMode::ECALL_ONLY){
                 callback(taf_pa_ecall_mode_t::ONLY,res,context);
@@ -1238,13 +1238,13 @@ pa_result_t tafpa::ecall::taf_pa_ecall_GetOpMode(
 
     auto ret = phonePtr->requestECallOperatingMode(cb);
     if(ret == telux::common::Status::SUCCESS && promisePtr->get_future().get() == ErrorCode::SUCCESS) {
-        PA_INFO("Get eCall operating mode request Success in phoneId: %d\n",
+        TAF_PA_INFO("Get eCall operating mode request Success in phoneId: %d\n",
             phoneId);
     }
     return paCtrl->MapStatus(ret);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_SetConfig(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_SetConfig(
     const taf_pa_ecall_config_t& config
 )
 {
@@ -1277,30 +1277,30 @@ pa_result_t tafpa::ecall::taf_pa_ecall_SetConfig(
     }
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     Status ret = callMngr->setECallConfig(eCallConfig);
     if(ret  != Status::SUCCESS){
-        PA_ERROR("Failed to set ecall config");
+        TAF_PA_ERROR("Failed to set ecall config");
     }
     return paCtrl->MapStatus(ret);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_GetConfig(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_GetConfig(
     taf_pa_ecall_config_t& config
 )
 {
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     EcallConfig eCallConfig = {};
     Status ret = callMngr->getECallConfig(eCallConfig);
     if(ret  != Status::SUCCESS){
-        PA_ERROR("Failed to Get ecall config");
+        TAF_PA_ERROR("Failed to Get ecall config");
         return paCtrl->MapStatus(ret);
     }
     if(eCallConfig.configValidityMask.test(EcallConfigType::ECALL_CONFIG_NUM_TYPE)){
@@ -1328,10 +1328,10 @@ pa_result_t tafpa::ecall::taf_pa_ecall_GetConfig(
         config.validityMask.set(taf_pa_ecall_config_type_t::T9_TIMER);
         config.t9Timer = eCallConfig.t9Timer;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
     uint8_t phoneId,
     const std::vector<uint8_t>& msdData,
     taf_pa_ecall_CommandCb callback,
@@ -1341,30 +1341,30 @@ pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto cb = [callMngr,paCtrl,context,callback](telux::common::ErrorCode errorCode)
     {
-        PA_INFO("taf_pa_ecall_UpdateMsd response trigger %d",(int)errorCode);
+        TAF_PA_INFO("taf_pa_ecall_UpdateMsd response trigger %d",(int)errorCode);
         if(callback){
-            pa_result_t res = paCtrl->MapErrorCode(errorCode);
+            taf_pa_result_t res = paCtrl->MapErrorCode(errorCode);
             callback(res,context);
         }
     };
 
     Status status = callMngr->updateECallMsd(phoneId, msdData, cb);
     if(status != Status::SUCCESS){
-        PA_ERROR("Unable to update Msd");
+        TAF_PA_ERROR("Unable to update Msd");
     }
     return paCtrl->MapStatus(status);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_EncodeMsd(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_EncodeMsd(
     const taf_pa_ecall_msd_data_t& msdData,
     std::vector<uint8_t>& msdPdu
 )
@@ -1372,23 +1372,23 @@ pa_result_t tafpa::ecall::taf_pa_ecall_EncodeMsd(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     ECallMsdData ecallMsdData = {};
-    pa_result_t res = paCtrl->ConvertMsd(ecallMsdData,msdData);
-    if(res != PA_OK){
-        PA_ERROR("Unable to convert msd data");
+    taf_pa_result_t res = paCtrl->ConvertMsd(ecallMsdData,msdData);
+    if(res != TAF_PA_OK){
+        TAF_PA_ERROR("Unable to convert msd data");
         return res;
     }
     telux::common::ErrorCode errorCode = callMngr->encodeECallMsd(ecallMsdData, msdPdu);
     if (errorCode != telux::common::ErrorCode::SUCCESS){
-        PA_ERROR("Unable to encode msd pdu");
+        TAF_PA_ERROR("Unable to encode msd pdu");
     }
     return paCtrl->MapErrorCode(errorCode);
 }
 
-pa_result_t EcallPaController::ConvertMsd(ECallMsdData &ecallMsdData,
+taf_pa_result_t EcallPaController::ConvertMsd(ECallMsdData &ecallMsdData,
     const taf_pa_ecall_msd_data_t& msdData)
 {
     ecallMsdData.messageIdentifier = msdData.messageIdentifier;
@@ -1452,10 +1452,10 @@ pa_result_t EcallPaController::ConvertMsd(ECallMsdData &ecallMsdData,
     ecallMsdData.vehiclePropulsionStorage.electricEnergyStorage = msdData.propulsionType.electricEnergyStorage;
     ecallMsdData.vehiclePropulsionStorage.hydrogenStorage= msdData.propulsionType.hydrogenStorage;
     ecallMsdData.vehiclePropulsionStorage.otherStorage = msdData.propulsionType.otherStorage;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
     uint8_t phoneId,
     const taf_pa_ecall_msd_data_t& msdData,
     taf_pa_ecall_CommandCb callback,
@@ -1465,17 +1465,17 @@ pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     ECallMsdData ecallMsdData = {};
-    pa_result_t res = paCtrl->ConvertMsd(ecallMsdData,msdData);
-    if(res != PA_OK){
-        PA_ERROR("Unable to convert msd data");
+    taf_pa_result_t res = paCtrl->ConvertMsd(ecallMsdData,msdData);
+    if(res != TAF_PA_OK){
+        TAF_PA_ERROR("Unable to convert msd data");
         return res;
     }
 
@@ -1488,38 +1488,38 @@ pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
     // Make SDK call
     Status status = callMngr->updateECallMsd(phoneId,ecallMsdData,cbPtr);
     if(status != Status::SUCCESS){
-        PA_ERROR("Unable to update Msd");
+        TAF_PA_ERROR("Unable to update Msd");
         return paCtrl->MapStatus(status);
     }
 
     // Wait for callback to complete (cbPtr stays alive on stack)
-    PA_DEBUG("Waiting for updateECallMsd callback...");
+    TAF_PA_DEBUG("Waiting for updateECallMsd callback...");
     std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);  // 30 seconds
     std::future_status waitStatus = future.wait_for(timeout);
 
     if (std::future_status::timeout == waitStatus) {
-        PA_ERROR("updateECallMsd timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("updateECallMsd timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+        return TAF_PA_TIMEOUT;
     }
 
     // Get result from callback
     try {
         telux::common::ErrorCode errorCode = future.get();
         if (errorCode != telux::common::ErrorCode::SUCCESS) {
-            PA_ERROR("updateECallMsd failed with error: %d", (int)errorCode);
+            TAF_PA_ERROR("updateECallMsd failed with error: %d", (int)errorCode);
             return paCtrl->MapErrorCode(errorCode);
         }
     }
     catch (const std::exception& e) {
-        PA_ERROR("Exception getting future result: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("Exception getting future result: %s", e.what());
+        return TAF_PA_FAULT;
     }
 
-    PA_DEBUG("updateECallMsd completed successfully");
-    return PA_OK;
+    TAF_PA_DEBUG("updateECallMsd completed successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_UpdateHlapTimer(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_UpdateHlapTimer(
     int phoneId,
     taf_pa_ecall_hlap_timer_type_t type,
     uint32_t duration,
@@ -1530,18 +1530,18 @@ pa_result_t tafpa::ecall::taf_pa_ecall_UpdateHlapTimer(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto cb = [callMngr,paCtrl,context,callback](telux::common::ErrorCode errorCode)
     {
         if(callback){
-            PA_INFO("taf_pa_ecall_UpdateHlapTimer response trigger %d",(int)errorCode);
-            pa_result_t res = paCtrl->MapErrorCode(errorCode);
+            TAF_PA_INFO("taf_pa_ecall_UpdateHlapTimer response trigger %d",(int)errorCode);
+            taf_pa_result_t res = paCtrl->MapErrorCode(errorCode);
             callback(res,context);
         }
     };
@@ -1549,12 +1549,12 @@ pa_result_t tafpa::ecall::taf_pa_ecall_UpdateHlapTimer(
     HlapTimerType timerType = static_cast<HlapTimerType>(static_cast<int>(type));
     Status status = callMngr->updateEcallHlapTimer(phoneId,timerType,duration,cb);
     if(status != Status::SUCCESS){
-        PA_ERROR("Unable to update Hlap Timer");
+        TAF_PA_ERROR("Unable to update Hlap Timer");
     }
     return paCtrl->MapStatus(status);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_RequestHlapTimerStatus(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_RequestHlapTimerStatus(
     int phoneId,
     taf_pa_ecall_HlapTimerStatusCb callback,
     std::any context
@@ -1563,19 +1563,19 @@ pa_result_t tafpa::ecall::taf_pa_ecall_RequestHlapTimerStatus(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto promisePtr = std::make_shared<std::promise<telux::common::ErrorCode>>();
     auto cb = [promisePtr,callMngr,paCtrl,callback,context](telux::common::ErrorCode error, int phoneId,
         ECallHlapTimerStatus hlapTimerStatus)
     {
-        PA_INFO("taf_pa_ecall_RequestHlapTimerStatus response trigger %d",(int)error);
-        pa_result_t res = paCtrl->MapErrorCode(error);
+        TAF_PA_INFO("taf_pa_ecall_RequestHlapTimerStatus response trigger %d",(int)error);
+        taf_pa_result_t res = paCtrl->MapErrorCode(error);
         auto hlapStatus = std::make_shared<taf_pa_ecall_hlap_timer_status_t>();
         hlapStatus->t2 = static_cast<taf_pa_ecall_hlap_timer_state_t>(static_cast<int>(hlapTimerStatus.t2));
         hlapStatus->t5 = static_cast<taf_pa_ecall_hlap_timer_state_t>(static_cast<int>(hlapTimerStatus.t5));
@@ -1591,12 +1591,12 @@ pa_result_t tafpa::ecall::taf_pa_ecall_RequestHlapTimerStatus(
 
     Status status = callMngr->requestECallHlapTimerStatus(phoneId, cb);
     if(status == Status::SUCCESS && promisePtr->get_future().get() == ErrorCode::SUCCESS){
-        PA_INFO("able to update Hlap Timer");
+        TAF_PA_INFO("able to update Hlap Timer");
     }
     return paCtrl->MapStatus(status);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_RequestHlapTimer(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_RequestHlapTimer(
     int phoneId,
     taf_pa_ecall_hlap_timer_type_t type,
     taf_pa_ecall_HlapTimerCb callback,
@@ -1606,29 +1606,29 @@ pa_result_t tafpa::ecall::taf_pa_ecall_RequestHlapTimer(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto cb = [callMngr,paCtrl,callback,context](telux::common::ErrorCode error, uint32_t timeDuration){
-        PA_INFO("taf_pa_ecall_RequestHlapTimer response trigger %d",(int)error);
+        TAF_PA_INFO("taf_pa_ecall_RequestHlapTimer response trigger %d",(int)error);
         if(callback){
-            pa_result_t res = paCtrl->MapErrorCode(error);
+            taf_pa_result_t res = paCtrl->MapErrorCode(error);
             callback(res,timeDuration,context);
         }
     };
     HlapTimerType timerType = static_cast<HlapTimerType>(static_cast<int>(type));
     Status status = callMngr->requestEcallHlapTimer(phoneId,timerType,cb);
     if(status != Status::SUCCESS){
-        PA_ERROR("Unable to update Hlap Timer");
+        TAF_PA_ERROR("Unable to update Hlap Timer");
     }
     return paCtrl->MapStatus(status);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_SetEcallRedial(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_SetEcallRedial(
     const std::vector<int>& timeGap,
     taf_pa_ecall_CommandCb callback,
     std::any context
@@ -1637,28 +1637,28 @@ pa_result_t tafpa::ecall::taf_pa_ecall_SetEcallRedial(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto cb = [callMngr,paCtrl,callback,context](telux::common::ErrorCode error){
-        PA_INFO("taf_pa_ecall_SetEcallRedial response trigger %d",(int)error);
+        TAF_PA_INFO("taf_pa_ecall_SetEcallRedial response trigger %d",(int)error);
         if(callback){
-            pa_result_t res = paCtrl->MapErrorCode(error);
+            taf_pa_result_t res = paCtrl->MapErrorCode(error);
             callback(res,context);
         }
     };
     Status status = callMngr->configureECallRedial(RedialConfigType::CALL_ORIG,timeGap,cb);
     if(status != Status::SUCCESS){
-        PA_ERROR("Unable to update Hlap Timer");
+        TAF_PA_ERROR("Unable to update Hlap Timer");
     }
     return paCtrl->MapStatus(status);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_GetEcallRedial(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_GetEcallRedial(
     std::vector<int>& callOrigTimeGap,
     std::vector<int>& callDropTimeGap
 )
@@ -1666,18 +1666,18 @@ pa_result_t tafpa::ecall::taf_pa_ecall_GetEcallRedial(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     telux::common::ErrorCode errorCode = callMngr->
         getECallRedialConfig(callOrigTimeGap, callDropTimeGap);
     if(errorCode != telux::common::ErrorCode::SUCCESS) {
-        PA_ERROR("Unable to get ecall redail Info");
+        TAF_PA_ERROR("Unable to get ecall redail Info");
     }
     return paCtrl->MapErrorCode(errorCode);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_RestartHlapTimer(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_RestartHlapTimer(
     int phoneId,
     taf_pa_ecall_hlap_timer_id_t id,
     uint32_t duration,
@@ -1688,29 +1688,29 @@ pa_result_t tafpa::ecall::taf_pa_ecall_RestartHlapTimer(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto cb = [callMngr,paCtrl,callback,context](telux::common::ErrorCode error){
-        PA_INFO("taf_pa_ecall_RestartHlapTimer response trigger %d",(int)error);
+        TAF_PA_INFO("taf_pa_ecall_RestartHlapTimer response trigger %d",(int)error);
         if(callback){
-            pa_result_t res = paCtrl->MapErrorCode(error);
+            taf_pa_result_t res = paCtrl->MapErrorCode(error);
             callback(res,context);
         }
     };
     EcallHlapTimerId timerId  =  static_cast<EcallHlapTimerId>(static_cast<int>(id));
     Status status = callMngr->restartECallHlapTimer(phoneId,timerId,duration,cb);
     if(status != Status::SUCCESS){
-        PA_ERROR("Unable to restart Hlap Timer");
+        TAF_PA_ERROR("Unable to restart Hlap Timer");
     }
     return paCtrl->MapStatus(status);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     int phoneId,
     const taf_pa_ecall_msd_data_t& msdData,
     taf_pa_ecall_category_t category,
@@ -1722,46 +1722,46 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     ECallMsdData ecallMsdData = {};
-    pa_result_t res = paCtrl->ConvertMsd(ecallMsdData,msdData);
-    if(res!=PA_OK) return PA_FAULT;
+    taf_pa_result_t res = paCtrl->ConvertMsd(ecallMsdData,msdData);
+    if(res!=TAF_PA_OK) return TAF_PA_FAULT;
     ECallCategory categoryId = static_cast<ECallCategory>(static_cast<int>(category));
     ECallVariant eCallType = static_cast<ECallVariant>(static_cast<int>(type));
     auto cbPtr = std::make_shared<EcallPaController::MakeCallCallback>(callMngr,callback,context);
     Status ret = callMngr->makeECall(phoneId,ecallMsdData,(int)categoryId,(int)eCallType,cbPtr);
     if(ret != Status::SUCCESS ){
-        PA_ERROR("Unable to make ecall");
+        TAF_PA_ERROR("Unable to make ecall");
     }
     if (ret == telux::common::Status::SUCCESS &&
             cbPtr->getFuture().get() == telux::common::ErrorCode::SUCCESS)
     {
-        PA_INFO("Success on make ecall");
-        return PA_OK;
+        TAF_PA_INFO("Success on make ecall");
+        return TAF_PA_OK;
     }
     return paCtrl->MapStatus(ret);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_GetInProgressCalls
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_GetInProgressCalls
 (
     std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>* callListPtr
 )
 {
     if (!callListPtr) {
-        PA_ERROR("callListPtr is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("callListPtr is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     auto activeCall = callMngr->getInProgressCalls();
     for (auto icall = std::begin(activeCall); icall != std::end(activeCall); icall++)
@@ -1775,10 +1775,10 @@ pa_result_t tafpa::ecall::taf_pa_ecall_GetInProgressCalls
         callInfo->endCause = paCtrl->convertToPaTermination((*icall)->getCallEndCause());
         callListPtr->push_back(callInfo);
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_RequestNetworkDeregistration(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_RequestNetworkDeregistration(
     uint8_t phoneId,
     taf_pa_ecall_CommandCb callback,
     std::any context
@@ -1787,28 +1787,28 @@ pa_result_t tafpa::ecall::taf_pa_ecall_RequestNetworkDeregistration(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
     auto cb = [paCtrl,callback,context](telux::common::ErrorCode error){
-        PA_INFO("taf_pa_ecall_RequestNetworkDeregistration response trigger %d",(int)error);
+        TAF_PA_INFO("taf_pa_ecall_RequestNetworkDeregistration response trigger %d",(int)error);
         if(callback){
-            pa_result_t res = paCtrl->MapErrorCode(error);
+            taf_pa_result_t res = paCtrl->MapErrorCode(error);
             callback(res,context);
         }
     };
     Status status = callMngr->requestNetworkDeregistration(phoneId, cb);
     if(status != Status::SUCCESS){
-        PA_ERROR("Unable to do NetworkDeregistration");
+        TAF_PA_ERROR("Unable to do NetworkDeregistration");
     }
     return paCtrl->MapStatus(status);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     int phoneId,
     const std::vector<uint8_t>& msdPdu,
     taf_pa_ecall_category_t category,
@@ -1820,12 +1820,12 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     ECallCategory categoryId = static_cast<ECallCategory>(static_cast<int>(category));
@@ -1834,8 +1834,8 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     auto cb = [promisePtr,callMngr,paCtrl,context,callback](telux::common::ErrorCode errorCode,
         std::shared_ptr<telux::tel::ICall> icall)
     {
-        PA_INFO("taf_pa_ecall_MakeECall response trigger %d",(int)errorCode);
-        pa_result_t result = paCtrl->MapErrorCode(errorCode);
+        TAF_PA_INFO("taf_pa_ecall_MakeECall response trigger %d",(int)errorCode);
+        taf_pa_result_t result = paCtrl->MapErrorCode(errorCode);
         std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
             std::make_shared<taf_pa_ecall_CallInfo_t>();
         callInfo->phoneId = icall->getPhoneId();
@@ -1855,13 +1855,13 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     if (ret == telux::common::Status::SUCCESS &&
             promisePtr->get_future().get() == telux::common::ErrorCode::SUCCESS)
     {
-        PA_INFO("Success on make ecall");
-        return PA_OK;
+        TAF_PA_INFO("Success on make ecall");
+        return TAF_PA_OK;
     }
     return paCtrl->MapStatus(ret);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     int phoneId,
     std::string dialNumber,
     const taf_pa_ecall_custom_sip_header_t& header,
@@ -1873,25 +1873,25 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     if(!callback){
-        PA_ERROR("Callback is null");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Callback is null");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     CustomSipHeader header_;
     if (header.contentType != ""){
         header_.contentType = header.contentType;
-        PA_INFO("Set content type as %s", header.contentType.c_str());
+        TAF_PA_INFO("Set content type as %s", header.contentType.c_str());
     } else {
         header_.contentType= telux::tel::CONTENT_HEADER;
     }
 
     if (header.acceptInfo != "") {
         header_.acceptInfo = header.acceptInfo;
-        PA_INFO("Set accept info as %s", header.acceptInfo.c_str());
+        TAF_PA_INFO("Set accept info as %s", header.acceptInfo.c_str());
     } else {
         header_.acceptInfo = "";
     }
@@ -1899,8 +1899,8 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     auto cb = [promisePtr,callMngr,paCtrl,context,callback](telux::common::ErrorCode errorCode,
         std::shared_ptr<telux::tel::ICall> icall)
     {
-        PA_INFO("taf_pa_ecall_MakeECall response trigger %d",(int)errorCode);
-        pa_result_t result = paCtrl->MapErrorCode(errorCode);
+        TAF_PA_INFO("taf_pa_ecall_MakeECall response trigger %d",(int)errorCode);
+        taf_pa_result_t result = paCtrl->MapErrorCode(errorCode);
         std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
             std::make_shared<taf_pa_ecall_CallInfo_t>();
         callInfo->phoneId = icall->getPhoneId();
@@ -1918,13 +1918,13 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     if (ret == telux::common::Status::SUCCESS &&
             promisePtr->get_future().get() == telux::common::ErrorCode::SUCCESS)
     {
-        PA_INFO("Success on make ecall");
-        return PA_OK;
+        TAF_PA_INFO("Success on make ecall");
+        return TAF_PA_OK;
     }
     return paCtrl->MapStatus(ret);
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_GetPhoneIdFromSlotId
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_GetPhoneIdFromSlotId
 (
     int8_t slotId,
     int8_t* phoneIdPtr
@@ -1933,14 +1933,14 @@ pa_result_t tafpa::ecall::taf_pa_ecall_GetPhoneIdFromSlotId
     auto paCtrl =  EcallPaController::getInstance();
     auto phnMngr = paCtrl->getPhoneManager();
     if(!phnMngr){
-        PA_ERROR("phone Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("phone Manager is Null");
+        return TAF_PA_FAULT;
     }
     if (phoneIdPtr) *phoneIdPtr = phnMngr->getPhoneIdFromSlotId(slotId);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_Answer(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_Answer(
     const taf_pa_ecall_CallInfo_t& callInfo,
     taf_pa_ecall_CommandCb callback,
     std::any context
@@ -1949,14 +1949,14 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Answer(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     auto activeCall = callMngr->getInProgressCalls();
     if (activeCall.size() == 0)
     {
-        PA_ERROR("No call is in progress");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("No call is in progress");
+        return TAF_PA_NOT_FOUND;
     }
     for (auto iCall = std::begin(activeCall); iCall != std::end(activeCall); iCall++)
     {
@@ -1971,41 +1971,41 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Answer(
 
             Status status = (*iCall)->answer(cbObj);
             if (status != telux::common::Status::SUCCESS) {
-                PA_ERROR("Failed to answer call, status: %d", (int)status);
+                TAF_PA_ERROR("Failed to answer call, status: %d", (int)status);
                 return paCtrl->MapStatus(status);
             }
 
             // Wait for callback with timeout
-            PA_DEBUG("Waiting for answer callback...");
+            TAF_PA_DEBUG("Waiting for answer callback...");
             std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
             std::future_status waitStatus = future.wait_for(timeout);
 
             if (std::future_status::timeout == waitStatus) {
-                PA_ERROR("answer timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
-                return PA_TIMEOUT;
+                TAF_PA_ERROR("answer timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return TAF_PA_TIMEOUT;
             }
 
             // Get result from callback
             try {
                 telux::common::ErrorCode errorCode = future.get();
                 if (errorCode == telux::common::ErrorCode::SUCCESS) {
-                    PA_INFO("Success on answer ecall");
-                    return PA_OK;
+                    TAF_PA_INFO("Success on answer ecall");
+                    return TAF_PA_OK;
                 } else {
-                    PA_ERROR("answer failed with error: %d", (int)errorCode);
+                    TAF_PA_ERROR("answer failed with error: %d", (int)errorCode);
                     return paCtrl->MapErrorCode(errorCode);
                 }
             }
             catch (const std::exception& e) {
-                PA_ERROR("Exception getting future result: %s", e.what());
-                return PA_FAULT;
+                TAF_PA_ERROR("Exception getting future result: %s", e.what());
+                return TAF_PA_FAULT;
             }
         }
     }
-    return PA_NOT_FOUND;
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_Hangup(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_Hangup(
     const taf_pa_ecall_CallInfo_t& callInfo,
     taf_pa_ecall_CommandCb callback,
     std::any context
@@ -2014,14 +2014,14 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Hangup(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     auto activeCall = callMngr->getInProgressCalls();
     if (activeCall.size() == 0)
     {
-        PA_ERROR("No call is in progress");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("No call is in progress");
+        return TAF_PA_NOT_FOUND;
     }
     for (auto iCall = std::begin(activeCall); iCall != std::end(activeCall); iCall++)
     {
@@ -2031,8 +2031,8 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Hangup(
         {
             if ((*iCall)->getCallState() == telux::tel::CallState::CALL_ENDED)
             {
-                PA_ERROR("Call is already ended");
-                return PA_DUPLICATE;
+                TAF_PA_ERROR("Call is already ended");
+                return TAF_PA_DUPLICATE;
             }
 
             auto cbObj = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback, context);
@@ -2042,41 +2042,41 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Hangup(
 
             Status status = (*iCall)->hangup(cbObj);
             if (status != telux::common::Status::SUCCESS) {
-                PA_ERROR("Failed to hangup call, status: %d", (int)status);
+                TAF_PA_ERROR("Failed to hangup call, status: %d", (int)status);
                 return paCtrl->MapStatus(status);
             }
 
             // Wait for callback with timeout
-            PA_DEBUG("Waiting for hangup callback...");
+            TAF_PA_DEBUG("Waiting for hangup callback...");
             std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
             std::future_status waitStatus = future.wait_for(timeout);
 
             if (std::future_status::timeout == waitStatus) {
-                PA_ERROR("hangup timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
-                return PA_TIMEOUT;
+                TAF_PA_ERROR("hangup timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return TAF_PA_TIMEOUT;
             }
 
             // Get result from callback
             try {
                 telux::common::ErrorCode errorCode = future.get();
                 if (errorCode == telux::common::ErrorCode::SUCCESS) {
-                    PA_INFO("Success on hangup ecall");
-                    return PA_OK;
+                    TAF_PA_INFO("Success on hangup ecall");
+                    return TAF_PA_OK;
                 } else {
-                    PA_ERROR("hangup failed with error: %d", (int)errorCode);
+                    TAF_PA_ERROR("hangup failed with error: %d", (int)errorCode);
                     return paCtrl->MapErrorCode(errorCode);
                 }
             }
             catch (const std::exception& e) {
-                PA_ERROR("Exception getting future result: %s", e.what());
-                return PA_FAULT;
+                TAF_PA_ERROR("Exception getting future result: %s", e.what());
+                return TAF_PA_FAULT;
             }
         }
     }
-    return PA_NOT_FOUND;
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
     const taf_pa_ecall_CallInfo_t& callInfo,
     taf_pa_ecall_CommandCb callback,
     std::any context
@@ -2085,14 +2085,14 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
-        PA_ERROR("Call Manager is Null");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call Manager is Null");
+        return TAF_PA_FAULT;
     }
     auto activeCall = callMngr->getInProgressCalls();
     if (activeCall.size() == 0)
     {
-        PA_ERROR("No call is in progress");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("No call is in progress");
+        return TAF_PA_NOT_FOUND;
     }
     for (auto iCall = std::begin(activeCall); iCall != std::end(activeCall); iCall++)
     {
@@ -2102,8 +2102,8 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
         {
             if ((*iCall)->getCallState() == telux::tel::CallState::CALL_ENDED)
             {
-                PA_ERROR("Call is already ended");
-                return PA_DUPLICATE;
+                TAF_PA_ERROR("Call is already ended");
+                return TAF_PA_DUPLICATE;
             }
 
             auto cbObj = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback, context);
@@ -2113,59 +2113,59 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
 
             Status status = (*iCall)->reject(cbObj);
             if (status != telux::common::Status::SUCCESS) {
-                PA_ERROR("Failed to reject call, status: %d", (int)status);
+                TAF_PA_ERROR("Failed to reject call, status: %d", (int)status);
                 return paCtrl->MapStatus(status);
             }
 
             // Wait for callback with timeout
-            PA_DEBUG("Waiting for reject callback...");
+            TAF_PA_DEBUG("Waiting for reject callback...");
             std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
             std::future_status waitStatus = future.wait_for(timeout);
 
             if (std::future_status::timeout == waitStatus) {
-                PA_ERROR("reject timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
-                return PA_TIMEOUT;
+                TAF_PA_ERROR("reject timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return TAF_PA_TIMEOUT;
             }
 
             // Get result from callback
             try {
                 telux::common::ErrorCode errorCode = future.get();
                 if (errorCode == telux::common::ErrorCode::SUCCESS) {
-                    PA_INFO("Success on reject ecall");
-                    return PA_OK;
+                    TAF_PA_INFO("Success on reject ecall");
+                    return TAF_PA_OK;
                 } else {
-                    PA_ERROR("reject failed with error: %d", (int)errorCode);
+                    TAF_PA_ERROR("reject failed with error: %d", (int)errorCode);
                     return paCtrl->MapErrorCode(errorCode);
                 }
             }
             catch (const std::exception& e) {
-                PA_ERROR("Exception getting future result: %s", e.what());
-                return PA_FAULT;
+                TAF_PA_ERROR("Exception getting future result: %s", e.what());
+                return TAF_PA_FAULT;
             }
         }
     }
-    return PA_NOT_FOUND;
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t EcallPaController::deinitialize()
+taf_pa_result_t EcallPaController::deinitialize()
 {
     // Check if initialization was successful before proceeding with deinitialization
     if (!isInitialized_.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Starting ECall PA deinitialization...");
+    TAF_PA_INFO("Starting ECall PA deinitialization...");
 
     // Step 1: Deregister ecall call listener from CallManager
     if (CallManager_ && ecallListener_)
     {
-        PA_INFO("Deregistering ecallListener_ from CallManager_");
+        TAF_PA_INFO("Deregistering ecallListener_ from CallManager_");
         telux::common::Status status = CallManager_->removeListener(ecallListener_);
         if (status != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("Failed to deregister ecall call listener. Status: %d",
+            TAF_PA_ERROR("Failed to deregister ecall call listener. Status: %d",
                      static_cast<int>(status));
         }
         ecallListener_.reset();
@@ -2174,11 +2174,11 @@ pa_result_t EcallPaController::deinitialize()
     // Step 2: Deregister ecall phone listener from PhoneManager
     if (PhoneManager_ && ecallPhoneListener_)
     {
-        PA_INFO("Deregistering ecallPhoneListener_ from PhoneManager_");
+        TAF_PA_INFO("Deregistering ecallPhoneListener_ from PhoneManager_");
         telux::common::Status status = PhoneManager_->removeListener(ecallPhoneListener_);
         if (status != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("Failed to deregister ecall phone listener. Status: %d",
+            TAF_PA_ERROR("Failed to deregister ecall phone listener. Status: %d",
                      static_cast<int>(status));
         }
         ecallPhoneListener_.reset();
@@ -2188,7 +2188,7 @@ pa_result_t EcallPaController::deinitialize()
     // Reconstruct the same subsystem info list used during registration.
     if (subsystemMgr_ && ecallModemListener_)
     {
-        PA_INFO("Deregistering ecallModemListener_ from subsystemMgr_");
+        TAF_PA_INFO("Deregistering ecallModemListener_ from subsystemMgr_");
         telux::common::SubsystemInfo subsysInfo{};
         std::vector<telux::common::SubsystemInfo> listOfSubsystems;
         subsysInfo.location = telux::common::ProcType::LOCAL_PROC;
@@ -2198,60 +2198,60 @@ pa_result_t EcallPaController::deinitialize()
             subsystemMgr_->deRegisterListener(ecallModemListener_);
         if (ec != telux::common::ErrorCode::SUCCESS)
         {
-            PA_ERROR("Failed to deregister ecall modem listener. ErrorCode: %d",
+            TAF_PA_ERROR("Failed to deregister ecall modem listener. ErrorCode: %d",
                      static_cast<int>(ec));
         }
         ecallModemListener_.reset();
     }
 
     // Step 4: Reset manager shared pointers
-    PA_INFO("Resetting CallManager_, PhoneManager_, subsystemMgr_");
+    TAF_PA_INFO("Resetting CallManager_, PhoneManager_, subsystemMgr_");
     CallManager_.reset();
     PhoneManager_.reset();
     subsystemMgr_.reset();
 
     // Step 5: Clear phone list
-    PA_INFO("Clearing Phones vector");
+    TAF_PA_INFO("Clearing Phones vector");
     Phones.clear();
 
     // Step 6: Clear event listener pointer and context.
     // Hold listenerMutex_ so the clear is mutually exclusive with any in-flight
     // SB callback that reads eventListener_ under the same mutex.
-    PA_INFO("Clearing eventListener_ and contextPtr_");
+    TAF_PA_INFO("Clearing eventListener_ and contextPtr_");
     {
         std::lock_guard<std::mutex> lock(listenerMutex_);
         eventListener_ = nullptr;
         contextPtr_.reset();
     }
 
-    PA_INFO("ECall PA deinitialization complete");
+    TAF_PA_INFO("ECall PA deinitialization complete");
     isInitialized_.store(false, std::memory_order_release);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_Init(){
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_Init(){
     auto paCtrl =  EcallPaController::getInstance();
-    pa_result_t result = paCtrl->initialize();
-    if(result != PA_OK){
-        PA_ERROR("Ecall pa controller initialization failed");
+    taf_pa_result_t result = paCtrl->initialize();
+    if(result != TAF_PA_OK){
+        TAF_PA_ERROR("Ecall pa controller initialization failed");
     }
     else{
-        PA_INFO("Ecall pa controller initialization done");
+        TAF_PA_INFO("Ecall pa controller initialization done");
     }
     return result;
 }
 
-pa_result_t tafpa::ecall::taf_pa_ecall_Deinit()
+taf_pa_result_t tafpa::ecall::taf_pa_ecall_Deinit()
 {
     auto paCtrl = EcallPaController::getInstance();
-    pa_result_t result = paCtrl->deinitialize();
-    if (result != PA_OK)
+    taf_pa_result_t result = paCtrl->deinitialize();
+    if (result != TAF_PA_OK)
     {
-        PA_ERROR("Ecall pa controller deinitialization failed");
+        TAF_PA_ERROR("Ecall pa controller deinitialization failed");
     }
     else
     {
-        PA_INFO("Ecall pa controller deinitialization done");
+        TAF_PA_INFO("Ecall pa controller deinitialization done");
     }
     return result;
 }

@@ -162,7 +162,7 @@ struct PaDtmfTone {
 };
 
 using taf_pa_audio_cb = std::function<void(
-    pa_result_t errorCode,
+    taf_pa_result_t errorCode,
     std::any context
 )>;
 
@@ -182,14 +182,14 @@ class IPaStreamBuffer {
 
    virtual void setDataSize(uint32_t size) = 0;
 
-   virtual pa_result_t reset() = 0;
+   virtual taf_pa_result_t reset() = 0;
 
     virtual ~IPaStreamBuffer() {};
 };
 
 using taf_pa_audio_Readcb = std::function<void(
     std::shared_ptr<IPaStreamBuffer> buffer,
-    pa_result_t paRes
+    taf_pa_result_t paRes
 )>;
 
 /**
@@ -216,7 +216,7 @@ class PaAudioCaptureStream{
 
     virtual std::shared_ptr<IPaStreamBuffer> getStreamBuffer() = 0;
 
-    virtual pa_result_t read(std::shared_ptr<IPaStreamBuffer> buffer,
+    virtual taf_pa_result_t read(std::shared_ptr<IPaStreamBuffer> buffer,
             uint32_t bytesToRead, taf_pa_audio_Readcb callback = nullptr) = 0;
 
     virtual ~PaAudioCaptureStream() {};
@@ -234,91 +234,91 @@ class IPaDtmfListener {
     virtual ~IPaDtmfListener() {}
 };
 
-PA_SHARED pa_result_t taf_pa_audio_Init();
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_Init();
 
-PA_SHARED pa_result_t taf_pa_audio_Deinit();
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_Deinit();
 
-PA_SHARED pa_result_t taf_pa_audio_CreateStream(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_CreateStream(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_DeleteStream(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_DeleteStream(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_StartAudio(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_StartAudio(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_StopAudio(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_StopAudio(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_StartPlayback(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_StartPlayback(
     std::vector<taf_pa_audio_PlayFileInfo_t> &playFileInfos,
     int listSiz,
     std::weak_ptr<IPaPlayListListener> pbStatusListener
 );
 
-PA_SHARED pa_result_t taf_pa_audio_StopPlayback(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_StopPlayback(
     PaStreamConfig streamConfig
 );
 
-PA_SHARED pa_result_t taf_pa_audio_GetCaptureStream(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_GetCaptureStream(
     PaStreamDirection streamDir,
     std::shared_ptr<PaAudioCaptureStream>& captureStream
 );
 
-PA_SHARED pa_result_t taf_pa_audio_SetVolume(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_SetVolume(
     PaStreamConfig streamConfig,
     double volLevel,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_GetVolume(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_GetVolume(
     PaStreamConfig streamConfig,
     double *volLevel,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_SetMute(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_SetMute(
     PaStreamConfig streamConfig,
     bool isMute,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_GetMute(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_GetMute(
     PaStreamConfig streamConfig,
     bool *isMute,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_PlaySignallingDtmfOnTx(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_PlaySignallingDtmfOnTx(
     uint32_t slotId,
     const char dtmf,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_StopSignallingDtmfOnTx(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_StopSignallingDtmfOnTx(
     uint32_t slotId,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_PlayDtmf(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_PlayDtmf(
     PaDtmfTone dtmfTone,
     uint16_t duration,
     uint16_t gain,
@@ -326,17 +326,17 @@ PA_SHARED pa_result_t taf_pa_audio_PlayDtmf(
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_StopDtmf(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_StopDtmf(
     PaStreamDirection direction,
     taf_pa_audio_cb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_audio_registerDtmfListener(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_registerDtmfListener(
     std::weak_ptr<IPaDtmfListener> dtmfListener
 );
 
-PA_SHARED pa_result_t taf_pa_audio_deregisterDtmfListener(
+TAF_PA_SHARED taf_pa_result_t taf_pa_audio_deregisterDtmfListener(
     std::weak_ptr<IPaDtmfListener> dtmfListener
 );
 
@@ -355,7 +355,7 @@ using taf_pa_audio_SubsystemStateChangeCb =
 /**
  * Register audio subsystem state events callback
  */
-PA_SHARED pa_result_t AddSubsystemStateChangeListener
+TAF_PA_SHARED taf_pa_result_t AddSubsystemStateChangeListener
 (
     taf_pa_audio_SubsystemStateChangeCb callBack,
     ///< [IN] The callback function.
@@ -368,7 +368,7 @@ PA_SHARED pa_result_t AddSubsystemStateChangeListener
 /**
  * Deregister a previously registered subsystem state change callback
  */
-PA_SHARED pa_result_t RemoveSubsystemStateChangeListener
+TAF_PA_SHARED taf_pa_result_t RemoveSubsystemStateChangeListener
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.

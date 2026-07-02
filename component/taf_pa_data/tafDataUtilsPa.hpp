@@ -84,13 +84,13 @@ class Utils
             telux::data::ServiceState
         );
 
-        static pa_result_t ConvertProfileInfo
+        static taf_pa_result_t ConvertProfileInfo
         (
             telux::data::DataProfile  &dataProfile, // IN
             ProfileInfo_t    &profileInfo           // OUT
         );
 
-        static pa_result_t ConvertThrottledApnEvent
+        static taf_pa_result_t ConvertThrottledApnEvent
         (
             const telux::data::APNThrottleInfo &sdkEvent,
             ThrottledApnEventInfo_t &paEvent

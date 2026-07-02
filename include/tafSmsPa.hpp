@@ -50,7 +50,7 @@ typedef struct
     int endMessageId;
 } taf_cb_filter_t;
 
-typedef std::function<void(void* context, pa_result_t result)> taf_pa_sms_SendCallback_t;
+typedef std::function<void(void* context, taf_pa_result_t result)> taf_pa_sms_SendCallback_t;
 
 typedef std::function<void(
     int phoneId, const std::string& pdu, const std::string& sender, int storageIdx)>
@@ -59,10 +59,10 @@ typedef std::function<void(
 typedef std::function<void(int phoneId, taf_pa_sms_StorageFullType fullType)>
     MemoryFullCallback;
 
-PA_SHARED pa_result_t taf_pa_sms_Init(void);
-PA_SHARED pa_result_t taf_pa_sms_Deinit(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_Init(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_Deinit(void);
 
-PA_SHARED pa_result_t taf_pa_sms_ReadMessage
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_ReadMessage
 (
     uint32_t readAtIdx,
     uint32_t timeout,
@@ -72,17 +72,17 @@ PA_SHARED pa_result_t taf_pa_sms_ReadMessage
     uint32_t* pduMsgIndex
 );
 
-PA_SHARED pa_result_t taf_pa_sms_RegisterIncomingSmsCallback
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_RegisterIncomingSmsCallback
 (
     IncomingSmsCallback cb
 );
 
-PA_SHARED pa_result_t taf_pa_sms_RegisterMemoryFullCallback
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_RegisterMemoryFullCallback
 (
     MemoryFullCallback cb
 );
 
-PA_SHARED pa_result_t taf_pa_sms_SendRawSms
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_SendRawSms
 (
     uint8_t* pduData,
     uint32_t pduLength,
@@ -90,36 +90,28 @@ PA_SHARED pa_result_t taf_pa_sms_SendRawSms
     uint8_t phoneId
 );
 
-PA_SHARED pa_result_t taf_pa_sms_SendPDUMessageAsync
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_SendPDUMessageAsync
 (
     uint8_t phoneId,
     const uint8_t* pduData,
     size_t pduLength,
-    std::function<void(pa_result_t)> cb
+    std::function<void(taf_pa_result_t)> cb
 );
 
-PA_SHARED pa_result_t taf_pa_sms_SetActivationStatus
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_SetActivationStatus
 (
     uint8_t phoneId,
     bool activate,
     uint32_t timeout
 );
 
-PA_SHARED pa_result_t taf_pa_sms_RequestMessageFilters
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_RequestMessageFilters
 (
     uint8_t phoneId,
     uint32_t timeout
 );
 
-PA_SHARED pa_result_t taf_pa_sms_AddCellBroadcastIds
-(
-    uint8_t phoneId,
-    uint16_t fromId,
-    uint16_t toId,
-    uint32_t timeout
-);
-
-PA_SHARED pa_result_t taf_pa_sms_RemoveCellBroadcastIds
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_AddCellBroadcastIds
 (
     uint8_t phoneId,
     uint16_t fromId,
@@ -127,7 +119,15 @@ PA_SHARED pa_result_t taf_pa_sms_RemoveCellBroadcastIds
     uint32_t timeout
 );
 
-PA_SHARED pa_result_t taf_pa_sms_GetSmsCenterAddress
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_RemoveCellBroadcastIds
+(
+    uint8_t phoneId,
+    uint16_t fromId,
+    uint16_t toId,
+    uint32_t timeout
+);
+
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_GetSmsCenterAddress
 (
     uint8_t phoneId,
     char* addr,
@@ -135,28 +135,28 @@ PA_SHARED pa_result_t taf_pa_sms_GetSmsCenterAddress
     uint32_t timeout
 );
 
-PA_SHARED pa_result_t taf_pa_sms_SetSmsCenterAddress
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_SetSmsCenterAddress
 (
     uint8_t phoneId,
     const char* addr,
     uint32_t timeout
 );
 
-PA_SHARED pa_result_t taf_pa_sms_GetPreferredStorage
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_GetPreferredStorage
 (
     taf_pa_sms_Storage* type,
     uint32_t timeout,
     uint8_t phoneId
 );
 
-PA_SHARED pa_result_t taf_pa_sms_SetPreferredStorage
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_SetPreferredStorage
 (
     taf_pa_sms_Storage type,
     uint32_t timeout,
     uint8_t phoneId
 );
 
-PA_SHARED pa_result_t taf_pa_sms_SetTag
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_SetTag
 (
     uint32_t msgIndex,
     taf_pa_sms_Tag tagType,
@@ -164,14 +164,14 @@ PA_SHARED pa_result_t taf_pa_sms_SetTag
     uint8_t phoneId
 );
 
-PA_SHARED pa_result_t taf_pa_sms_DeleteMessage
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_DeleteMessage
 (
     uint32_t msgIndex,
     uint32_t timeout,
     uint8_t phoneId
 );
 
-PA_SHARED pa_result_t taf_pa_sms_RequestSmsMessageList
+TAF_PA_SHARED taf_pa_result_t taf_pa_sms_RequestSmsMessageList
 (
     uint32_t* arr,
     size_t arrSize,

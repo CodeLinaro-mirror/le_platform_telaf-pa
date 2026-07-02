@@ -9,8 +9,6 @@ set(LIBRARY_SOVERSION "1")
 set(TARGET_NAME taf_pa_radio)
 set(OUTPUT_NAME Component_${TARGET_NAME})
 
-add_subdirectory(stub)
-
 add_library(${TARGET_NAME} SHARED tafRadioPa.cpp)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
@@ -19,7 +17,8 @@ set_target_properties(${TARGET_NAME} PROPERTIES
     OUTPUT_NAME ${OUTPUT_NAME}
 )
 
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/stub/include)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
 target_link_libraries(${TARGET_NAME} PRIVATE telux_tel telux_data)
 target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
@@ -28,4 +27,3 @@ target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_radio)
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib
 )
-

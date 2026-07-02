@@ -244,7 +244,7 @@ static taf_pa_common_LogLevel_t PropLevelToPaLevel(taf_prop_common_LogLevel_t le
     }
 }
 
-pa_result_t taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
+taf_pa_result_t taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
 {
     gLogLevel = level;
 
@@ -256,7 +256,7 @@ pa_result_t taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
             std::memory_order_acq_rel,
             std::memory_order_acquire))
     {
-        return PA_OK;
+        return TAF_PA_OK;
     }
 
     taf_prop_common_LogLevel_t commonLevel = LogLevelToPropLogLevel(level);
@@ -272,16 +272,16 @@ pa_result_t taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
     }
 
     gSetLevelFanoutInProgress.store(false, std::memory_order_release);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_common_LogSetBackend(taf_pa_common_LogBackend_t backend)
+taf_pa_result_t taf_pa_common_LogSetBackend(taf_pa_common_LogBackend_t backend)
 {
     if (backend == TAF_PA_COMMON_LOG_BACKEND_AUTO)
         backend = DetectBackendFromEnv();
 
     gLogBackend = backend;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 static inline taf_pa_common_LogBackend_t GetBackend(void)
@@ -312,12 +312,12 @@ static void EmitLog(taf_pa_common_LogLevel_t level, const char* msg)
     }
 }
 
-pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
+taf_pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
                               const char* file, const char* func, int line,
                               const char* fmt, ...)
 {
     if (level < GetLevel())
-        return PA_OK;
+        return TAF_PA_OK;
 
     char buf[MAX_MSG_SIZE];
 
@@ -328,7 +328,7 @@ pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
     va_end(ap);
 
     if (len < 0)
-        return PA_OK;
+        return TAF_PA_FORMAT_ERROR;
 
     // If truncated, optionally append "..." to make truncation visible.
     if ((size_t)len >= sizeof(buf))
@@ -344,7 +344,7 @@ pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
     }
 
     EmitLog(level, buf);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 static void taf_pa_common_LogVMessage(taf_pa_common_LogLevel_t level,
@@ -395,7 +395,7 @@ static const taf_prop_common_LogVtable_t SharedLogVt = {
     .set_level   = PaShared_SetLevel,
 };
 
-pa_result_t taf_pa_common_LogInit(
+taf_pa_result_t taf_pa_common_LogInit(
     taf_pa_common_LogBackend_t backend,
     taf_pa_common_LogLevel_t initLogLevel,
     void* logCtxPtr
@@ -408,7 +408,7 @@ pa_result_t taf_pa_common_LogInit(
             std::memory_order_acq_rel,
             std::memory_order_acquire))
     {
-        return PA_OK;
+        return TAF_PA_OK;
     }
 
     if (backend == TAF_PA_COMMON_LOG_BACKEND_AUTO)
@@ -436,18 +436,18 @@ pa_result_t taf_pa_common_LogInit(
         gNsCommonLogBindFn(&SharedLogVt);
     }
 
-    PA_INFO("Common PA initialization flag set to true.");
+    TAF_PA_INFO("Common PA initialization flag set to true.");
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_common_LogDeinit(void)
+taf_pa_result_t taf_pa_common_LogDeinit(void)
 {
     // Check if Init() was called before Deinit()
     if (!gCommonPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return TAF_PA_FAULT;
     }
 
     // Clear injected vtables to avoid dangling pointers in PA-prop and PA-noship
@@ -471,10 +471,10 @@ pa_result_t taf_pa_common_LogDeinit(void)
     gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
 
     // Log before resetting the flag
-    PA_INFO("Common PA initialization flag reset to false.");
+    TAF_PA_INFO("Resetting Common PA initialization flag to false.");
 
     // Reset the atomic flag last, after all cleanup is complete.
     gCommonPaInitialized.store(false, std::memory_order_release);
 
-    return PA_OK;
+    return TAF_PA_OK;
 }

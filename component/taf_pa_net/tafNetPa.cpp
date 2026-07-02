@@ -10,7 +10,8 @@
 #include "tafVlanPa.hpp"
 #include "tafL2tpPa.hpp"
 
-#include "taf_prop_net.hpp"
+#include "taf_prop_net.h"
+#include "tafInternalCommonPa.h"
 
 #include <telux/tel/PhoneFactory.hpp>
 #include <atomic>
@@ -22,7 +23,7 @@ class taf_NetAdaptor
         public:
             static taf_NetAdaptor &getInstance();
 
-            pa_result_t initialize();
+            taf_pa_result_t initialize();
 
             std::atomic<bool> isInitialized{false};
 
@@ -43,28 +44,28 @@ taf_NetAdaptor &taf_NetAdaptor::getInstance
     return instance;
 }
 
-pa_result_t taf_NetAdaptor::initialize()
+taf_pa_result_t taf_NetAdaptor::initialize()
 {
-    PA_INFO("Actual platform adatper implementation");
+    TAF_PA_INFO("Actual platform adapter implementation");
 
     auto &phoneFactory = telux::tel::PhoneFactory::getInstance();
     phoneManager = phoneFactory.getPhoneManager();
     if (!phoneManager) {
-        PA_CRIT("Failed to get phone manager");
-        return PA_FAULT;
+        TAF_PA_CRIT("Failed to get phone manager");
+        return TAF_PA_FAULT;
     }
 
     telux::common::ServiceStatus phoneMgrStatus = phoneManager->getServiceStatus();
 
     if (phoneMgrStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-        PA_INFO("Telephony subsystem is not ready, waiting for it to be ready...");
+        TAF_PA_INFO("Telephony subsystem is not ready, waiting for it to be ready...");
 
         auto phoneMgrPromPtr =
             std::make_shared<std::promise<telux::common::ServiceStatus>>();
 
         phoneManager = phoneFactory.getPhoneManager(
             [phoneMgrPromPtr](telux::common::ServiceStatus status) {
-                PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
+                TAF_PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
                 try {
                     if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
                         phoneMgrPromPtr->set_value(
@@ -74,15 +75,15 @@ pa_result_t taf_NetAdaptor::initialize()
                             telux::common::ServiceStatus::SERVICE_FAILED);
                     }
                 } catch (const std::exception &e) {
-                    PA_ERROR("Exception setting phone manager promise: %s", e.what());
+                    TAF_PA_ERROR("Exception setting phone manager promise: %s", e.what());
                 } catch (...) {
-                    PA_ERROR("Unknown error setting phone manager promise");
+                    TAF_PA_ERROR("Unknown error setting phone manager promise");
                 }
             });
 
         if (!phoneManager) {
-            PA_CRIT("Failed to get phone manager with init callback");
-            return PA_FAULT;
+            TAF_PA_CRIT("Failed to get phone manager with init callback");
+            return TAF_PA_FAULT;
         }
 
         std::future<telux::common::ServiceStatus> initFuture =
@@ -91,48 +92,51 @@ pa_result_t taf_NetAdaptor::initialize()
             initFuture.wait_for(std::chrono::seconds(30));
 
         if (std::future_status::timeout == waitStatus) {
-            PA_CRIT("Timeout waiting for telephony subsystem");
-            return PA_TIMEOUT;
+            TAF_PA_CRIT("Timeout waiting for telephony subsystem");
+            return TAF_PA_TIMEOUT;
         } else {
             phoneMgrStatus = initFuture.get();
         }
     }
 
     if (phoneMgrStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-        PA_INFO("Telephony subsystem is ready.");
-        return PA_OK;
+        TAF_PA_INFO("Telephony subsystem is ready.");
+        return TAF_PA_OK;
     } else {
-        PA_CRIT("Failed to init telephony subsystem, status=%d",
+        TAF_PA_CRIT("Failed to init telephony subsystem, status=%d",
                 static_cast<int>(phoneMgrStatus));
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 }
 
-pa_result_t taf_pa_net_Init()
+taf_pa_result_t taf_pa_net_Init()
 {
-    PA_INFO("Actual platform adatper implementation");
+    TAF_PA_INFO("Actual platform adapter implementation");
 
-    int32_t result_ns = taf_prop_net_Init();
-    if (result_ns == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
-        PA_INFO("NET proprietary platform adaptor is not implemented.");
-    else if (result_ns == TAF_PROP_NET_RESULT_OK)
-        PA_INFO("NET proprietary platform adaptor initialization is done.");
+    taf_prop_result_t result_ns = taf_prop_net_Init();
+    if (result_ns == TAF_PROP_NOT_IMPLEMENTED)
+        TAF_PA_INFO("NET proprietary platform adaptor is not implemented.");
+    else if (result_ns == TAF_PROP_OK)
+        TAF_PA_INFO("NET proprietary platform adaptor initialization is done.");
+    else
+        TAF_PA_ERROR("NET proprietary platform adaptor initialization failed, ret: %d",
+                 static_cast<int>(result_ns));
 
     auto &pNetAdaptor = taf_NetAdaptor::getInstance();
 
-    pa_result_t result = pNetAdaptor.initialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pNetAdaptor.initialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Net platform adapter initialization is done");
+        TAF_PA_INFO("Net platform adapter initialization is done");
         pNetAdaptor.isInitialized = true;
     }
     else
     {
-        PA_CRIT("Failed to initialize Net platform adapter, ret: %d", result);
+        TAF_PA_CRIT("Failed to initialize Net platform adapter, ret: %d", result);
         pNetAdaptor.isInitialized = false;
     }
 
-    return PA_OK;
+    return result;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -140,18 +144,18 @@ pa_result_t taf_pa_net_Init()
  * Get phone ID from slot ID
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_GetPhoneIdFromSlotId
+taf_pa_result_t taf_pa_net_GetPhoneIdFromSlotId
 (
     uint8_t slotId,
     uint8_t *phoneIdPtr
 )
 {
     int retPhoneId;
-    pa_result_t result = PA_OK;
+    taf_pa_result_t result = TAF_PA_OK;
 
     if (phoneIdPtr == nullptr) {
-        PA_ERROR("Null ptr(phoneIdPtr)");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Null ptr(phoneIdPtr)");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto &pNetAdaptor = taf_NetAdaptor::getInstance();
@@ -162,22 +166,22 @@ pa_result_t taf_pa_net_GetPhoneIdFromSlotId
         retPhoneId = phoneMgr->getPhoneIdFromSlotId(slotId);
         if(retPhoneId < 0)
         {
-            PA_ERROR("Invalid phone id");
-            result = PA_FAULT;
+            TAF_PA_ERROR("Invalid phone id");
+            result = TAF_PA_FAULT;
         }
         else
         {
             *phoneIdPtr = (uint8_t)retPhoneId;
-            result = PA_OK;
+            result = TAF_PA_OK;
         }
     }
     else
     {
-        PA_ERROR("Phone manager is NULL");
-        result = PA_FAULT;
+        TAF_PA_ERROR("Phone manager is NULL");
+        result = TAF_PA_FAULT;
     }
 
-    PA_DEBUG("result =%d, slotId = %d, phoneId = %d", result, slotId, *phoneIdPtr);
+    TAF_PA_DEBUG("result =%d, slotId = %d, phoneId = %d", result, slotId, *phoneIdPtr);
 
     return result;
 }
@@ -187,18 +191,18 @@ pa_result_t taf_pa_net_GetPhoneIdFromSlotId
  * Get slot ID from phone ID
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_GetSlotIdFromPhoneId
+taf_pa_result_t taf_pa_net_GetSlotIdFromPhoneId
 (
     uint8_t phoneId,
     uint8_t *slotIdPtr
 )
 {
     int retSlotId;
-    pa_result_t result = PA_OK;
+    taf_pa_result_t result = TAF_PA_OK;
 
     if (slotIdPtr == nullptr) {
-        PA_ERROR("Null ptr(slotIdPtr)");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Null ptr(slotIdPtr)");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto &pNetAdaptor = taf_NetAdaptor::getInstance();
@@ -209,22 +213,22 @@ pa_result_t taf_pa_net_GetSlotIdFromPhoneId
         retSlotId = phoneMgr->getSlotIdFromPhoneId(phoneId);
         if(retSlotId < 0)
         {
-            PA_ERROR("Invalid slot id");
-            result = PA_FAULT;
+            TAF_PA_ERROR("Invalid slot id");
+            result = TAF_PA_FAULT;
         }
         else
         {
             *slotIdPtr = (uint8_t)retSlotId;
-            result = PA_OK;
+            result = TAF_PA_OK;
         }
     }
     else
     {
-        PA_ERROR("Phone manager is NULL");
-        result = PA_FAULT;
+        TAF_PA_ERROR("Phone manager is NULL");
+        result = TAF_PA_FAULT;
     }
 
-    PA_DEBUG("result =%d, slotId = %d, phoneId = %d",result, *slotIdPtr, phoneId);
+    TAF_PA_DEBUG("result =%d, slotId = %d, phoneId = %d",result, *slotIdPtr, phoneId);
 
     return result;
 }
@@ -234,7 +238,7 @@ pa_result_t taf_pa_net_GetSlotIdFromPhoneId
  * Return supported slot IDs
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
+taf_pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
 {
     slotIds.clear();
 
@@ -242,8 +246,8 @@ pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
     auto phoneMgr = pNetAdaptor.getPhoneManager();
     if (!phoneMgr)
     {
-        PA_ERROR("Phone manager is NULL");
-        return PA_FAULT;
+        TAF_PA_ERROR("Phone manager is NULL");
+        return TAF_PA_FAULT;
     }
 
     // Get phone IDs from TelSDK
@@ -251,8 +255,8 @@ pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
     telux::common::Status status = phoneMgr->getPhoneIds(phoneIds);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("getPhoneIds failed, status=%d", static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("getPhoneIds failed, status=%d", static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
 
     // Convert to slot IDs and deduplicate
@@ -266,7 +270,7 @@ pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
         }
         else
         {
-            PA_WARN("getSlotIdFromPhoneId(%d) returned %d", phoneId, slot);
+            TAF_PA_WARN("getSlotIdFromPhoneId(%d) returned %d", phoneId, slot);
         }
     }
 
@@ -275,41 +279,40 @@ pa_result_t taf_pa_net_GetSupportedSlotIds(std::vector<uint8_t> &slotIds)
         slotIds.push_back(static_cast<uint8_t>(slot));
     }
 
-    PA_INFO("Supported slots count: %zu", slotIds.size());
-    return PA_OK;
+    TAF_PA_INFO("Supported slots count: %zu", slotIds.size());
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_net_Deinit()
+taf_pa_result_t taf_pa_net_Deinit()
 {
-    PA_INFO("Starting Net platform adaptor deinitialization...");
+    TAF_PA_INFO("Starting Net platform adaptor deinitialization...");
     auto &pNetAdaptor = taf_NetAdaptor::getInstance();
 
     // Check if Init() was successfully called
     if (!pNetAdaptor.isInitialized)
     {
-        PA_WARN("Net Deinit() called before Init() was successfully called");
-        return PA_FAULT;
+        TAF_PA_WARN("Net Deinit() called before Init() was successfully called");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Resetting phoneManager");
+    TAF_PA_INFO("Resetting phoneManager");
     pNetAdaptor.phoneManager.reset();
 
-    int32_t nsRes = taf_prop_net_Deinit();
-    if (nsRes == TAF_PROP_NET_RESULT_OK)
+    taf_prop_result_t nsRes = taf_prop_net_Deinit();
+    if (nsRes == TAF_PROP_OK)
     {
-        PA_INFO("taf_prop_net_Deinit() completed successfully.");
+        TAF_PA_INFO("taf_prop_net_Deinit() completed successfully.");
     }
-    else if (nsRes == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
+    else if (nsRes == TAF_PROP_NOT_IMPLEMENTED)
     {
-        PA_INFO("taf_prop_net_Deinit() not implemented (stub).");
+        TAF_PA_INFO("taf_prop_net_Deinit() not implemented (stub).");
     }
     else
     {
-        PA_ERROR("taf_prop_net_Deinit() failed with result %d.", nsRes);
+        TAF_PA_ERROR("taf_prop_net_Deinit() failed with result %d.", (int)nsRes);
     }
 
     pNetAdaptor.isInitialized = false;
-    PA_INFO("Net platform adaptor deinitialization complete.");
-    return PA_OK;
+    TAF_PA_INFO("Net platform adaptor deinitialization complete.");
+    return TAF_PA_OK;
 }
-

@@ -13,6 +13,7 @@
 #include "tafFlashPa.hpp"
 
 #include "taf_prop_flash.h"
+#include "tafInternalCommonPa.h"
 
 using namespace std;
 
@@ -57,34 +58,34 @@ static taf_prop_flash_OpenModeBitMask_t ConvertOpenMode
     return result;
 }
 
-pa_result_t taf_pa_flash_Init()
+taf_pa_result_t taf_pa_flash_Init()
 {
-    PA_INFO("Flash platform adaptor initialization is done.");
+    TAF_PA_INFO("Flash platform adaptor initialization is done.");
 
-    int32_t result = taf_prop_flash_Init();
-    if (result == -ENOSYS)
-        PA_INFO("Flash proprietary platform adaptor is not implemented.");
+    taf_prop_result_t result = taf_prop_flash_Init();
+    if (result == TAF_PROP_NOT_IMPLEMENTED)
+        TAF_PA_INFO("Flash proprietary platform adaptor is not implemented.");
 
-    if (result == 0)
+    if (result == TAF_PROP_OK)
     {
         auto& pa = PlatformAdaptor::GetInstance();
         pa.isInitialized_.store(true, std::memory_order_release);
     }
 
-    return result;
+    return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_Deinit()
+taf_pa_result_t taf_pa_flash_Deinit()
 {
-    PA_INFO("Flash platform adaptor deinitialization starting.");
+    TAF_PA_INFO("Flash platform adaptor deinitialization starting.");
 
     auto& pa = PlatformAdaptor::GetInstance();
 
     // Check if initialization was successful before proceeding with deinitialization
     if (!pa.isInitialized_.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return TAF_PA_FAULT;
     }
 
     // Close all open MTD references and free their malloc'd keys.
@@ -97,10 +98,10 @@ pa_result_t taf_pa_flash_Deinit()
         keysToFree.reserve(pa.mtdRefMap.size());
         for (auto& entry : pa.mtdRefMap)
         {
-            int32_t result = taf_prop_flash_CloseMtd(entry.second);
-            if (result != 0)
+            taf_prop_result_t result = taf_prop_flash_CloseMtd(entry.second);
+            if (result != TAF_PROP_OK)
             {
-                PA_ERROR("Failed to close MTD during deinit. Error: %d", result);
+                TAF_PA_ERROR("Failed to close MTD during deinit. Error: %d", (int)result);
             }
             keysToFree.push_back(entry.first);
         }
@@ -118,10 +119,10 @@ pa_result_t taf_pa_flash_Deinit()
         keysToFree.reserve(pa.ubiVolumeRefMap.size());
         for (auto& entry : pa.ubiVolumeRefMap)
         {
-            int32_t result = taf_prop_flash_CloseUbiVolume(entry.second);
-            if (result != 0)
+            taf_prop_result_t result = taf_prop_flash_CloseUbiVolume(entry.second);
+            if (result != TAF_PROP_OK)
             {
-                PA_ERROR("Failed to close UBI volume during deinit. Error: %d", result);
+                TAF_PA_ERROR("Failed to close UBI volume during deinit. Error: %d", (int)result);
             }
             keysToFree.push_back(entry.first);
         }
@@ -132,12 +133,12 @@ pa_result_t taf_pa_flash_Deinit()
         }
     }
 
-    PA_INFO("Flash platform adaptor deinitialization complete.");
+    TAF_PA_INFO("Flash platform adaptor deinitialization complete.");
     pa.isInitialized_.store(false, std::memory_order_release);
-    return 0;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_flash_OpenMtd
+taf_pa_result_t taf_pa_flash_OpenMtd
 (
     const char* namePtr,
     taf_pa_flash_OpenModeBitMask_t mode,
@@ -146,46 +147,46 @@ pa_result_t taf_pa_flash_OpenMtd
 {
     taf_prop_flash_MtdRef_t nsMtdRef = nullptr;
     taf_prop_flash_OpenModeBitMask_t nsMode = ConvertOpenMode(mode);
-    int32_t result = taf_prop_flash_OpenMtd(namePtr, nsMode, &nsMtdRef);
-    if (result != 0)
+    taf_prop_result_t result = taf_prop_flash_OpenMtd(namePtr, nsMode, &nsMtdRef);
+    if (result != TAF_PROP_OK)
     {
-        PA_ERROR("Failed to open MTD %s.", namePtr);
-        return result;
+        TAF_PA_ERROR("Failed to open MTD %s.", namePtr);
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
     taf_pa_flash_MtdRef_t paMtdRef = (taf_pa_flash_MtdRef_t)malloc(sizeof(taf_pa_flash_MtdRef_t));
     if (paMtdRef == nullptr)
     {
-        PA_ERROR("Failed to allocate memory for MTD reference.");
+        TAF_PA_ERROR("Failed to allocate memory for MTD reference.");
         result = taf_prop_flash_CloseMtd(nsMtdRef);
-        if (result != 0)
+        if (result != TAF_PROP_OK)
         {
-            PA_ERROR("Failed to close MTD %s.", namePtr);
-            return result;
+            TAF_PA_ERROR("Failed to close MTD %s.", namePtr);
+            return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
         }
-        return -ENOMEM;
+        return TAF_PA_NO_MEMORY;
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
     auto it = pa.mtdRefMap.insert(make_pair(paMtdRef, nsMtdRef));
     if (!it.second)
     {
-        PA_ERROR("MTD reference already exists, insert failed.");
+        TAF_PA_ERROR("MTD reference already exists, insert failed.");
         result = taf_prop_flash_CloseMtd(nsMtdRef);
-        if (result != 0)
+        if (result != TAF_PROP_OK)
         {
-            PA_ERROR("Failed to close MTD %s.", namePtr);
-            return result;
+            TAF_PA_ERROR("Failed to close MTD %s.", namePtr);
+            return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
         }
-        return -EEXIST;
+        return TAF_PA_DUPLICATE;
     }
 
     *mtdRefPtr = paMtdRef;
 
-    return 0;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_flash_CloseMtd
+taf_pa_result_t taf_pa_flash_CloseMtd
 (
     taf_pa_flash_MtdRef_t mtdRef
 )
@@ -194,23 +195,23 @@ pa_result_t taf_pa_flash_CloseMtd
     auto it = pa.mtdRefMap.find(mtdRef);
     if (it == pa.mtdRefMap.end())
     {
-        PA_ERROR("MTD reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("MTD reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    int32_t result = taf_prop_flash_CloseMtd(it->second);
-    if (result != 0)
+    taf_prop_result_t result = taf_prop_flash_CloseMtd(it->second);
+    if (result != TAF_PROP_OK)
     {
-        PA_ERROR("Failed to close MTD.");
-        return result;
+        TAF_PA_ERROR("Failed to close MTD.");
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
     pa.mtdRefMap.erase(it);
     free(mtdRef);
-    return 0;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_flash_GetMtdInfo
+taf_pa_result_t taf_pa_flash_GetMtdInfo
 (
     taf_pa_flash_MtdRef_t mtdRef,
     taf_pa_flash_MtdInfo_t* infoPtr
@@ -220,26 +221,26 @@ pa_result_t taf_pa_flash_GetMtdInfo
     auto it = pa.mtdRefMap.find(mtdRef);
     if (it == pa.mtdRefMap.end())
     {
-        PA_ERROR("MTD reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("MTD reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
     taf_prop_flash_MtdInfo_t info;
-    int32_t result = taf_prop_flash_GetMtdInfo(it->second, &info);
-    if (result != 0)
+    taf_prop_result_t result = taf_prop_flash_GetMtdInfo(it->second, &info);
+    if (result != TAF_PROP_OK)
     {
-        PA_ERROR("Failed to get MTD information.");
-        return result;
+        TAF_PA_ERROR("Failed to get MTD information.");
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
     infoPtr->size = info.size;
     infoPtr->eraseSize = info.eraseSize;
     infoPtr->writeSize = info.writeSize;
 
-    return 0;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_flash_EraseMtdBlock
+taf_pa_result_t taf_pa_flash_EraseMtdBlock
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t blockIndex
@@ -249,14 +250,15 @@ pa_result_t taf_pa_flash_EraseMtdBlock
     auto it = pa.mtdRefMap.find(mtdRef);
     if (it == pa.mtdRefMap.end())
     {
-        PA_ERROR("MTD reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("MTD reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    return taf_prop_flash_EraseMtdBlock(it->second, blockIndex);
+    taf_prop_result_t rc = taf_prop_flash_EraseMtdBlock(it->second, blockIndex);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_CheckMtdGoodBlock
+taf_pa_result_t taf_pa_flash_CheckMtdGoodBlock
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t blockIndex,
@@ -267,14 +269,16 @@ pa_result_t taf_pa_flash_CheckMtdGoodBlock
     auto it = pa.mtdRefMap.find(mtdRef);
     if (it == pa.mtdRefMap.end())
     {
-        PA_ERROR("MTD reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("MTD reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    return taf_prop_flash_CheckMtdGoodBlock(it->second, blockIndex, isGoodBlockPtr);
+    taf_prop_result_t rc = taf_prop_flash_CheckMtdGoodBlock(
+        it->second, blockIndex, isGoodBlockPtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_MarkMtdBadBlock
+taf_pa_result_t taf_pa_flash_MarkMtdBadBlock
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t blockIndex
@@ -284,14 +288,15 @@ pa_result_t taf_pa_flash_MarkMtdBadBlock
     auto it = pa.mtdRefMap.find(mtdRef);
     if (it == pa.mtdRefMap.end())
     {
-        PA_ERROR("MTD reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("MTD reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    return taf_prop_flash_MarkMtdBadBlock(it->second, blockIndex);
+    taf_prop_result_t rc = taf_prop_flash_MarkMtdBadBlock(it->second, blockIndex);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_ReadMtdPage
+taf_pa_result_t taf_pa_flash_ReadMtdPage
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t pageIndex,
@@ -303,14 +308,15 @@ pa_result_t taf_pa_flash_ReadMtdPage
     auto it = pa.mtdRefMap.find(mtdRef);
     if (it == pa.mtdRefMap.end())
     {
-        PA_ERROR("MTD reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("MTD reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    return taf_prop_flash_ReadMtdPage(it->second, pageIndex, dataPtr, dataSizePtr);
+    taf_prop_result_t rc = taf_prop_flash_ReadMtdPage(it->second, pageIndex, dataPtr, dataSizePtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_WriteMtdPage
+taf_pa_result_t taf_pa_flash_WriteMtdPage
 (
     taf_pa_flash_MtdRef_t mtdRef,
     uint32_t pageIndex,
@@ -322,24 +328,26 @@ pa_result_t taf_pa_flash_WriteMtdPage
     auto it = pa.mtdRefMap.find(mtdRef);
     if (it == pa.mtdRefMap.end())
     {
-        PA_ERROR("MTD reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("MTD reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    return taf_prop_flash_WriteMtdPage(it->second, pageIndex, dataPtr, dataSize);
+    taf_prop_result_t rc = taf_prop_flash_WriteMtdPage(it->second, pageIndex, dataPtr, dataSize);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_CopyMtd
+taf_pa_result_t taf_pa_flash_CopyMtd
 (
     const char* srcNamePtr,
     const char* dstNamePtr,
     size_t dataSize
 )
 {
-    return taf_prop_flash_CopyMtd(srcNamePtr, dstNamePtr, dataSize);
+    taf_prop_result_t rc = taf_prop_flash_CopyMtd(srcNamePtr, dstNamePtr, dataSize);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_OpenUbiVolume
+taf_pa_result_t taf_pa_flash_OpenUbiVolume
 (
     const char* namePtr,
     taf_pa_flash_OpenModeBitMask_t mode,
@@ -348,47 +356,47 @@ pa_result_t taf_pa_flash_OpenUbiVolume
 {
     taf_prop_flash_UbiVolumeRef_t nsUbiVolumeRef = nullptr;
     taf_prop_flash_OpenModeBitMask_t nsMode = ConvertOpenMode(mode);
-    int32_t result = taf_prop_flash_OpenUbiVolume(namePtr, nsMode, &nsUbiVolumeRef);
-    if (result != 0)
+    taf_prop_result_t result = taf_prop_flash_OpenUbiVolume(namePtr, nsMode, &nsUbiVolumeRef);
+    if (result != TAF_PROP_OK)
     {
-        PA_ERROR("Failed to open UBI volume %s.", namePtr);
-        return result;
+        TAF_PA_ERROR("Failed to open UBI volume %s.", namePtr);
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
     taf_pa_flash_UbiVolumeRef_t paUbiVolumeRef = (taf_pa_flash_UbiVolumeRef_t)malloc(sizeof(
         taf_pa_flash_UbiVolumeRef_t));
     if (paUbiVolumeRef == nullptr)
     {
-        PA_ERROR("Failed to allocate memory for UBI volume reference.");
+        TAF_PA_ERROR("Failed to allocate memory for UBI volume reference.");
         result = taf_prop_flash_CloseUbiVolume(nsUbiVolumeRef);
-        if (result != 0)
+        if (result != TAF_PROP_OK)
         {
-            PA_ERROR("Failed to close UBI volume %s.", namePtr);
-            return result;
+            TAF_PA_ERROR("Failed to close UBI volume %s.", namePtr);
+            return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
         }
-        return -ENOMEM;
+        return TAF_PA_NO_MEMORY;
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
     auto it = pa.ubiVolumeRefMap.insert(make_pair(paUbiVolumeRef, nsUbiVolumeRef));
     if (!it.second)
     {
-        PA_ERROR("UBI volume reference already exists, insert failed.");
+        TAF_PA_ERROR("UBI volume reference already exists, insert failed.");
         result = taf_prop_flash_CloseUbiVolume(nsUbiVolumeRef);
-        if (result != 0)
+        if (result != TAF_PROP_OK)
         {
-            PA_ERROR("Failed to close UBI volume %s.", namePtr);
-            return result;
+            TAF_PA_ERROR("Failed to close UBI volume %s.", namePtr);
+            return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
         }
-        return -EEXIST;
+        return TAF_PA_DUPLICATE;
     }
 
     *ubiVolumeRefPtr = paUbiVolumeRef;
 
-    return 0;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_flash_CloseUbiVolume
+taf_pa_result_t taf_pa_flash_CloseUbiVolume
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef
 )
@@ -397,23 +405,23 @@ pa_result_t taf_pa_flash_CloseUbiVolume
     auto it = pa.ubiVolumeRefMap.find(ubiVolumeRef);
     if (it == pa.ubiVolumeRefMap.end())
     {
-        PA_ERROR("UBI volume reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("UBI volume reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    int32_t result = taf_prop_flash_CloseUbiVolume(it->second);
-    if (result != 0)
+    taf_prop_result_t result = taf_prop_flash_CloseUbiVolume(it->second);
+    if (result != TAF_PROP_OK)
     {
-        PA_ERROR("Failed to close UBI volume.");
-        return result;
+        TAF_PA_ERROR("Failed to close UBI volume.");
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
     pa.ubiVolumeRefMap.erase(it);
     free(ubiVolumeRef);
-    return 0;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_flash_SetUbiVolumeUpdateSize
+taf_pa_result_t taf_pa_flash_SetUbiVolumeUpdateSize
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef,
     int64_t size
@@ -423,14 +431,15 @@ pa_result_t taf_pa_flash_SetUbiVolumeUpdateSize
     auto it = pa.ubiVolumeRefMap.find(ubiVolumeRef);
     if (it == pa.ubiVolumeRefMap.end())
     {
-        PA_ERROR("UBI volume reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("UBI volume reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    return taf_prop_flash_SetUbiVolumeUpdateSize(it->second, size);
+    taf_prop_result_t rc = taf_prop_flash_SetUbiVolumeUpdateSize(it->second, size);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_ReadUbiVolume
+taf_pa_result_t taf_pa_flash_ReadUbiVolume
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef,
     off_t offset,
@@ -442,14 +451,15 @@ pa_result_t taf_pa_flash_ReadUbiVolume
     auto it = pa.ubiVolumeRefMap.find(ubiVolumeRef);
     if (it == pa.ubiVolumeRefMap.end())
     {
-        PA_ERROR("UBI volume reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("UBI volume reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    return taf_prop_flash_ReadUbiVolume(it->second, offset, dataPtr, dataSizePtr);
+    taf_prop_result_t rc = taf_prop_flash_ReadUbiVolume(it->second, offset, dataPtr, dataSizePtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_UpdateUbiVolume
+taf_pa_result_t taf_pa_flash_UpdateUbiVolume
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef,
     const unsigned char* dataPtr,
@@ -460,14 +470,15 @@ pa_result_t taf_pa_flash_UpdateUbiVolume
     auto it = pa.ubiVolumeRefMap.find(ubiVolumeRef);
     if (it == pa.ubiVolumeRefMap.end())
     {
-        PA_ERROR("UBI volume reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("UBI volume reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
-    return taf_prop_flash_UpdateUbiVolume(it->second, dataPtr, dataSize);
+    taf_prop_result_t rc = taf_prop_flash_UpdateUbiVolume(it->second, dataPtr, dataSize);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_CopyUbiVolume
+taf_pa_result_t taf_pa_flash_CopyUbiVolume
 (
     const char* srcNamePtr,
     const char* dstNamePtr,
@@ -475,18 +486,23 @@ pa_result_t taf_pa_flash_CopyUbiVolume
     size_t dataSize
 )
 {
-    return taf_prop_flash_CopyUbiVolume(srcNamePtr, dstNamePtr, bufferSize, dataSize);
+    taf_prop_result_t rc = taf_prop_flash_CopyUbiVolume(srcNamePtr, dstNamePtr, bufferSize,
+                                                         dataSize);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_flash_EraseUbiVolume
+taf_pa_result_t taf_pa_flash_EraseUbiVolume
 (
     const char* namePtr
 )
 {
-    return taf_prop_flash_EraseUbiVolume(namePtr);
+    uint32_t underlyingErr = TAF_PROP_UNDERLYING_ERR_NONE;
+    taf_prop_result_t rc = taf_prop_flash_EraseUbiVolume(namePtr, &underlyingErr);
+    TAF_PROP_LOG_UNDERLYING_ERROR(rc, underlyingErr);
+    return PropResultToPaResult(rc, underlyingErr);
 }
 
-pa_result_t taf_pa_flash_GetUbiVolumeInfo
+taf_pa_result_t taf_pa_flash_GetUbiVolumeInfo
 (
     taf_pa_flash_UbiVolumeRef_t ubiVolumeRef,
     taf_pa_flash_UbiVolumeInfo_t* infoPtr
@@ -496,16 +512,16 @@ pa_result_t taf_pa_flash_GetUbiVolumeInfo
     auto it = pa.ubiVolumeRefMap.find(ubiVolumeRef);
     if (it == pa.ubiVolumeRefMap.end())
     {
-        PA_ERROR("UBI volume reference not found.");
-        return -ENOENT;
+        TAF_PA_ERROR("UBI volume reference not found.");
+        return TAF_PA_NOT_FOUND;
     }
 
     taf_prop_flash_UbiVolumeInfo_t info;
-    int32_t result = taf_prop_flash_GetUbiVolumeInfo(it->second, &info);
-    if (result != 0)
+    taf_prop_result_t result = taf_prop_flash_GetUbiVolumeInfo(it->second, &info);
+    if (result != TAF_PROP_OK)
     {
-        PA_ERROR("Failed to get UBI volume information.");
-        return result;
+        TAF_PA_ERROR("Failed to get UBI volume information.");
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
     infoPtr->size = info.size;
@@ -513,6 +529,5 @@ pa_result_t taf_pa_flash_GetUbiVolumeInfo
     infoPtr->reservedLebs = info.reservedLebs;
     infoPtr->availLebs = info.availLebs;
 
-    return 0;
+    return TAF_PA_OK;
 }
-

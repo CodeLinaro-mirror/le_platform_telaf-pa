@@ -19,7 +19,7 @@ taf::pa::data::TafPaTeluxDataConnection &taf::pa::data::TafPaTeluxDataConnection
     return instance;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetSubsysState
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetSubsysState
 (
     taf::pa::data::SlotId_e slotId,
     taf::pa::data::SubsystemState_e &sState
@@ -30,17 +30,17 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetSubsysState
 
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     {
         std::shared_lock<std::shared_mutex> lock(dataConnSubsysStateMapMtx_);
         sState = dataConnectionManagersSubsysStateMap_[slotId];
     }
-    PA_INFO("Conn init state for slot id[%d]: %d", slotId, TO_INT(sState));
-    return PA_OK;
+    TAF_PA_INFO("Conn init state for slot id[%d]: %d", slotId, TO_INT(sState));
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::SetSubsysState
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::SetSubsysState
 (
     taf::pa::data::SlotId_e slotId,
     taf::pa::data::SubsystemState_e sState,
@@ -49,27 +49,27 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::SetSubsysState
 {
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     {
         std::unique_lock<std::shared_mutex> lock(dataConnSubsysStateMapMtx_);
         dataConnectionManagersSubsysStateMap_[slotId] = sState;
     }
-    PA_INFO("Conn init state for slot id[%d]: %d", slotId, TO_INT(sState));
+    TAF_PA_INFO("Conn init state for slot id[%d]: %d", slotId, TO_INT(sState));
 
     // Send the state change event to clients.
     if (bSendEvent)
     {
-        PA_INFO("Send event to clients.");
+        TAF_PA_INFO("Send event to clients.");
         auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
         SubsystemEvent_t event;
-        pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(slotId, event.phoneId);
-        TAF_PA_ERROR_IF_RET_VAL(PA_OK != result, result, "PaGetPhoneIdFromSlotId err: %d", result);
+        taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(slotId, event.phoneId);
+        TAF_PA_ERROR_IF_RET_VAL(TAF_PA_OK != result, result, "PaGetPhoneIdFromSlotId err: %d", result);
         event.subsystem      = Subsystem_e::DATACALL_MANAGER;
         event.subsystemState = sState;
         teluxPaData.SendSubsystemEventToClients(event);
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 void taf::pa::data::TafPaTeluxDataConnection::Init(taf::pa::data::SlotCount_e slotCount)
@@ -98,52 +98,52 @@ void taf::pa::data::TafPaTeluxDataConnection::LogDataCallInfo
     uint8_t slotId = (uint8_t)dataCall->getSlotId();
     telux::data::DataCallStatus callStatus;
 
-    PA_DEBUG("data callback details from: %s", fromPtr);
-    PA_DEBUG("profile id:           %d", profileId);
-    PA_DEBUG("slot id:              %d", slotId);
-    PA_DEBUG("interface name:       %s", dataCall->getInterfaceName().c_str());
+    TAF_PA_DEBUG("data callback details from: %s", fromPtr);
+    TAF_PA_DEBUG("profile id:           %d", profileId);
+    TAF_PA_DEBUG("slot id:              %d", slotId);
+    TAF_PA_DEBUG("interface name:       %s", dataCall->getInterfaceName().c_str());
     callStatus = dataCall->getDataCallStatus();
-    PA_DEBUG("call status:          %s", taf::pa::data::Utils::CallStatusToString(callStatus));
-    PA_DEBUG("ip type:              %s", taf::pa::data::Utils::IpFamilyTypeToString(
+    TAF_PA_DEBUG("call status:          %s", taf::pa::data::Utils::CallStatusToString(callStatus));
+    TAF_PA_DEBUG("ip type:              %s", taf::pa::data::Utils::IpFamilyTypeToString(
                                              dataCall->getIpFamilyType()));
-    PA_DEBUG("ipv4 status:          %s", taf::pa::data::Utils::CallStatusToString(
+    TAF_PA_DEBUG("ipv4 status:          %s", taf::pa::data::Utils::CallStatusToString(
                                              dataCall->getIpv4Info().status));
     if (telux::data::DataCallStatus::NET_CONNECTED == dataCall->getIpv4Info().status)
     {
         unsigned int mask = 0;
-        PA_DEBUG("IPv4 Address Info:");
-        PA_DEBUG("  Interface addr : %s", dataCall->getIpv4Info().addr.ifAddress.c_str());
+        TAF_PA_DEBUG("IPv4 Address Info:");
+        TAF_PA_DEBUG("  Interface addr : %s", dataCall->getIpv4Info().addr.ifAddress.c_str());
         mask = dataCall->getIpv4Info().addr.ifMask;
-        PA_DEBUG("  Interface mask : 0x%X(%u.%u.%u.%u)", mask,
+        TAF_PA_DEBUG("  Interface mask : 0x%X(%u.%u.%u.%u)", mask,
                                                         (mask >> 24) & 0xFF,
                                                         (mask >> 16) & 0xFF,
                                                         (mask >> 8)  & 0xFF,
                                                          mask        & 0xFF);
-        PA_DEBUG("  Gateway addr   : %s", dataCall->getIpv4Info().addr.gwAddress.c_str());
+        TAF_PA_DEBUG("  Gateway addr   : %s", dataCall->getIpv4Info().addr.gwAddress.c_str());
         mask = dataCall->getIpv4Info().addr.gwMask;
-        PA_DEBUG("  Gateway mask   : 0x%X(%u.%u.%u.%u)", mask,
+        TAF_PA_DEBUG("  Gateway mask   : 0x%X(%u.%u.%u.%u)", mask,
                                                         (mask >> 24) & 0xFF,
                                                         (mask >> 16) & 0xFF,
                                                         (mask >> 8)  & 0xFF,
                                                          mask        & 0xFF);
-        PA_DEBUG("  Pri DNS addr   : %s", dataCall->getIpv4Info().addr.primaryDnsAddress.c_str());
-        PA_DEBUG("  Sec DNS addr   : %s", dataCall->getIpv4Info().addr.secondaryDnsAddress.c_str());
+        TAF_PA_DEBUG("  Pri DNS addr   : %s", dataCall->getIpv4Info().addr.primaryDnsAddress.c_str());
+        TAF_PA_DEBUG("  Sec DNS addr   : %s", dataCall->getIpv4Info().addr.secondaryDnsAddress.c_str());
     }
-    PA_DEBUG("ipv6 status:          %s", taf::pa::data::Utils::CallStatusToString(
+    TAF_PA_DEBUG("ipv6 status:          %s", taf::pa::data::Utils::CallStatusToString(
                                              dataCall->getIpv6Info().status));
     if (telux::data::DataCallStatus::NET_CONNECTED == dataCall->getIpv6Info().status)
     {
-        PA_DEBUG("IPv6 Address Info:");
-        PA_DEBUG("  Interface addr : %s", dataCall->getIpv6Info().addr.ifAddress.c_str());
-        PA_DEBUG("  Interface mask : 0x%X", dataCall->getIpv6Info().addr.ifMask);
-        PA_DEBUG("  Gateway addr   : %s", dataCall->getIpv6Info().addr.gwAddress.c_str());
-        PA_DEBUG("  Gateway mask   : 0x%X", dataCall->getIpv6Info().addr.gwMask);
-        PA_DEBUG("  Pri DNS addr   : %s", dataCall->getIpv6Info().addr.primaryDnsAddress.c_str());
-        PA_DEBUG("  Sec DNS addr   : %s", dataCall->getIpv6Info().addr.secondaryDnsAddress.c_str());
+        TAF_PA_DEBUG("IPv6 Address Info:");
+        TAF_PA_DEBUG("  Interface addr : %s", dataCall->getIpv6Info().addr.ifAddress.c_str());
+        TAF_PA_DEBUG("  Interface mask : 0x%X", dataCall->getIpv6Info().addr.ifMask);
+        TAF_PA_DEBUG("  Gateway addr   : %s", dataCall->getIpv6Info().addr.gwAddress.c_str());
+        TAF_PA_DEBUG("  Gateway mask   : 0x%X", dataCall->getIpv6Info().addr.gwMask);
+        TAF_PA_DEBUG("  Pri DNS addr   : %s", dataCall->getIpv6Info().addr.primaryDnsAddress.c_str());
+        TAF_PA_DEBUG("  Sec DNS addr   : %s", dataCall->getIpv6Info().addr.secondaryDnsAddress.c_str());
     }
 
     telux::common::DataCallEndReason reason = dataCall->getDataCallEndReason();
-    PA_DEBUG("call end reason type:   %s",
+    TAF_PA_DEBUG("call end reason type:   %s",
                                      taf::pa::data::Utils::CallEndReasonTypeToString(reason.type));
     if (telux::data::DataCallStatus::NET_NO_NET == callStatus ||
         telux::data::DataCallStatus::NET_DISCONNECTING == callStatus)
@@ -151,57 +151,57 @@ void taf::pa::data::TafPaTeluxDataConnection::LogDataCallInfo
         switch (reason.type)
         {
         case telux::data::EndReasonType::CE_MOBILE_IP:
-            PA_DEBUG("call end MIP reason code: %d", TO_INT(reason.IpCode));
+            TAF_PA_DEBUG("call end MIP reason code: %d", TO_INT(reason.IpCode));
             break;
         case telux::data::EndReasonType::CE_INTERNAL:
-            PA_DEBUG("call end internal reason code: %d", TO_INT(reason.internalCode));
+            TAF_PA_DEBUG("call end internal reason code: %d", TO_INT(reason.internalCode));
             break;
         case telux::data::EndReasonType::CE_CALL_MANAGER_DEFINED:
-            PA_DEBUG("call end CM reason code: %d", TO_INT(reason.cmCode));
+            TAF_PA_DEBUG("call end CM reason code: %d", TO_INT(reason.cmCode));
             break;
         case telux::data::EndReasonType::CE_3GPP_SPEC_DEFINED:
-            PA_DEBUG("call end 3GPP spec reason code: %d", TO_INT(reason.specCode));
+            TAF_PA_DEBUG("call end 3GPP spec reason code: %d", TO_INT(reason.specCode));
             break;
         case telux::data::EndReasonType::CE_PPP:
-            PA_DEBUG("call end PPP reason code: %d", TO_INT(reason.pppCode));
+            TAF_PA_DEBUG("call end PPP reason code: %d", TO_INT(reason.pppCode));
             break;
         case telux::data::EndReasonType::CE_EHRPD:
-            PA_DEBUG("call end EHRPD reason code: %d", TO_INT(reason.ehrpdCode));
+            TAF_PA_DEBUG("call end EHRPD reason code: %d", TO_INT(reason.ehrpdCode));
             break;
         case telux::data::EndReasonType::CE_IPV6:
-            PA_DEBUG("call end IPv6 reason code: %d", TO_INT(reason.ipv6Code));
+            TAF_PA_DEBUG("call end IPv6 reason code: %d", TO_INT(reason.ipv6Code));
             break;
         case telux::data::EndReasonType::CE_HANDOFF:
-            PA_DEBUG("call end handoff reason code: %d", TO_INT(reason.handOffCode));
+            TAF_PA_DEBUG("call end handoff reason code: %d", TO_INT(reason.handOffCode));
             break;
         default:
-            PA_DEBUG("Invalid Reason code: %d", TO_INT(reason.type));
+            TAF_PA_DEBUG("Invalid Reason code: %d", TO_INT(reason.type));
             break;
         }
     }
 
-    PA_DEBUG("tech preference:      %s", taf::pa::data::Utils::TechPreferenceToString(
+    TAF_PA_DEBUG("tech preference:      %s", taf::pa::data::Utils::TechPreferenceToString(
                                              dataCall->getTechPreference()));
     {
         auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
         taf::pa::data::SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(
                                                                          dataCall->getSlotId());
         telux::data::ServiceStatus svcStatus{};
-        if (PA_OK == teluxPaData.PaGetServiceStatus(slotIdPa, svcStatus))
+        if (TAF_PA_OK == teluxPaData.PaGetServiceStatus(slotIdPa, svcStatus))
         {
-            PA_DEBUG("NetworkRat (bearer tech): %s",
+            TAF_PA_DEBUG("NetworkRat (bearer tech): %s",
                      taf::pa::data::Utils::NetworkRatToString(svcStatus.networkRat));
         }
         else
         {
-            PA_DEBUG("NetworkRat (bearer tech): unavailable");
+            TAF_PA_DEBUG("NetworkRat (bearer tech): unavailable");
         }
     }
 
     return;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetDefaultProfile
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetDefaultProfile
 (
     const taf::pa::data::PhoneId_e phoneId,
     taf::pa::data::ProfileId_e &profileId
@@ -212,22 +212,22 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetDefaultProfile
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
-    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
-    if (PA_OK != result)
+    taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
         return result;
     }
-    PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIDpa));
+    TAF_PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
 
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
-        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return TAF_PA_FAULT;
     }
 
     // Create shared promise to ensure it outlives this function scope
@@ -253,20 +253,20 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetDefaultProfile
             }
             catch (const std::future_error& e)
             {
-                PA_ERROR("Future error in callback: %s", e.what());
+                TAF_PA_ERROR("Future error in callback: %s", e.what());
                 // Try to set promise to unblock waiting thread
                 try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
                     telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
             }
             catch (const std::exception& e)
             {
-                PA_ERROR("Exception in callback: %s", e.what());
+                TAF_PA_ERROR("Exception in callback: %s", e.what());
                 try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
                     telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
             }
             catch (...)
             {
-                PA_ERROR("Unknown error in getDefaultProfile callback.");
+                TAF_PA_ERROR("Unknown error in getDefaultProfile callback.");
                 try { promisePtr->set_value(std::make_tuple(-1, INVALID_SLOT_ID,
                     telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
             }
@@ -274,46 +274,46 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetDefaultProfile
     );
     if (telux::common::Status::SUCCESS != status)
     {
-        PA_ERROR("getDefaultProfile failed. Status: %d", TO_INT(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("getDefaultProfile failed. Status: %d", TO_INT(status));
+        return TAF_PA_FAULT;
     }
 
     // Wait for the callback to complete and capture the results
-    PA_DEBUG("Wait for callback..");
+    TAF_PA_DEBUG("Wait for callback..");
 
     std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = future.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("getDefaultProfile promise timeout");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("getDefaultProfile promise timeout");
+        return TAF_PA_TIMEOUT;
     }
 
     std::tuple<int, SlotId, telux::common::ErrorCode> futResult;
-    FUTURE_GET_RET_VAL(future, futResult, PA_FAULT);
+    FUTURE_GET_RET_VAL(future, futResult, TAF_PA_FAULT);
     int futProfileId = std::get<0>(futResult);
     SlotId futSlotId = std::get<1>(futResult);
     telux::common::ErrorCode futError = std::get<2>(futResult);
 
     if (telux::common::ErrorCode::SUCCESS != futError)
     {
-        PA_ERROR("getDefaultProfile failed in callback. Error: %d", TO_INT(futError));
-        return PA_FAULT;
+        TAF_PA_ERROR("getDefaultProfile failed in callback. Error: %d", TO_INT(futError));
+        return TAF_PA_FAULT;
     }
-    PA_DEBUG("Slot Id: %d", TO_INT(futSlotId));
-    PA_DEBUG("Profile: %d", futProfileId);
+    TAF_PA_DEBUG("Slot Id: %d", TO_INT(futSlotId));
+    TAF_PA_DEBUG("Profile: %d", futProfileId);
 
     if (futSlotId != slotId)
     {
-        PA_ERROR("Slot ID mismatch. Expected: %d, Actual: %d", TO_INT(slotId), TO_INT(futSlotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Slot ID mismatch. Expected: %d, Actual: %d", TO_INT(slotId), TO_INT(futSlotId));
+        return TAF_PA_FAULT;
     }
     profileId = static_cast<taf::pa::data::ProfileId_e>(futProfileId);
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetDefaultProfile
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetDefaultProfile
 (
     const taf::pa::data::PhoneId_e phoneId,
     const taf::pa::data::ProfileId_e profileId
@@ -324,29 +324,29 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetDefaultProfile
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
-    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
-    if (PA_OK != result)
+    taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
         return result;
     }
-    PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIDpa));
+    TAF_PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
 
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
-        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return TAF_PA_FAULT;
     }
 
     // Create shared promise to ensure it outlives this function scope
     auto promisePtr = std::make_shared<std::promise<telux::common::ErrorCode>>();
     std::future<telux::common::ErrorCode> fut = promisePtr->get_future();
 
-    PA_INFO("Profile ID to set: %d", TO_INT(profileId));
+    TAF_PA_INFO("Profile ID to set: %d", TO_INT(profileId));
     status = dataConnectionManagersMap_[slotId]->setDefaultProfile
                 (
                     telux::data::OperationType::DATA_LOCAL,
@@ -361,20 +361,20 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetDefaultProfile
                         }
                         catch (const std::future_error& e)
                         {
-                            PA_ERROR("Future error in callback: %s", e.what());
+                            TAF_PA_ERROR("Future error in callback: %s", e.what());
                             // Try to set promise to unblock waiting thread
                             try { promisePtr->set_value
                                 (telux::common::ErrorCode::INTERNAL_ERROR); } catch(...) {}
                         }
                         catch (const std::exception& e)
                         {
-                            PA_ERROR("Exception in callback: %s", e.what());
+                            TAF_PA_ERROR("Exception in callback: %s", e.what());
                             try { promisePtr->set_value
                                 (telux::common::ErrorCode::INTERNAL_ERROR); } catch(...) {}
                         }
                         catch (...)
                         {
-                            PA_ERROR("Unknown error in setDefaultProfile callback.");
+                            TAF_PA_ERROR("Unknown error in setDefaultProfile callback.");
                             try { promisePtr->set_value
                                 (telux::common::ErrorCode::INTERNAL_ERROR); } catch(...) {}
                         }
@@ -382,30 +382,30 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetDefaultProfile
                 );
     if (telux::common::Status::SUCCESS != status)
     {
-        PA_ERROR("setDefaultProfile failed. Status: %d", TO_INT(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("setDefaultProfile failed. Status: %d", TO_INT(status));
+        return TAF_PA_FAULT;
     }
 
     // Wait for the callback to complete and capture the results
-    PA_DEBUG("Wait for callback..");
+    TAF_PA_DEBUG("Wait for callback..");
 
     std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("setDefaultProfile promise timeout");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("setDefaultProfile promise timeout");
+        return TAF_PA_TIMEOUT;
     }
 
     telux::common::ErrorCode futError;
-    FUTURE_GET_RET_VAL(fut, futError, PA_FAULT);
+    FUTURE_GET_RET_VAL(fut, futError, TAF_PA_FAULT);
     if (telux::common::ErrorCode::SUCCESS != futError)
     {
-        PA_ERROR("setDefaultProfile failed in callback. Error: %d", TO_INT(futError));
-        return PA_FAULT;
+        TAF_PA_ERROR("setDefaultProfile failed in callback. Error: %d", TO_INT(futError));
+        return TAF_PA_FAULT;
     }
-    PA_DEBUG("setDefaultProfile done.");
-    return PA_OK;
+    TAF_PA_DEBUG("setDefaultProfile done.");
+    return TAF_PA_OK;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -428,7 +428,7 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
     std::vector<int> unavailableSlots;
     std::vector<int> successfulSlots;
 
-    PA_INFO("Starting data connection manager initialization for %d slot(s)", TO_INT(slotCount_));
+    TAF_PA_INFO("Starting data connection manager initialization for %d slot(s)", TO_INT(slotCount_));
 
     for (auto slotId = 1; slotId <= TO_INT(slotCount_); slotId++)
     {
@@ -442,12 +442,12 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
         }
         if (taf::pa::data::SubsystemState_e::AVAILABLE == connInitCheckState)
         {
-            PA_INFO("Data connection manager already initialized for slot id: %d.", TO_INT(slotId));
+            TAF_PA_INFO("Data connection manager already initialized for slot id: %d.", TO_INT(slotId));
             successfulSlots.push_back(slotId);
             continue;
         }
 
-        PA_INFO("Initializing data connection manager for slot %d...", slotId);
+        TAF_PA_INFO("Initializing data connection manager for slot %d...", slotId);
 
         // Initialize the data connection manager for each slot
         // Create shared state for synchronization using condition variable
@@ -465,8 +465,8 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
             (SlotId)slotId, [state, slotId](telux::common::ServiceStatus svcStatus)
             {
                 SET_SDK_THREAD_NAME();
-                PA_INFO("getDataConnectionManager callback for slot ID: %d", TO_INT(slotId));
-                PA_INFO("Data connection manager status: %d", TO_INT(svcStatus));
+                TAF_PA_INFO("getDataConnectionManager callback for slot ID: %d", TO_INT(slotId));
+                TAF_PA_INFO("Data connection manager status: %d", TO_INT(svcStatus));
 
                 {
                     std::lock_guard<std::mutex> lock(state->mtx);
@@ -478,7 +478,7 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
 
         if (!dataProfMngr)
         {
-            PA_ERROR("Failed to get Data connection manager for slot %d", slotId);
+            TAF_PA_ERROR("Failed to get Data connection manager for slot %d", slotId);
             SetSubsysState(paSlotId, SubsystemState_e::FAILED);
             failedSlots.push_back(slotId);
             // Continue processing other slots instead of returning
@@ -487,7 +487,7 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
 
         // Wait for the callback with timeout
         telux::common::ServiceStatus dataServSysMgrStatus;
-        PA_INFO("Waiting for Data connection manager to be ready for slot %d...", slotId);
+        TAF_PA_INFO("Waiting for Data connection manager to be ready for slot %d...", slotId);
 
         {
             std::unique_lock<std::mutex> lock(state->mtx);
@@ -499,7 +499,7 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
 
             if (!success)
             {
-                PA_ERROR("Timeout waiting for Data connection manager for slot %d", slotId);
+                TAF_PA_ERROR("Timeout waiting for Data connection manager for slot %d", slotId);
                 SetSubsysState(paSlotId, SubsystemState_e::FAILED);
                 failedSlots.push_back(slotId);
                 // Continue processing other slots instead of returning
@@ -509,12 +509,12 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
             dataServSysMgrStatus = state->status;
         }
 
-        PA_INFO("dataConnMngr for slot %d status: %d", slotId, TO_INT(dataServSysMgrStatus));
+        TAF_PA_INFO("dataConnMngr for slot %d status: %d", slotId, TO_INT(dataServSysMgrStatus));
 
         // Handle different service status outcomes
         if (telux::common::ServiceStatus::SERVICE_AVAILABLE == dataServSysMgrStatus)
         {
-            PA_INFO("dataConnMngr for slot %d: AVAILABLE", slotId);
+            TAF_PA_INFO("dataConnMngr for slot %d: AVAILABLE", slotId);
             // Store the manager in the map with slot Id as index
             dataConnectionManagersMap_.emplace((SlotId)slotId, dataProfMngr);
             // Initialize and store the callback objects for later registration.
@@ -531,11 +531,11 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
             // Update that the data connection manager is initialized.
             SetSubsysState(paSlotId, SubsystemState_e::AVAILABLE);
             successfulSlots.push_back(slotId);
-            PA_INFO("Data connection manager initialization for slot %d complete", slotId);
+            TAF_PA_INFO("Data connection manager initialization for slot %d complete", slotId);
         }
         else if (telux::common::ServiceStatus::SERVICE_UNAVAILABLE == dataServSysMgrStatus)
         {
-            PA_WARN("dataConnMngr for slot %d: UNAVAILABLE (temporary)", slotId);
+            TAF_PA_WARN("dataConnMngr for slot %d: UNAVAILABLE (temporary)", slotId);
             // Mark as unavailable but don't set FAILED state - this is temporary
             // The service may become available later
             unavailableSlots.push_back(slotId);
@@ -545,7 +545,7 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
         else
         {
             // Unknown/error status
-            PA_ERROR("Failed to init Data connection manager for slot %d with status: %d",
+            TAF_PA_ERROR("Failed to init Data connection manager for slot %d with status: %d",
                      slotId, TO_INT(dataServSysMgrStatus));
             SetSubsysState(paSlotId, SubsystemState_e::FAILED);
             failedSlots.push_back(slotId);
@@ -555,72 +555,72 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
     }
 
     // Log summary of initialization results
-    PA_INFO("=== Data Connection Manager Initialization Summary ===");
-    PA_INFO("Total slots: %d", TO_INT(slotCount_));
-    PA_INFO("Successfully initialized: %zu slot(s)", successfulSlots.size());
+    TAF_PA_INFO("=== Data Connection Manager Initialization Summary ===");
+    TAF_PA_INFO("Total slots: %d", TO_INT(slotCount_));
+    TAF_PA_INFO("Successfully initialized: %zu slot(s)", successfulSlots.size());
     if (!successfulSlots.empty())
     {
         for (auto slot : successfulSlots)
         {
-            PA_INFO("  - Slot %d: AVAILABLE", slot);
+            TAF_PA_INFO("  - Slot %d: AVAILABLE", slot);
         }
     }
 
     if (!unavailableSlots.empty())
     {
-        PA_WARN("Temporarily unavailable: %zu slot(s)", unavailableSlots.size());
+        TAF_PA_WARN("Temporarily unavailable: %zu slot(s)", unavailableSlots.size());
         for (auto slot : unavailableSlots)
         {
-            PA_WARN("  - Slot %d: UNAVAILABLE (may retry later)", slot);
+            TAF_PA_WARN("  - Slot %d: UNAVAILABLE (may retry later)", slot);
         }
     }
 
     if (!failedSlots.empty())
     {
-        PA_ERROR("Failed to initialize: %zu slot(s)", failedSlots.size());
+        TAF_PA_ERROR("Failed to initialize: %zu slot(s)", failedSlots.size());
         for (auto slot : failedSlots)
         {
-            PA_ERROR("  - Slot %d: FAILED", slot);
+            TAF_PA_ERROR("  - Slot %d: FAILED", slot);
         }
     }
-    PA_INFO("====================================================");
+    TAF_PA_INFO("====================================================");
 
     return;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManagers()
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManagers()
 {
-    PA_INFO("Starting data connection managers deinitialization...");
+    TAF_PA_INFO("Starting data connection managers deinitialization...");
 
     // Phase 1: Check for active operations
     if (bRequestCallListInProgress_.load())
     {
-        PA_WARN("Request call list operation in progress during deinit");
+        TAF_PA_WARN("Request call list operation in progress during deinit");
         // Log warning but continue - the operation will be aborted when maps are cleared
     }
 
     // Phase 2: Deregister callbacks with error checking
-    pa_result_t result = PaDeregisterDataConnCallbacks();
-    if (PA_OK != result)
+    taf_pa_result_t result = PaDeregisterDataConnCallbacks();
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("CRITICAL: Failed to deregister data connection callbacks!");
-        PA_ERROR("Cannot safely proceed with cleanup - callbacks may still be active");
-        PA_ERROR("This could lead to crashes if SDK invokes callbacks after cleanup");
+        TAF_PA_ERROR("CRITICAL: Failed to deregister data connection callbacks!");
+        TAF_PA_ERROR("Cannot safely proceed with cleanup - callbacks may still be active");
+        TAF_PA_ERROR("This could lead to crashes if SDK invokes callbacks after cleanup");
         // Reset the flag to prevent further event forwarding attempts even though
         // deregistration failed - this stops the PA layer from forwarding any
         // incoming SDK throughput events to a partially cleaned-up state.
         bThroughputEventsEnabled_.store(false);
-        return PA_FAULT; // Do NOT clear maps if deregistration failed
+        return TAF_PA_FAULT; // Do NOT clear maps if deregistration failed
     }
 
-    PA_INFO("Callbacks successfully deregistered, proceeding with cleanup...");
+    TAF_PA_INFO("Callbacks successfully deregistered, proceeding with cleanup...");
 
     // Phase 3: Ordered cleanup with mutex protection
     {
         std::unique_lock lock(dataConnectionCbksMtx_);
 
         // Clear callback vectors first to prevent new callbacks from being invoked
-        PA_INFO("Clearing callback vectors...");
+        TAF_PA_INFO("Clearing callback vectors...");
         dataCallEventsCallbacks_.clear();
         throttledApnEventsCallbacks_.clear();
         qosTftEventsCallbacks_.clear();
@@ -631,17 +631,17 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManager
         // PaRemoveThroughputEventsCallback), so the flag must be reset here.
         bThroughputEventsEnabled_.store(false);
 
-        PA_INFO("Cleared all callback vectors");
+        TAF_PA_INFO("Cleared all callback vectors");
     }
 
     // Clear listener and manager maps in proper order
-    PA_INFO("Clear tafPaTeluxDataConnectionListenersMap_");
+    TAF_PA_INFO("Clear tafPaTeluxDataConnectionListenersMap_");
     tafPaTeluxDataConnectionListenersMap_.clear();
 
-    PA_INFO("Clear dataConnectionListenersMap_");
+    TAF_PA_INFO("Clear dataConnectionListenersMap_");
     dataConnectionListenersMap_.clear();
 
-    PA_INFO("Clear dataConnectionManagersMap_");
+    TAF_PA_INFO("Clear dataConnectionManagersMap_");
     dataConnectionManagersMap_.clear();
 
     // Update subsystem states to reflect deinitialized state
@@ -653,28 +653,22 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionManager
 
     // Reset request call list state: release the stored context shared_ptr and
     // clear the in-progress flag so a subsequent Init()/Deinit() cycle starts clean.
-    PA_INFO("Reset requestCallListClientEntry_ and bRequestCallListInProgress_");
+    TAF_PA_INFO("Reset requestCallListClientEntry_ and bRequestCallListInProgress_");
     {
         std::lock_guard<std::mutex> lock(requestCallListMutex_);
         requestCallListClientEntry_ = {nullptr, nullptr};
     }
     bRequestCallListInProgress_.store(false);
 
-    // Reset request call list state: release the stored context shared_ptr and
-    // clear the in-progress flag so a subsequent Init()/Deinit() cycle starts clean.
-    PA_INFO("Reset requestCallListClientEntry_ and bRequestCallListInProgress_");
-    requestCallListClientEntry_ = {nullptr, nullptr};
-    bRequestCallListInProgress_.store(false);
-
-    PA_INFO("Data connection managers deinitialization complete");
-    return PA_OK;
+    TAF_PA_INFO("Data connection managers deinitialization complete");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks()
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks()
 {
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     bool allSuccess = true;
     std::vector<int> failedSlots;
@@ -686,7 +680,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks
         // Register serving system listener for each slot it
         if (bDataConnectionListenersRegistered_[slotId - 1])
         {
-            PA_INFO("Data connection listener already registered for slot ID: %d.", slotId);
+            TAF_PA_INFO("Data connection listener already registered for slot ID: %d.", slotId);
         }
         else
         {
@@ -697,7 +691,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks
                 PaGetSubsysState(static_cast<SlotId_e>(slotId), subsysState);
                 if (SubsystemState_e::AVAILABLE != subsysState)
                 {
-                    PA_ERROR("Subsystem not initialized for slot id: %d", slotId);
+                    TAF_PA_ERROR("Subsystem not initialized for slot id: %d", slotId);
                     allSuccess = false;
                     failedSlots.push_back(slotId);
                     // Go to the next slot if available
@@ -714,12 +708,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks
                     if (managerIt->second->registerListener(listenerIt->second,
                         telux::data::DEFAULT_INDICATIONS) == telux::common::Status::SUCCESS)
                     {
-                        PA_INFO("Data connection listener for slot ID %d registered.", slotId);
+                        TAF_PA_INFO("Data connection listener for slot ID %d registered.", slotId);
                         bDataConnectionListenersRegistered_[slotId - 1] = true;
                     }
                     else
                     {
-                        PA_ERROR("Failed to register data connection listener for slot ID %d.",
+                        TAF_PA_ERROR("Failed to register data connection listener for slot ID %d.",
                                                                                            slotId);
                         allSuccess = false;
                         failedSlots.push_back(slotId);
@@ -730,25 +724,25 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks
     }
     if (!allSuccess)
     {
-        PA_ERROR("=== Registration Failed ===");
-        PA_ERROR("Failed to register listeners for %zu slot(s)", failedSlots.size());
+        TAF_PA_ERROR("=== Registration Failed ===");
+        TAF_PA_ERROR("Failed to register listeners for %zu slot(s)", failedSlots.size());
         for (auto slot : failedSlots)
         {
-            PA_ERROR("  - Slot %d: REGISTRATION FAILED", slot);
+            TAF_PA_ERROR("  - Slot %d: REGISTRATION FAILED", slot);
         }
-        PA_ERROR("============================");
-        return PA_FAULT;
+        TAF_PA_ERROR("============================");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("All data connection listeners successfully registered");
-    return PA_OK;
+    TAF_PA_INFO("All data connection listeners successfully registered");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaDeregisterDataConnCallbacks()
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaDeregisterDataConnCallbacks()
 {
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     // Protect the critical section
     std::unique_lock lock(dataConnectionCbksMtx_);
@@ -772,12 +766,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaDeregisterDataConnCallbac
 
                 if (telux::common::Status::SUCCESS == status)
                 {
-                    PA_INFO("Data connection listener for slot ID %d deregistered.", slotId);
+                    TAF_PA_INFO("Data connection listener for slot ID %d deregistered.", slotId);
                     bDataConnectionListenersRegistered_[slotId - 1] = false;
                 }
                 else
                 {
-                    PA_ERROR("FAILED to deregister listener for slot ID %d. Status: %d",
+                    TAF_PA_ERROR("FAILED to deregister listener for slot ID %d. Status: %d",
                              slotId, TO_INT(status));
                     failedSlots.push_back(slotId);
                     allSuccess = false;
@@ -786,24 +780,24 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaDeregisterDataConnCallbac
         }
         else
         {
-            PA_INFO("Serving System listener already deregistered for slot ID: %d.", slotId);
+            TAF_PA_INFO("Serving System listener already deregistered for slot ID: %d.", slotId);
         }
     }
 
     if (!allSuccess)
     {
-        PA_ERROR("=== Deregistration Failed ===");
-        PA_ERROR("Failed to deregister callbacks for %zu slot(s)", failedSlots.size());
+        TAF_PA_ERROR("=== Deregistration Failed ===");
+        TAF_PA_ERROR("Failed to deregister callbacks for %zu slot(s)", failedSlots.size());
         for (auto slot : failedSlots)
         {
-            PA_ERROR("  - Slot %d: DEREGISTRATION FAILED", slot);
+            TAF_PA_ERROR("  - Slot %d: DEREGISTRATION FAILED", slot);
         }
-        PA_ERROR("============================");
-        return PA_FAULT;
+        TAF_PA_ERROR("============================");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("All data connection callbacks successfully deregistered");
-    return PA_OK;
+    TAF_PA_INFO("All data connection callbacks successfully deregistered");
+    return TAF_PA_OK;
 }
 
 /**
@@ -842,8 +836,8 @@ void taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback
     telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
 
     auto &teluxPaData    = TafPaTeluxData::GetInstance();
-    pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result, "PaGetPhoneIdFromSlotId err: %d, drop this event",
+    taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "PaGetPhoneIdFromSlotId err: %d, drop this event",
                                                                                             result);
 
     eventInfo.phoneId    = phoneId;
@@ -854,7 +848,7 @@ void taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback
 
     if (telux::common::ErrorCode::SUCCESS != errorCode)
     {
-        PA_ERROR("Starting data session failed with error code: %d", TO_INT(errorCode));
+        TAF_PA_ERROR("Starting data session failed with error code: %d", TO_INT(errorCode));
         // Set the call status to DISCONNECTED
         eventInfo.callStatus                  = DataCallStatus_e::DISCONNECTED;
         eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
@@ -868,7 +862,7 @@ void taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback
         */
         if (telux::data::DataCallStatus::NET_NO_NET == iDataCall->getDataCallStatus())
         {
-            PA_WARN("TelSDK returned NET_NOT_NET");
+            TAF_PA_WARN("TelSDK returned NET_NOT_NET");
             eventInfo.callStatus                  = DataCallStatus_e::CONNECTING;
             eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::CONNECTING;
             eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::CONNECTING;
@@ -892,7 +886,7 @@ void taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback
     return;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
 (
     const taf::pa::data::DataCallStartStopParams_t& params
 )
@@ -904,29 +898,29 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
     teluxParams.ipFamilyType = taf::pa::data::Utils::ConvertIpType(params.ipType);
     teluxParams.interfaceName = params.interfaceName;
 
-    PA_DEBUG("PaStartDataSessionAsync - teluxParams (after): profileId=%d, ipFamilyType=%d, "
+    TAF_PA_DEBUG("PaStartDataSessionAsync - teluxParams (after): profileId=%d, ipFamilyType=%d, "
             "interfaceName='%s', operationType=%d",
             teluxParams.profileId, TO_INT(teluxParams.ipFamilyType),
             teluxParams.interfaceName.c_str(), TO_INT(teluxParams.operationType));
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
-    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(params.phoneId, slotIDpa);
-    if (PA_OK != result)
+    taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(params.phoneId, slotIDpa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(params.phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(params.phoneId));
         return result;
     }
-    PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
+    TAF_PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
 
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
-        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return TAF_PA_FAULT;
     }
 
     taf::pa::data::PhoneId_e phoneId = params.phoneId;
@@ -947,7 +941,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
             if (!iDataCall)
             {
                 // Graceful handling of NULL iDataCall
-                PA_WARN("startDataCallCallback iDataCall is NULL, phoneId=%d profileId=%d err=%d",
+                TAF_PA_WARN("startDataCallCallback iDataCall is NULL, phoneId=%d profileId=%d err=%d",
                         TO_INT(phoneId), TO_INT(profileId), TO_INT(errorCode));
 
                 DataCallEventInfo_t eventInfo{};
@@ -960,7 +954,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
                 // treat as failure defensively.
                 if (telux::common::ErrorCode::SUCCESS != errorCode)
                 {
-                    PA_ERROR("Starting data session failed with error code: %d",
+                    TAF_PA_ERROR("Starting data session failed with error code: %d",
                              TO_INT(errorCode));
                 }
 
@@ -980,10 +974,10 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
     auto status = dataConnectionManagersMap_[slotId]->startDataCall(teluxParams, cb);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("startDataCall failed. Status: %d", TO_INT(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("startDataCall failed. Status: %d", TO_INT(status));
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 void taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback
@@ -996,7 +990,7 @@ void taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback
 
     if (telux::common::ErrorCode::SUCCESS != errorCode)
     {
-        PA_ERROR("Stopping data session failed with error code: %d", TO_INT(errorCode));
+        TAF_PA_ERROR("Stopping data session failed with error code: %d", TO_INT(errorCode));
     }
 
     // Log the call data
@@ -1011,8 +1005,8 @@ void taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback
     telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
-    pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result, "PaGetPhoneIdFromSlotId err: %d, drop this event",
+    taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "PaGetPhoneIdFromSlotId err: %d, drop this event",
                                                                                            result);
     eventInfo.phoneId = phoneId;
     eventInfo.profileId = static_cast<taf::pa::data::ProfileId_e>(iDataCall->getProfileId());
@@ -1026,7 +1020,7 @@ void taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback
     return;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
 (
     const taf::pa::data::DataCallStartStopParams_t& params
 )
@@ -1039,22 +1033,22 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
-    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(params.phoneId, slotIDpa);
-    if (PA_OK != result)
+    taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(params.phoneId, slotIDpa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(params.phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(params.phoneId));
         return result;
     }
-    PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
+    TAF_PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
 
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
-        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return TAF_PA_FAULT;
     }
 
     taf::pa::data::PhoneId_e phoneId = params.phoneId;
@@ -1075,12 +1069,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
             if (!iDataCall)
             {
                 // Graceful handling of NULL iDataCall
-                PA_WARN("stopDataCallCallback iDataCall is NULL, phoneId=%d profileId=%d err=%d",
+                TAF_PA_WARN("stopDataCallCallback iDataCall is NULL, phoneId=%d profileId=%d err=%d",
                         TO_INT(phoneId), TO_INT(profileId), TO_INT(errorCode));
 
                 if (telux::common::ErrorCode::SUCCESS != errorCode)
                 {
-                    PA_ERROR("Stopping data session failed with error code: %d",
+                    TAF_PA_ERROR("Stopping data session failed with error code: %d",
                              TO_INT(errorCode));
                 }
 
@@ -1107,10 +1101,10 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
     auto status = dataConnectionManagersMap_[slotId]->stopDataCall(teluxParams, cb);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("stopDataCall failed. Status: %d", TO_INT(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("stopDataCall failed. Status: %d", TO_INT(status));
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
@@ -1125,7 +1119,7 @@ void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
     TAF_PA_ERROR_IF_RET_NIL(!teluxPaDataConn.bRequestCallListInProgress_.load(),
                                         "No pending request call list. Ignoring the event.");
 
-    PA_INFO("Number of active calls: %zu", iDataCalls.size());
+    TAF_PA_INFO("Number of active calls: %zu", iDataCalls.size());
 
     // read the entry under the mutex so we always see the fully-written
     // callback/context pair that was stored atomically in PaRequestDataCallsListAsync.
@@ -1141,16 +1135,16 @@ void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
     // Verify callback is not null before proceeding
     if (!callback)
     {
-        PA_ERROR("Callback is NULL. Exit request call list processing.");
+        TAF_PA_ERROR("Callback is NULL. Exit request call list processing.");
         teluxPaDataConn.bRequestCallListInProgress_.store(false);
         return;
     }
 
     if (telux::common::ErrorCode::SUCCESS != error)
     {
-        PA_ERROR("onRequestDataCallList failed with error code: %d", TO_INT(error));
+        TAF_PA_ERROR("onRequestDataCallList failed with error code: %d", TO_INT(error));
         // Call the callback with error
-        callback(PA_FAULT, callList, context);
+        callback(TAF_PA_FAULT, callList, context);
         // Mark call as completed.
         teluxPaDataConn.bRequestCallListInProgress_.store(false);
         return;
@@ -1161,11 +1155,11 @@ void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
         LogDataCallInfo(iDataCall, __func__);
 
         SlotId slotId = iDataCall->getSlotId();
-        PA_INFO("Slot ID: %d", TO_INT(slotId));
+        TAF_PA_INFO("Slot ID: %d", TO_INT(slotId));
         if (teluxPaDataConn.tafPaTeluxDataConnectionListenersMap_.find(slotId) ==
                                     teluxPaDataConn.tafPaTeluxDataConnectionListenersMap_.end())
         {
-            PA_ERROR("Connection connection listener not available for slot %d", TO_INT(slotId));
+            TAF_PA_ERROR("Connection connection listener not available for slot %d", TO_INT(slotId));
             return;
         }
         DataCallEventInfo_t eventInfo;
@@ -1174,10 +1168,10 @@ void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
         callList.push_back(eventInfo);
     }
 
-    PA_INFO("Number of calls in list: %zu", callList.size());
+    TAF_PA_INFO("Number of calls in list: %zu", callList.size());
 
     // Send the data call info to the requesting client
-    callback(PA_OK, callList, context);
+    callback(TAF_PA_OK, callList, context);
 
     // Reset the callback entry info.
     teluxPaDataConn.resetCallListClientEntry();
@@ -1193,18 +1187,18 @@ void taf::pa::data::TafPaTeluxDataConnection::resetCallListClientEntry()
     requestCallListClientEntry_ = {nullptr, nullptr};
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
 (
     taf::pa::data::PhoneId_e phoneId,
     taf::pa::data::taf_pa_data_RequestCallListCb callback,
     std::shared_ptr<void> context
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callback, PA_BAD_PARAMETER, "callback is null");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callback, TAF_PA_BAD_PARAMETER, "callback is null");
 
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
 
     // acquire the mutex, set the flag, and write the entry atomically
@@ -1214,9 +1208,9 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
         bool expected = false;
         if (!bRequestCallListInProgress_.compare_exchange_strong(expected, true))
         {
-            // Another thread already set the flag, return PA_BUSY
-            PA_ERROR("Request call list already in progress for phone id: %d", TO_INT(phoneId));
-            return PA_BUSY;
+            // Another thread already set the flag, return TAF_PA_BUSY
+            TAF_PA_ERROR("Request call list already in progress for phone id: %d", TO_INT(phoneId));
+            return TAF_PA_BUSY;
         }
         // Write the entry under the lock, before the flag is visible to the SB thread.
         requestCallListClientEntry_ = {callback, context};
@@ -1226,10 +1220,10 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
     telux::common::Status status;
     SlotId slotId;
 
-    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIdPa);
-    if (PA_OK != result)
+    taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIdPa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
         // Reset the entry and flag since we're returning early.
         {
             std::lock_guard<std::mutex> lock(requestCallListMutex_);
@@ -1238,54 +1232,54 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
         bRequestCallListInProgress_.store(false);
         return result;
     }
-    PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIdPa));
+    TAF_PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIdPa));
     slotId = taf::pa::data::Utils::ConvertSlotId(slotIdPa);
     if (INVALID_SLOT_ID == slotId)
     {
-        PA_ERROR("Invalid Slot ID");
+        TAF_PA_ERROR("Invalid Slot ID");
         // Reset the entry and flag since we're returning early.
         {
             std::lock_guard<std::mutex> lock(requestCallListMutex_);
             requestCallListClientEntry_ = {nullptr, nullptr};
         }
         bRequestCallListInProgress_.store(false);
-        return PA_BAD_PARAMETER;
+        return TAF_PA_BAD_PARAMETER;
     }
 
     // Check if the data connection manager is initialized.
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
-        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
         // Reset the entry and flag since we're returning early.
         {
             std::lock_guard<std::mutex> lock(requestCallListMutex_);
             requestCallListClientEntry_ = {nullptr, nullptr};
         }
         bRequestCallListInProgress_.store(false);
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     status = dataConnectionManagersMap_[slotId]->requestDataCallList(
                             telux::data::OperationType::DATA_LOCAL, onRequestDataCallList);
     if (telux::common::Status::SUCCESS != status)
     {
-        PA_ERROR("requestDataCallList failed for phone id[%d]: %d",TO_INT(phoneId), TO_INT(status));
+        TAF_PA_ERROR("requestDataCallList failed for phone id[%d]: %d",TO_INT(phoneId), TO_INT(status));
         // Reset the entry and flag since we're returning early.
         {
             std::lock_guard<std::mutex> lock(requestCallListMutex_);
             requestCallListClientEntry_ = {nullptr, nullptr};
         }
         bRequestCallListInProgress_.store(false);
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("requestDataCallList in progress for phone id %d", TO_INT(phoneId));
-    return PA_OK;
+    TAF_PA_INFO("requestDataCallList in progress for phone id %d", TO_INT(phoneId));
+    return TAF_PA_OK;
 }
 
 
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
 (
     const taf::pa::data::PhoneId_e        phoneId,
     std::vector<ThrottledApnEventInfo_t> &throttledApnEventInfoList
@@ -1295,22 +1289,22 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
     telux::common::Status status;
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
-    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
-    if (PA_OK != result)
+    taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
         return result;
     }
-    PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
+    TAF_PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
 
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
-        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return TAF_PA_FAULT;
     }
 
     // Create shared promise to ensure it outlives this function scope
@@ -1334,50 +1328,50 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
             // Try to set promise to unblock waiting thread
             try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
             try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in requestThrottledApnInfo callback.");
+            TAF_PA_ERROR("Unknown error in requestThrottledApnInfo callback.");
             try { promisePtr->set_value(std::make_pair(std::vector<telux::data::APNThrottleInfo>(),
                 telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
         }
     });
     if (telux::common::Status::SUCCESS != status)
     {
-        PA_ERROR("requestThrottledApnInfo failed. Status: %d", TO_INT(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("requestThrottledApnInfo failed. Status: %d", TO_INT(status));
+        return TAF_PA_FAULT;
     }
-    PA_DEBUG("Wait for callback ...");
+    TAF_PA_DEBUG("Wait for callback ...");
 
     std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
     std::future_status waitStatus = fut.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("requestThrottledApnInfo promise timeout");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("requestThrottledApnInfo promise timeout");
+        return TAF_PA_TIMEOUT;
     }
 
     std::pair<std::vector<telux::data::APNThrottleInfo>, telux::common::ErrorCode> futResult;
-    FUTURE_GET_RET_VAL(fut, futResult, PA_FAULT);
+    FUTURE_GET_RET_VAL(fut, futResult, TAF_PA_FAULT);
     if (telux::common::ErrorCode::SUCCESS != futResult.second)
     {
-        PA_ERROR("requestThrottledApnInfo error: %d", TO_INT(futResult.second));
-        return PA_FAULT;
+        TAF_PA_ERROR("requestThrottledApnInfo error: %d", TO_INT(futResult.second));
+        return TAF_PA_FAULT;
     }
 
     std::vector<telux::data::APNThrottleInfo> throttleInfoList = futResult.first;
     size_t numThrottledApn = throttleInfoList.size();
-    PA_DEBUG("Number of throttled APN(s): %zu", numThrottledApn);
+    TAF_PA_DEBUG("Number of throttled APN(s): %zu", numThrottledApn);
     if (numThrottledApn > 0)
     {
         for (auto &throttleInfo : throttleInfoList)
@@ -1391,7 +1385,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::paGetThrottledApnInfo
         }
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 /**
@@ -1402,7 +1396,7 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendHwAccelerationEventInfoToCli
     const HwAccelerationChangeEvent_t &hwAccelerationEventInfo
 )
 {
-    PA_DEBUG("Calling registered callbacks...");
+    TAF_PA_DEBUG("Calling registered callbacks...");
     std::vector<HwAccelerationEventsCallbackEntry_t> localCbksCopy;
     {
         // Lock and get a copy of the callbacks.
@@ -1413,21 +1407,21 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendHwAccelerationEventInfoToCli
     {
         try
         {
-            PA_DEBUG("Calling callback: %d", cbk.id);
+            TAF_PA_DEBUG("Calling callback: %d", cbk.id);
             cbk.callBack(hwAccelerationEventInfo, cbk.context);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+            TAF_PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown exception in callback %d", cbk.id);
+            TAF_PA_ERROR("Unknown exception in callback %d", cbk.id);
         }
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddHwAccelerationChangeEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddHwAccelerationChangeEventsCallback
 (
     taf_pa_data_HwAccelerationEventsCb callBack,
     ///< [IN] The callback function.
@@ -1437,11 +1431,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddHwAccelerationChangeEv
     ///< [OUT] The ID of the registered callback.
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, TAF_PA_BAD_PARAMETER, "callBack is NULL!");
 
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
 
     std::unique_lock lock(dataConnectionCbksMtx_);
@@ -1453,12 +1447,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddHwAccelerationChangeEv
     id = hwAccelerationEventsCallbackId_;
     // Increment the ID.
     hwAccelerationEventsCallbackId_++;
-    PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
-    PA_INFO("Number of registered callbacks: %zu", hwAccelerationEventsCallbacks_.size());
-    return PA_OK;
+    TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+    TAF_PA_INFO("Number of registered callbacks: %zu", hwAccelerationEventsCallbacks_.size());
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveHwAccelerationChangeEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveHwAccelerationChangeEventsCallback
 (
     uint16_t id
     ///< [IN] The ID of the registered callback.
@@ -1466,7 +1460,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveHwAccelerationChang
 {
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     std::unique_lock lock(dataConnectionCbksMtx_);
     // Iterate over the vector and remove the one with the provided id.
@@ -1477,13 +1471,13 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveHwAccelerationChang
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
+            TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
             hwAccelerationEventsCallbacks_.erase(cbk);
-            return PA_OK;
+            return TAF_PA_OK;
         }
     }
-    PA_WARN("Callback not found. Id: %d", id);
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Callback not found. Id: %d", id);
+    return TAF_PA_NOT_FOUND;
 }
 
 void taf::pa::data::TafPaTeluxDataConnection::PaSendQosTftEventInfoToClients
@@ -1491,7 +1485,7 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendQosTftEventInfoToClients
     const QosTftEventInfo_t &qosTftEventsList
 )
 {
-    PA_DEBUG("Calling registered callbacks...");
+    TAF_PA_DEBUG("Calling registered callbacks...");
     std::vector<QosTftEventsCallbackEntry_t> localCbksCopy;
     {
         // Lock and get a copy of the callbacks.
@@ -1502,21 +1496,21 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendQosTftEventInfoToClients
     {
         try
         {
-            PA_DEBUG("Calling callback: %d", cbk.id);
+            TAF_PA_DEBUG("Calling callback: %d", cbk.id);
             cbk.callBack(qosTftEventsList, cbk.context);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+            TAF_PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown exception in callback %d", cbk.id);
+            TAF_PA_ERROR("Unknown exception in callback %d", cbk.id);
         }
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddQosTftEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddQosTftEventsCallback
 (
     taf_pa_data_QosTftEventsCb callBack,
     ///< [IN] The callback function.
@@ -1526,11 +1520,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddQosTftEventsCallback
     ///< [OUT] The ID of the registered callback.
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, TAF_PA_BAD_PARAMETER, "callBack is NULL!");
 
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     std::unique_lock lock(dataConnectionCbksMtx_);
     // Add the callback
@@ -1540,12 +1534,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddQosTftEventsCallback
     id = qosTftEventsCallbackId_;
     // Increment the ID.
     qosTftEventsCallbackId_++;
-    PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
-    PA_INFO("Number of registered callbacks: %zu", qosTftEventsCallbacks_.size());
-    return PA_OK;
+    TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+    TAF_PA_INFO("Number of registered callbacks: %zu", qosTftEventsCallbacks_.size());
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveQosTftEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveQosTftEventsCallback
 (
     uint16_t id
     ///< [IN] The ID of the registered callback.
@@ -1553,7 +1547,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveQosTftEventsCallbac
 {
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     std::unique_lock lock(dataConnectionCbksMtx_);
     // Iterate over the vector and remove the one with the provided id.
@@ -1564,13 +1558,13 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveQosTftEventsCallbac
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
+            TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
             qosTftEventsCallbacks_.erase(cbk);
-            return PA_OK;
+            return TAF_PA_OK;
         }
     }
-    PA_WARN("Callback not found. Id: %d", id);
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Callback not found. Id: %d", id);
+    return TAF_PA_NOT_FOUND;
 }
 
 void taf::pa::data::TafPaTeluxDataConnection::PaSendThrottledApnEventInfoToClients
@@ -1578,7 +1572,7 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendThrottledApnEventInfoToClien
     const std::vector<ThrottledApnEventInfo_t> &throttledApnEventInfo
 )
 {
-    PA_DEBUG("Calling registered callbacks...");
+    TAF_PA_DEBUG("Calling registered callbacks...");
     std::vector<ThrottledApnEventsCallbackEntry_t> localCbksCopy;
     {
         // Lock and get a copy of the callbacks.
@@ -1589,21 +1583,21 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendThrottledApnEventInfoToClien
     {
         try
         {
-            PA_DEBUG("Calling callback: %d", cbk.id);
+            TAF_PA_DEBUG("Calling callback: %d", cbk.id);
             cbk.callBack(throttledApnEventInfo, cbk.context);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+            TAF_PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown exception in callback %d", cbk.id);
+            TAF_PA_ERROR("Unknown exception in callback %d", cbk.id);
         }
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThrottledApnEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThrottledApnEventsCallback
 (
     taf_pa_data_ThrottledApnEventsCb callBack,
     ///< [IN] The callback function.
@@ -1613,11 +1607,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThrottledApnEventsCall
     ///< [OUT] The ID of the registered callback.
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, TAF_PA_BAD_PARAMETER, "callBack is NULL!");
 
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     std::unique_lock lock(dataConnectionCbksMtx_);
     // Add the callback
@@ -1627,12 +1621,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThrottledApnEventsCall
     id = throttledApnEventsCallbackId_;
     // Increment the ID.
     throttledApnEventsCallbackId_++;
-    PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
-    PA_INFO("Number of registered callbacks: %zu", throttledApnEventsCallbacks_.size());
-    return PA_OK;
+    TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+    TAF_PA_INFO("Number of registered callbacks: %zu", throttledApnEventsCallbacks_.size());
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThrottledApnEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThrottledApnEventsCallback
 (
     uint16_t id
     ///< [IN] The ID of the registered callback.
@@ -1640,7 +1634,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThrottledApnEventsC
 {
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     std::unique_lock lock(dataConnectionCbksMtx_);
     // Iterate over the vector and remove the one with the provided id.
@@ -1652,13 +1646,13 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThrottledApnEventsC
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
+            TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
             throttledApnEventsCallbacks_.erase(cbk);
-            return PA_OK;
+            return TAF_PA_OK;
         }
     }
-    PA_WARN("Callback not found. Id: %d", id);
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Callback not found. Id: %d", id);
+    return TAF_PA_NOT_FOUND;
 }
 
 void taf::pa::data::TafPaTeluxDataConnection::PaSendDataCallEventInfoToClients
@@ -1666,7 +1660,7 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendDataCallEventInfoToClients
     const taf::pa::data::DataCallEventInfo_t &dataCallEventInfo
 )
 {
-    PA_DEBUG("Calling registered callbacks...");
+    TAF_PA_DEBUG("Calling registered callbacks...");
     std::vector<DataCallEventsCallbackEntry_t> localCbksCopy;
     {
         // Lock and get a copy of the callbacks.
@@ -1678,21 +1672,21 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendDataCallEventInfoToClients
     {
         try
         {
-            PA_DEBUG("Calling callback: %d", cbk.id);
+            TAF_PA_DEBUG("Calling callback: %d", cbk.id);
             cbk.callBack(dataCallEventInfo, cbk.context);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+            TAF_PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown exception in callback %d", cbk.id);
+            TAF_PA_ERROR("Unknown exception in callback %d", cbk.id);
         }
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddDataCallEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddDataCallEventsCallback
 (
     taf_pa_data_CallEventsCb callBack,
     ///< [IN] The callback function.
@@ -1702,11 +1696,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddDataCallEventsCallback
     ///< [OUT] The ID of the registered callback.
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, TAF_PA_BAD_PARAMETER, "callBack is NULL!");
 
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
 
     std::unique_lock lock(dataConnectionCbksMtx_);
@@ -1717,12 +1711,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddDataCallEventsCallback
     id = dataCallEventsCallbackId_;
     // Increment the ID.
     dataCallEventsCallbackId_++;
-    PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
-    PA_INFO("Number of registered callbacks: %zu", dataCallEventsCallbacks_.size());
-    return PA_OK;
+    TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+    TAF_PA_INFO("Number of registered callbacks: %zu", dataCallEventsCallbacks_.size());
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveDataCallEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveDataCallEventsCallback
 (
     uint16_t id
     ///< [IN] The ID of the registered callback.
@@ -1730,7 +1724,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveDataCallEventsCallb
 {
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     std::unique_lock lock(dataConnectionCbksMtx_);
     // Iterate over the vector and remove the one with the provided id.
@@ -1738,13 +1732,13 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveDataCallEventsCallb
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
+            TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
             dataCallEventsCallbacks_.erase(cbk);
-            return PA_OK;
+            return TAF_PA_OK;
         }
     }
-    PA_WARN("Callback not found. Id: %d", id);
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Callback not found. Id: %d", id);
+    return TAF_PA_NOT_FOUND;
 }
 
 /*
@@ -1760,10 +1754,10 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendThroughputEventInfoToClients
     // This keeps the gating logic exclusively in the PA layer.
     if (!bThroughputEventsEnabled_.load())
     {
-        PA_DEBUG("Throughput events gated: no callbacks registered yet, dropping event.");
+        TAF_PA_DEBUG("Throughput events gated: no callbacks registered yet, dropping event.");
         return;
     }
-    PA_DEBUG("Calling registered callbacks...");
+    TAF_PA_DEBUG("Calling registered callbacks...");
     std::vector<ThroughputEventsCallbackEntry_t> localCbksCopy;
     {
         // Lock and get a copy of the callbacks.
@@ -1774,21 +1768,21 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendThroughputEventInfoToClients
     {
         try
         {
-            PA_DEBUG("Calling callback: %d", cbk.id);
+            TAF_PA_DEBUG("Calling callback: %d", cbk.id);
             cbk.callBack(throughputInfoList, cbk.context);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+            TAF_PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown exception in callback %d", cbk.id);
+            TAF_PA_ERROR("Unknown exception in callback %d", cbk.id);
         }
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThroughputEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThroughputEventsCallback
 (
     taf_pa_data_ThroughputEventsCb callBack,
     ///< [IN] The callback function.
@@ -1798,11 +1792,11 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThroughputEventsCallba
     ///< [OUT] The ID of the registered callback.
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, TAF_PA_BAD_PARAMETER, "callBack is NULL!");
 
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
 
     bool needRegister = false;
@@ -1815,8 +1809,8 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThroughputEventsCallba
         id = throughputEventsCallbackId_;
         // Increment the ID.
         throughputEventsCallbackId_++;
-        PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
-        PA_INFO("Number of registered callbacks: %zu", throughputEventsCallbacks_.size());
+        TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+        TAF_PA_INFO("Number of registered callbacks: %zu", throughputEventsCallbacks_.size());
 
         // Decide first-registration under the lock, but do NOT call TelSDK while holding it.
         needRegister = (throughputEventsCallbacks_.size() == 1);
@@ -1824,7 +1818,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThroughputEventsCallba
 
     if (needRegister)
     {
-        PA_INFO("First throughput callback added: registering THROUGHPUT indication with SDK.");
+        TAF_PA_INFO("First throughput callback added: registering THROUGHPUT indication with SDK.");
         telux::data::DataConnectionIndications throughputIndication;
         throughputIndication.set(
             telux::data::DataConnectionIndicationsType::THROUGHPUT);
@@ -1840,21 +1834,21 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThroughputEventsCallba
                     listenerIt->second, throughputIndication);
                 if (telux::common::Status::SUCCESS == status)
                 {
-                    PA_INFO("THROUGHPUT indication registered for slot ID %d.", slotId);
+                    TAF_PA_INFO("THROUGHPUT indication registered for slot ID %d.", slotId);
                 }
                 else
                 {
-                    PA_ERROR("Failed to register THROUGHPUT indication for slot ID %d.", slotId);
+                    TAF_PA_ERROR("Failed to register THROUGHPUT indication for slot ID %d.", slotId);
                 }
             }
         }
         bThroughputEventsEnabled_.store(true);
-        PA_INFO("Throughput events gate opened: SDK events will now be forwarded to clients.");
+        TAF_PA_INFO("Throughput events gate opened: SDK events will now be forwarded to clients.");
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThroughputEventsCallback
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThroughputEventsCallback
 (
     uint16_t id
     ///< [IN] The ID of the registered callback.
@@ -1862,7 +1856,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThroughputEventsCal
 {
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
     bool needDeregister = false;
     bool found = false;
@@ -1876,7 +1870,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThroughputEventsCal
         {
             if (cbk->id == id)
             {
-                PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
+                TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", id, cbk->callBack, cbk->context.get());
                 throughputEventsCallbacks_.erase(cbk);
                 found = true;
                 needDeregister = throughputEventsCallbacks_.empty();
@@ -1891,13 +1885,13 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThroughputEventsCal
 
     if (!found)
     {
-        PA_WARN("Callback not found. Id: %d", id);
-        return PA_NOT_FOUND;
+        TAF_PA_WARN("Callback not found. Id: %d", id);
+        return TAF_PA_NOT_FOUND;
     }
 
     if (needDeregister)
     {
-        PA_INFO("Last throughput callback removed: deregistering THROUGHPUT indication "
+        TAF_PA_INFO("Last throughput callback removed: deregistering THROUGHPUT indication "
                 "from SDK.");
         telux::data::DataConnectionIndications throughputIndication;
         throughputIndication.set(
@@ -1914,21 +1908,21 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThroughputEventsCal
                     listenerIt->second, throughputIndication);
                 if (telux::common::Status::SUCCESS == status)
                 {
-                    PA_INFO("THROUGHPUT indication deregistered for slot ID %d.", slotId);
+                    TAF_PA_INFO("THROUGHPUT indication deregistered for slot ID %d.", slotId);
                 }
                 else
                 {
-                    PA_ERROR("Failed to deregister THROUGHPUT indication for slot ID %d.",
+                    TAF_PA_ERROR("Failed to deregister THROUGHPUT indication for slot ID %d.",
                              slotId);
                 }
             }
         }
-        PA_INFO("Throughput events gate closed: no remaining callbacks.");
+        TAF_PA_INFO("Throughput events gate closed: no remaining callbacks.");
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetThroughputReportInterval
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetThroughputReportInterval
 (
     PhoneId_e phoneId,
     uint32_t reportInterval
@@ -1939,37 +1933,37 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetThroughputReportInterv
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
-    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
-    if (PA_OK != result)
+    taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
         return result;
     }
-    PA_INFO("Phone Id: %d, Slot Id: %d, Interval: %u ms", TO_INT(phoneId), TO_INT(slotIDpa),
+    TAF_PA_INFO("Phone Id: %d, Slot Id: %d, Interval: %u ms", TO_INT(phoneId), TO_INT(slotIDpa),
             reportInterval);
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
 
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
-        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return TAF_PA_FAULT;
     }
 
     errorCode = dataConnectionManagersMap_[slotId]->setThroughputInterval(reportInterval);
     if (telux::common::ErrorCode::SUCCESS != errorCode)
     {
-        PA_ERROR("setThroughputInterval failed. ErrorCode: %d", TO_INT(errorCode));
-        return PA_FAULT;
+        TAF_PA_ERROR("setThroughputInterval failed. ErrorCode: %d", TO_INT(errorCode));
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("setThroughputInterval succeeded");
-    return PA_OK;
+    TAF_PA_INFO("setThroughputInterval succeeded");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetLastThroughputInfo
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetLastThroughputInfo
 (
     PhoneId_e phoneId,
     std::vector<ThroughputInfo_t> &throughputInfoList
@@ -1980,33 +1974,33 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetLastThroughputInfo
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
-    pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
-    if (PA_OK != result)
+    taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIDpa);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
         return result;
     }
-    PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIDpa));
+    TAF_PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
 
     if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
     {
-        PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
+        return TAF_PA_FAULT;
     }
 
     std::vector<telux::data::ThroughputInfo> sdkThroughputInfoList;
     errorCode = dataConnectionManagersMap_[slotId]->getLastThroughputInfo(sdkThroughputInfoList);
     if (telux::common::ErrorCode::SUCCESS != errorCode)
     {
-        PA_ERROR("getLastThroughputInfo failed. ErrorCode: %d", TO_INT(errorCode));
-        return PA_FAULT;
+        TAF_PA_ERROR("getLastThroughputInfo failed. ErrorCode: %d", TO_INT(errorCode));
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("getLastThroughputInfo succeeded. Count: %zu", sdkThroughputInfoList.size());
+    TAF_PA_INFO("getLastThroughputInfo succeeded. Count: %zu", sdkThroughputInfoList.size());
 
     // Convert SDK throughput info to PA throughput info
     throughputInfoList.clear();
@@ -2019,10 +2013,10 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetLastThroughputInfo
         throughputInfoList.push_back(paInfo);
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetMtuByInterfaceName
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetMtuByInterfaceName
 (
     const std::string& interfaceName,
     int32_t& mtu
@@ -2030,27 +2024,27 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetMtuByInterfaceName
 {
     if (interfaceName.empty())
     {
-        PA_ERROR("Interface name is empty");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Interface name is empty");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     // Iterate through all slot listeners to find the data call with the matching interface name.
     // The MTU is read directly from IpAddrInfo (SDK-provided) via the active IDataCall object.
     for (auto& entry : tafPaTeluxDataConnectionListenersMap_)
     {
-        pa_result_t result = entry.second->GetMtuByInterfaceName(interfaceName, mtu);
-        if (PA_OK == result)
+        taf_pa_result_t result = entry.second->GetMtuByInterfaceName(interfaceName, mtu);
+        if (TAF_PA_OK == result)
         {
-            return PA_OK;
+            return TAF_PA_OK;
         }
-        else if (PA_NOT_FOUND != result)
+        else if (TAF_PA_NOT_FOUND != result)
         {
             // Interface found but MTU not available
             return result;
         }
-        // PA_NOT_FOUND: interface not in this slot's listener, try next slot
+        // TAF_PA_NOT_FOUND: interface not in this slot's listener, try next slot
     }
 
-    PA_WARN("Interface %s not found in any active data calls", interfaceName.c_str());
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Interface %s not found in any active data calls", interfaceName.c_str());
+    return TAF_PA_NOT_FOUND;
 }

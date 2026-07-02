@@ -25,9 +25,9 @@ class taf_L2tpAdaptor
     public:
         static taf_L2tpAdaptor &getInstance();
 
-        pa_result_t initialize();
+        taf_pa_result_t initialize();
 
-        pa_result_t ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTunnel_t& paL2tpTunnelConfig,
+        taf_pa_result_t ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTunnel_t& paL2tpTunnelConfig,
                                          telux::data::net::L2tpTunnelConfig& teluxL2tpTunnelConfig);
 
         std::atomic<bool> isInitialized{false};
@@ -71,31 +71,31 @@ taf_L2tpAdaptor &taf_L2tpAdaptor::getInstance(void)
     return instance;
 }
 
-pa_result_t taf_pa_l2tp_Init()
+taf_pa_result_t taf_pa_l2tp_Init()
 {
-    PA_DEBUG("Enter taf_pa_l2tp_Init in PA");
-    PA_INFO("Default platform adatper implementation");
+    TAF_PA_DEBUG("Enter taf_pa_l2tp_Init in PA");
+    TAF_PA_INFO("Default platform adatper implementation");
 
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
 
-    pa_result_t result = pL2tpAdaptor.initialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pL2tpAdaptor.initialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("L2tp platform adapter initialization is done");
+        TAF_PA_INFO("L2tp platform adapter initialization is done");
         pL2tpAdaptor.isInitialized = true;
     }
     else
     {
-        PA_CRIT("Failed to initialize L2tp platform adapter, ret: %d", result);
+        TAF_PA_CRIT("Failed to initialize L2tp platform adapter, ret: %d", result);
         pL2tpAdaptor.isInitialized = false;
     }
 
     return result;
 }
 
-pa_result_t taf_L2tpAdaptor::initialize()
+taf_pa_result_t taf_L2tpAdaptor::initialize()
 {
-    PA_DEBUG("Enter initialize in PA");
+    TAF_PA_DEBUG("Enter initialize in PA");
 
     auto &dataFactory = telux::data::DataFactory::getInstance();
 
@@ -106,22 +106,22 @@ pa_result_t taf_L2tpAdaptor::initialize()
 
     if (l2tpManager == nullptr)
     {
-        PA_INFO("L2tp manager initialize error...");
-        return PA_FAULT;
+        TAF_PA_INFO("L2tp manager initialize error...");
+        return TAF_PA_FAULT;
     }
 
     telux::common::ServiceStatus subSystemStatus =
         l2tpManager->getServiceStatus();
 
     if (subSystemStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-        PA_INFO("L2tp subsystem is not ready, waiting for it to be ready...");
+        TAF_PA_INFO("L2tp subsystem is not ready, waiting for it to be ready...");
 
         auto l2tpMgrPromPtr =
             std::make_shared<std::promise<telux::common::ServiceStatus>>();
 
         l2tpManager = dataFactory.getL2tpManager(
             [l2tpMgrPromPtr](telux::common::ServiceStatus status) {
-                PA_INFO("Getting status:%d from L2TP manager", static_cast<int>(status));
+                TAF_PA_INFO("Getting status:%d from L2TP manager", static_cast<int>(status));
                 try {
                     if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
                         l2tpMgrPromPtr->set_value(
@@ -131,15 +131,15 @@ pa_result_t taf_L2tpAdaptor::initialize()
                             telux::common::ServiceStatus::SERVICE_FAILED);
                     }
                 } catch (const std::exception &e) {
-                    PA_ERROR("Exception setting L2TP manager promise: %s", e.what());
+                    TAF_PA_ERROR("Exception setting L2TP manager promise: %s", e.what());
                 } catch (...) {
-                    PA_ERROR("Unknown error setting L2TP manager promise");
+                    TAF_PA_ERROR("Unknown error setting L2TP manager promise");
                 }
             });
 
         if (l2tpManager == nullptr) {
-            PA_ERROR("Failed to get L2TP manager with init callback");
-            return PA_FAULT;
+            TAF_PA_ERROR("Failed to get L2TP manager with init callback");
+            return TAF_PA_FAULT;
         }
 
         std::future<telux::common::ServiceStatus> initFuture =
@@ -148,21 +148,21 @@ pa_result_t taf_L2tpAdaptor::initialize()
             initFuture.wait_for(std::chrono::seconds(L2TP_TIMEOUT));
 
         if (std::future_status::timeout == waitStatus) {
-            PA_ERROR("Timeout waiting for L2TP subsystem");
-            return PA_FAULT;
+            TAF_PA_ERROR("Timeout waiting for L2TP subsystem");
+            return TAF_PA_FAULT;
         } else {
             subSystemStatus = initFuture.get();
         }
     }
 
     if (subSystemStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-        PA_INFO("L2tp manager service is available");
-        return PA_OK;
+        TAF_PA_INFO("L2tp manager service is available");
+        return TAF_PA_OK;
     } else {
-        PA_ERROR("L2tp Manager initialization failed, status=%d",
+        TAF_PA_ERROR("L2tp Manager initialization failed, status=%d",
                  static_cast<int>(subSystemStatus));
         l2tpManager = nullptr;
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 }
 
@@ -177,13 +177,13 @@ pa_result_t taf_L2tpAdaptor::initialize()
  PARAMETERS      [IN] paL2tpTunnelConfig: Source PA tunnel config.
                  [OUT] teluxL2tpTunnelConfig: Destination Telux tunnel config.
 
- RETURN VALUE    pa_result_t: PA_OK on success, PA_FAULT otherwise.
+ RETURN VALUE    taf_pa_result_t: TAF_PA_OK on success, TAF_PA_FAULT otherwise.
 
 ======================================================================*/
-pa_result_t taf_L2tpAdaptor::ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTunnel_t& paL2tpTunnelConfig,
+taf_pa_result_t taf_L2tpAdaptor::ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTunnel_t& paL2tpTunnelConfig,
                                                                    telux::data::net::L2tpTunnelConfig& teluxL2tpTunnelConfig)
 {
-    PA_DEBUG("Enter ConvertPaTunnelConfToTelux in PA");
+    TAF_PA_DEBUG("Enter ConvertPaTunnelConfToTelux in PA");
     teluxL2tpTunnelConfig.prot = static_cast<telux::data::net::L2tpProtocol>(paL2tpTunnelConfig.prot);
     teluxL2tpTunnelConfig.locId = paL2tpTunnelConfig.locId;
     teluxL2tpTunnelConfig.peerId = paL2tpTunnelConfig.peerId;
@@ -198,8 +198,8 @@ pa_result_t taf_L2tpAdaptor::ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTun
         teluxL2tpTunnelConfig.peerIpv6Addr = paL2tpTunnelConfig.peerIpv6Addr;
         teluxL2tpTunnelConfig.ipType = telux::data::IpFamilyType::IPV6;
     } else {
-        PA_ERROR("Unsupported IP family type: %d", static_cast<int>(paL2tpTunnelConfig.ipType));
-        return PA_FAULT;
+        TAF_PA_ERROR("Unsupported IP family type: %d", static_cast<int>(paL2tpTunnelConfig.ipType));
+        return TAF_PA_FAULT;
     }
 
     teluxL2tpTunnelConfig.locIface = paL2tpTunnelConfig.locIface;
@@ -212,7 +212,7 @@ pa_result_t taf_L2tpAdaptor::ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTun
         teluxSession.peerId = session.peerId;
         teluxL2tpTunnelConfig.sessionConfig.push_back(teluxSession);
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 /*======================================================================
@@ -230,15 +230,15 @@ pa_result_t taf_L2tpAdaptor::ConvertPaTunnelConfToTelux(const taf_pa_net_L2tpTun
 ======================================================================*/
 void taf_L2tpAdaptor::tafL2tpCallback::enableL2tpAsyncResponse(telux::common::ErrorCode error)
 {
-    PA_DEBUG("Enter enableL2tpAsyncResponse in PA");
+    TAF_PA_DEBUG("Enter enableL2tpAsyncResponse in PA");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
-    pa_result_t result = PA_OK;
+    taf_pa_result_t result = TAF_PA_OK;
 
     if(error != telux::common::ErrorCode::SUCCESS &&
        error != telux::common::ErrorCode::NO_EFFECT)
     {
-        PA_ERROR("Telux enableL2tp failed with error: %d", static_cast<int>(error));
-        result = PA_FAULT;
+        TAF_PA_ERROR("Telux enableL2tp failed with error: %d", static_cast<int>(error));
+        result = TAF_PA_FAULT;
     }
 
     if (pL2tpAdaptor.cbEnable)
@@ -261,15 +261,15 @@ void taf_L2tpAdaptor::tafL2tpCallback::enableL2tpAsyncResponse(telux::common::Er
 ======================================================================*/
 void taf_L2tpAdaptor::tafL2tpCallback::disableL2tpAsyncResponse(telux::common::ErrorCode error)
 {
-    PA_DEBUG("Enter disableL2tpAsyncResponse in PA");
+    TAF_PA_DEBUG("Enter disableL2tpAsyncResponse in PA");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
-    pa_result_t result = PA_OK;
+    taf_pa_result_t result = TAF_PA_OK;
 
     if(error != telux::common::ErrorCode::SUCCESS &&
        error != telux::common::ErrorCode::NO_EFFECT)
     {
-        PA_ERROR("Telux disableL2tp failed with error: %d", static_cast<int>(error));
-        result = PA_FAULT;
+        TAF_PA_ERROR("Telux disableL2tp failed with error: %d", static_cast<int>(error));
+        result = TAF_PA_FAULT;
     }
 
     if (pL2tpAdaptor.cbDisable)
@@ -292,15 +292,15 @@ void taf_L2tpAdaptor::tafL2tpCallback::disableL2tpAsyncResponse(telux::common::E
 ======================================================================*/
 void taf_L2tpAdaptor::tafL2tpCallback::startTunnelAsyncResponse(telux::common::ErrorCode error)
 {
-    PA_DEBUG("Enter startTunnelAsyncResponse in PA");
+    TAF_PA_DEBUG("Enter startTunnelAsyncResponse in PA");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
-    pa_result_t result = PA_OK;
+    taf_pa_result_t result = TAF_PA_OK;
 
     if(error != telux::common::ErrorCode::SUCCESS &&
        error != telux::common::ErrorCode::NO_EFFECT)
     {
-        PA_ERROR("Telux addTunnel failed with error: %d", static_cast<int>(error));
-        result = PA_FAULT;
+        TAF_PA_ERROR("Telux addTunnel failed with error: %d", static_cast<int>(error));
+        result = TAF_PA_FAULT;
     }
 
     if (pL2tpAdaptor.cbStartTunnel)
@@ -323,15 +323,15 @@ void taf_L2tpAdaptor::tafL2tpCallback::startTunnelAsyncResponse(telux::common::E
 ======================================================================*/
 void taf_L2tpAdaptor::tafL2tpCallback::stopTunnelAsyncResponse(telux::common::ErrorCode error)
 {
-    PA_DEBUG("Enter stopTunnelAsyncResponse in PA");
+    TAF_PA_DEBUG("Enter stopTunnelAsyncResponse in PA");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
-    pa_result_t result = PA_OK;
+    taf_pa_result_t result = TAF_PA_OK;
 
     if(error != telux::common::ErrorCode::SUCCESS &&
        error != telux::common::ErrorCode::NO_EFFECT)
     {
-        PA_ERROR("Telux removeTunnel failed with error: %d", static_cast<int>(error));
-        result = PA_FAULT;
+        TAF_PA_ERROR("Telux removeTunnel failed with error: %d", static_cast<int>(error));
+        result = TAF_PA_FAULT;
     }
 
     if (pL2tpAdaptor.cbStopTunnel)
@@ -346,18 +346,18 @@ void taf_L2tpAdaptor::tafL2tpCallback::stopTunnelAsyncResponse(telux::common::Er
  * It uses a future-promise to block until the async Telux callback populates the config.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_RequestL2tpConfig
+taf_pa_result_t taf_pa_net_RequestL2tpConfig
 (
     taf_pa_net_L2tpConfig_t& L2tpConfig // OUT parameter
 )
 {
-    PA_DEBUG("Enter taf_pa_net_RequestL2tpConfig in PA");
+    TAF_PA_DEBUG("Enter taf_pa_net_RequestL2tpConfig in PA");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
     auto l2tpManager = pL2tpAdaptor.getL2tpManager();
 
     if (l2tpManager == nullptr) {
-        PA_ERROR("l2tpManager is null");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("l2tpManager is null");
+        return TAF_PA_NOT_FOUND;
     }
 
     auto promisePtr = std::make_shared<std::promise<taf_pa_net_L2tpConfig_t>>();
@@ -411,10 +411,10 @@ pa_result_t taf_pa_net_RequestL2tpConfig
                 }
             } else {
                 // ERROR
-                PA_ERROR("ErrorCode %d", static_cast<int>(error));
+                TAF_PA_ERROR("ErrorCode %d", static_cast<int>(error));
                 // NOT_SUPPORTED means that L2TP is disabled
                 if (error == telux::common::ErrorCode::NOT_SUPPORTED) {
-                    PA_ERROR("L2TP Unmanaged tunnel state is not enabled");
+                    TAF_PA_ERROR("L2TP Unmanaged tunnel state is not enabled");
                 }
                 retrievedConfig.enableL2tp   = false;
                 retrievedConfig.enableMtu    = false;
@@ -430,49 +430,49 @@ pa_result_t taf_pa_net_RequestL2tpConfig
             try {
                 promisePtr->set_value(retrievedConfig);
             } catch (const std::exception &e) {
-                PA_ERROR("Setting L2TP config promise failed: %s", e.what());
+                TAF_PA_ERROR("Setting L2TP config promise failed: %s", e.what());
             } catch (...) {
-                PA_ERROR("Unknown error setting L2TP config promise");
+                TAF_PA_ERROR("Unknown error setting L2TP config promise");
             }
         });
 
     if (status != telux::common::Status::SUCCESS) {
-        PA_ERROR("ERROR - Failed to request config, Status:%d ", static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("ERROR - Failed to request config, Status:%d ", static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
 
     auto fut = promisePtr->get_future();
     if (fut.wait_for(std::chrono::seconds(L2TP_TIMEOUT)) == std::future_status::timeout) {
-        PA_ERROR("Wait for requestConfig response timed out after %d seconds", L2TP_TIMEOUT);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Wait for requestConfig response timed out after %d seconds", L2TP_TIMEOUT);
+        return TAF_PA_TIMEOUT;
     }
 
     L2tpConfig = fut.get();
-    return PA_OK;
+    return TAF_PA_OK;
 }
 //--------------------------------------------------------------------------------------------------
 /**
  * Set L2TP Configuration Synchronously
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_SetL2tpConfigSync
+taf_pa_result_t taf_pa_net_SetL2tpConfigSync
 (
     taf_pa_net_L2tpConfig_t& L2tpConfig  // IN
 )
 {
-    PA_DEBUG("Enter taf_pa_net_SetL2tpConfigSync in PA");
-    pa_result_t result = PA_OK;
+    TAF_PA_DEBUG("Enter taf_pa_net_SetL2tpConfigSync in PA");
+    taf_pa_result_t result = TAF_PA_OK;
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
     auto l2tpManager = pL2tpAdaptor.getL2tpManager();
 
     if (l2tpManager == nullptr) {
-        PA_ERROR("l2tpManager is null");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("l2tpManager is null");
+        return TAF_PA_NOT_FOUND;
     }
 
     std::chrono::seconds span(L2TP_TIMEOUT);
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
 
     auto setConfigL2tpRespCb = [promisePtr](telux::common::ErrorCode error)
     {
@@ -480,26 +480,26 @@ pa_result_t taf_pa_net_SetL2tpConfigSync
         {
             if (error != telux::common::ErrorCode::SUCCESS)
             {
-                PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
-                promisePtr->set_value(PA_FAULT);
+                TAF_PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
+                promisePtr->set_value(TAF_PA_FAULT);
             }
             else
             {
-                PA_DEBUG("Request processed successfully \n");
-                promisePtr->set_value(PA_OK);
+                TAF_PA_DEBUG("Request processed successfully \n");
+                promisePtr->set_value(TAF_PA_OK);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in L2TP callback.");
+            TAF_PA_ERROR("Unknown error in L2TP callback.");
         }
     };
 
@@ -507,7 +507,7 @@ pa_result_t taf_pa_net_SetL2tpConfigSync
         L2tpConfig.mtuSize=DEFAULT_MTU_SIZE;
 
     // Log all configuration values before applying
-    PA_DEBUG("L2TP config: enableL2tp=%d, enableTcpMss=%d, enableMtu=%d, mtuSize=%u",
+    TAF_PA_DEBUG("L2TP config: enableL2tp=%d, enableTcpMss=%d, enableMtu=%d, mtuSize=%u",
              L2tpConfig.enableL2tp,
              L2tpConfig.enableTcpMss,
              L2tpConfig.enableMtu,
@@ -518,13 +518,13 @@ pa_result_t taf_pa_net_SetL2tpConfigSync
 
     if (status == telux::common::Status::SUCCESS)
     {
-        std::future<pa_result_t> futureResult = promisePtr->get_future();
+        std::future<taf_pa_result_t> futureResult = promisePtr->get_future();
         std::future_status waitStatus = futureResult.wait_for(span);
 
         if (std::future_status::timeout == waitStatus)
         {
-            PA_ERROR("Set config timeout for %d seconds", L2TP_TIMEOUT);
-            result = PA_TIMEOUT;
+            TAF_PA_ERROR("Set config timeout for %d seconds", L2TP_TIMEOUT);
+            result = TAF_PA_TIMEOUT;
         }
         else
         {
@@ -535,8 +535,8 @@ pa_result_t taf_pa_net_SetL2tpConfigSync
     }
     else
     {
-        PA_ERROR( "ERROR - Failed to set config, Status:%d ", static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR( "ERROR - Failed to set config, Status:%d ", static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
 }
 
@@ -545,26 +545,26 @@ pa_result_t taf_pa_net_SetL2tpConfigSync
  * Add Tunnel Synchronously
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_AddTunnelSync(const taf_pa_net_L2tpTunnel_t& addTunnelConfig)
+taf_pa_result_t taf_pa_net_AddTunnelSync(const taf_pa_net_L2tpTunnel_t& addTunnelConfig)
 {
-    PA_DEBUG("Enter taf_pa_net_AddTunnelSync in PA");
-    pa_result_t result = PA_OK;
+    TAF_PA_DEBUG("Enter taf_pa_net_AddTunnelSync in PA");
+    taf_pa_result_t result = TAF_PA_OK;
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
     auto l2tpManager = pL2tpAdaptor.getL2tpManager();
 
     if (l2tpManager == nullptr) {
-        PA_ERROR("l2tpManager is null");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("l2tpManager is null");
+        return TAF_PA_NOT_FOUND;
     }
 
     telux::data::net::L2tpTunnelConfig l2tpTunnelConfig;
-    if(pL2tpAdaptor.ConvertPaTunnelConfToTelux(addTunnelConfig, l2tpTunnelConfig) != PA_OK) {
-        return PA_FAULT;
+    if(pL2tpAdaptor.ConvertPaTunnelConfToTelux(addTunnelConfig, l2tpTunnelConfig) != TAF_PA_OK) {
+        return TAF_PA_FAULT;
     }
 
     std::chrono::seconds span(L2TP_TIMEOUT);
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
 
     auto addTunnelSyncRespCb = [promisePtr](telux::common::ErrorCode error)
     {
@@ -572,26 +572,26 @@ pa_result_t taf_pa_net_AddTunnelSync(const taf_pa_net_L2tpTunnel_t& addTunnelCon
         {
             if (error != telux::common::ErrorCode::SUCCESS)
             {
-                PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
-                promisePtr->set_value(PA_FAULT);
+                TAF_PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
+                promisePtr->set_value(TAF_PA_FAULT);
             }
             else
             {
-                PA_DEBUG("Request processed successfully \n");
-                promisePtr->set_value(PA_OK);
+                TAF_PA_DEBUG("Request processed successfully \n");
+                promisePtr->set_value(TAF_PA_OK);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in L2TP callback.");
+            TAF_PA_ERROR("Unknown error in L2TP callback.");
         }
     };
 
@@ -600,13 +600,13 @@ pa_result_t taf_pa_net_AddTunnelSync(const taf_pa_net_L2tpTunnel_t& addTunnelCon
 
     if (status == telux::common::Status::SUCCESS)
     {
-        std::future<pa_result_t> futureResult = promisePtr->get_future();
+        std::future<taf_pa_result_t> futureResult = promisePtr->get_future();
         std::future_status waitStatus = futureResult.wait_for(span);
 
         if (std::future_status::timeout == waitStatus)
         {
-            PA_ERROR("Add tunnel timeout for %d seconds", L2TP_TIMEOUT);
-            result = PA_TIMEOUT;
+            TAF_PA_ERROR("Add tunnel timeout for %d seconds", L2TP_TIMEOUT);
+            result = TAF_PA_TIMEOUT;
         }
         else
         {
@@ -617,12 +617,9 @@ pa_result_t taf_pa_net_AddTunnelSync(const taf_pa_net_L2tpTunnel_t& addTunnelCon
     }
     else
     {
-        PA_ERROR( "ERROR - Failed to add tunnel, Status:%d ", static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR( "ERROR - Failed to add tunnel, Status:%d ", static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
-
-    return PA_OK;
-
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -630,20 +627,20 @@ pa_result_t taf_pa_net_AddTunnelSync(const taf_pa_net_L2tpTunnel_t& addTunnelCon
  * Remove Tunnel Synchronously
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_RemoveTunnelSync( const uint32_t tunnelId)
+taf_pa_result_t taf_pa_net_RemoveTunnelSync( const uint32_t tunnelId)
 {
-    PA_DEBUG("Enter taf_pa_net_RemoveTunnelSync in PA");
-    pa_result_t result = PA_OK;
+    TAF_PA_DEBUG("Enter taf_pa_net_RemoveTunnelSync in PA");
+    taf_pa_result_t result = TAF_PA_OK;
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
     auto l2tpManager = pL2tpAdaptor.getL2tpManager();
 
     if (l2tpManager == nullptr) {
-        PA_ERROR("l2tpManager is null");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("l2tpManager is null");
+        return TAF_PA_NOT_FOUND;
     }
 
     std::chrono::seconds span(L2TP_TIMEOUT);
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
 
     auto removeTunnelSyncRespCb = [promisePtr](telux::common::ErrorCode error)
     {
@@ -651,26 +648,26 @@ pa_result_t taf_pa_net_RemoveTunnelSync( const uint32_t tunnelId)
         {
             if (error != telux::common::ErrorCode::SUCCESS)
             {
-                PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
-                promisePtr->set_value(PA_FAULT);
+                TAF_PA_ERROR( "Request failed with errorCode: %d " , static_cast<int>(error));
+                promisePtr->set_value(TAF_PA_FAULT);
             }
             else
             {
-                PA_DEBUG("Request processed successfully \n");
-                promisePtr->set_value(PA_OK);
+                TAF_PA_DEBUG("Request processed successfully \n");
+                promisePtr->set_value(TAF_PA_OK);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in L2TP callback.");
+            TAF_PA_ERROR("Unknown error in L2TP callback.");
         }
     };
 
@@ -679,13 +676,13 @@ pa_result_t taf_pa_net_RemoveTunnelSync( const uint32_t tunnelId)
 
     if (status == telux::common::Status::SUCCESS)
     {
-        std::future<pa_result_t> futureResult = promisePtr->get_future();
+        std::future<taf_pa_result_t> futureResult = promisePtr->get_future();
         std::future_status waitStatus = futureResult.wait_for(span);
 
         if (std::future_status::timeout == waitStatus)
         {
-            PA_ERROR("Remove tunnel timeout for %d seconds", L2TP_TIMEOUT);
-            result = PA_TIMEOUT;
+            TAF_PA_ERROR("Remove tunnel timeout for %d seconds", L2TP_TIMEOUT);
+            result = TAF_PA_TIMEOUT;
         }
         else
         {
@@ -696,11 +693,9 @@ pa_result_t taf_pa_net_RemoveTunnelSync( const uint32_t tunnelId)
     }
     else
     {
-        PA_ERROR( "ERROR - Failed to Remove tunnel, Status:%d ", static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR( "ERROR - Failed to Remove tunnel, Status:%d ", static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
-
-    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -708,20 +703,20 @@ pa_result_t taf_pa_net_RemoveTunnelSync( const uint32_t tunnelId)
  * Set Config Asynchronously
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_SetL2tpConfigAsync
+taf_pa_result_t taf_pa_net_SetL2tpConfigAsync
 (
     const taf_pa_net_L2tpConfig_t& config,
     taf_pa_l2tp_CallCb callback,
     void *contextPtr
 )
 {
-    PA_DEBUG("Enter taf_pa_net_SetL2tpConfigAsync in PA");
+    TAF_PA_DEBUG("Enter taf_pa_net_SetL2tpConfigAsync in PA");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
     auto l2tpManager = pL2tpAdaptor.getL2tpManager();
 
     if (l2tpManager == nullptr) {
-        PA_ERROR("l2tpManager is null");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("l2tpManager is null");
+        return TAF_PA_NOT_FOUND;
     }
 
     // Store per-operation callback and context
@@ -751,9 +746,9 @@ pa_result_t taf_pa_net_SetL2tpConfigAsync
 
     if (status == telux::common::Status::SUCCESS)
     {
-       return PA_OK;
+       return TAF_PA_OK;
     }
-    return PA_FAULT;
+    return TAF_PA_FAULT;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -761,19 +756,19 @@ pa_result_t taf_pa_net_SetL2tpConfigAsync
  * Remove Tunnel Asynchronously
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_RemoveTunnelAsync(
+taf_pa_result_t taf_pa_net_RemoveTunnelAsync(
     uint32_t tunnelId,
     taf_pa_l2tp_CallCb callback,
     void *contextPtr
 )
 {
-    PA_DEBUG("Enter taf_pa_net_RemoveTunnelAsync in PA");
+    TAF_PA_DEBUG("Enter taf_pa_net_RemoveTunnelAsync in PA");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
     auto l2tpManager = pL2tpAdaptor.getL2tpManager();
 
     if (l2tpManager == nullptr) {
-        PA_ERROR("l2tpManager is null");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("l2tpManager is null");
+        return TAF_PA_NOT_FOUND;
     }
 
     pL2tpAdaptor.cbStopTunnel = callback;
@@ -784,9 +779,9 @@ pa_result_t taf_pa_net_RemoveTunnelAsync(
 
     if (status == telux::common::Status::SUCCESS)
     {
-       return PA_OK;
+       return TAF_PA_OK;
     }
-    return PA_FAULT;
+    return TAF_PA_FAULT;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -794,24 +789,24 @@ pa_result_t taf_pa_net_RemoveTunnelAsync(
  * Add tunnel Asynchronously
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_net_AddTunnelAsync(
+taf_pa_result_t taf_pa_net_AddTunnelAsync(
     const taf_pa_net_L2tpTunnel_t& addTunnelConfig,
     taf_pa_l2tp_CallCb callback,
     void *contextPtr)
 {
-    PA_DEBUG("Enter taf_pa_net_AddTunnelAsync in PA");
+    TAF_PA_DEBUG("Enter taf_pa_net_AddTunnelAsync in PA");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
     auto l2tpManager = pL2tpAdaptor.getL2tpManager();
 
     if (l2tpManager == nullptr) {
-        PA_ERROR("l2tpManager is null");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("l2tpManager is null");
+        return TAF_PA_NOT_FOUND;
     }
 
     telux::data::net::L2tpTunnelConfig l2tpTunnelConfig;
 
-    if (pL2tpAdaptor.ConvertPaTunnelConfToTelux(addTunnelConfig, l2tpTunnelConfig) != PA_OK) {
-        return PA_FAULT;
+    if (pL2tpAdaptor.ConvertPaTunnelConfToTelux(addTunnelConfig, l2tpTunnelConfig) != TAF_PA_OK) {
+        return TAF_PA_FAULT;
     }
 
     // Store per-op callback and context
@@ -819,27 +814,27 @@ pa_result_t taf_pa_net_AddTunnelAsync(
     pL2tpAdaptor.ctxStartTunnel = contextPtr;
     auto status = l2tpManager->addTunnel(l2tpTunnelConfig,
                 taf_L2tpAdaptor::tafL2tpCallback::startTunnelAsyncResponse);
-    return (status == telux::common::Status::SUCCESS) ? PA_OK : PA_FAULT;
+    return (status == telux::common::Status::SUCCESS) ? TAF_PA_OK : TAF_PA_FAULT;
 }
 
 
 
 
-pa_result_t taf_pa_l2tp_Deinit()
+taf_pa_result_t taf_pa_l2tp_Deinit()
 {
-    PA_DEBUG("Starting L2TP platform adaptor deinitialization...");
+    TAF_PA_DEBUG("Starting L2TP platform adaptor deinitialization...");
     auto &pL2tpAdaptor = taf_L2tpAdaptor::getInstance();
 
     // Check if Init() was successfully called
     if (!pL2tpAdaptor.isInitialized)
     {
-        PA_WARN("L2TP Deinit() called before Init() was successfully called");
-        return PA_FAULT;
+        TAF_PA_WARN("L2TP Deinit() called before Init() was successfully called");
+        return TAF_PA_FAULT;
     }
 
-    PA_DEBUG("Resetting l2tpManager");
+    TAF_PA_DEBUG("Resetting l2tpManager");
     pL2tpAdaptor.l2tpManager.reset();
     pL2tpAdaptor.isInitialized = false;
-    PA_DEBUG("L2TP platform adaptor deinitialization complete.");
-    return PA_OK;
+    TAF_PA_DEBUG("L2TP platform adaptor deinitialization complete.");
+    return TAF_PA_OK;
 }

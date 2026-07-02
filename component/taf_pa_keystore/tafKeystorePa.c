@@ -7,8 +7,393 @@
 #include "taf_prop_keystore.h"
 #include "taf_prop_file.h"
 #include "tafFilePa.h"
+#include "tafInternalCommonPa.h"
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <string.h>
+
+//--------------------------------------------------------------------------------------------------
+// Type conversion functions: taf_pa_ks_* → taf_prop_ks_*
+//
+// Each function maps enum values explicitly via a switch statement so that any
+// future divergence between the two type sets is caught at compile time (missing
+// case) rather than silently at runtime.
+//--------------------------------------------------------------------------------------------------
+
+static taf_prop_ks_RsaKeySize_t ConvertRsaKeySize(taf_pa_ks_RsaKeySize_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_RSA_SIZE_1024: return TAF_PROP_KS_RSA_SIZE_1024;
+        case TAF_PA_KS_RSA_SIZE_2048: return TAF_PROP_KS_RSA_SIZE_2048;
+        case TAF_PA_KS_RSA_SIZE_3072: return TAF_PROP_KS_RSA_SIZE_3072;
+        case TAF_PA_KS_RSA_SIZE_4096: return TAF_PROP_KS_RSA_SIZE_4096;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_RsaKeySize_t value %d", (int)paValue);
+            return TAF_PROP_KS_RSA_SIZE_2048;
+    }
+}
+
+static taf_prop_ks_EncPurpose_t ConvertEncPurpose(taf_pa_ks_EncPurpose_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_ENCRYPT_DECRYPT: return TAF_PROP_KS_ENCRYPT_DECRYPT;
+        case TAF_PA_KS_ENCRYPT_ONLY:    return TAF_PROP_KS_ENCRYPT_ONLY;
+        case TAF_PA_KS_DECRYPT_ONLY:    return TAF_PROP_KS_DECRYPT_ONLY;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_EncPurpose_t value %d", (int)paValue);
+            return TAF_PROP_KS_ENCRYPT_DECRYPT;
+    }
+}
+
+static taf_prop_ks_RsaEncPadding_t ConvertRsaEncPadding(taf_pa_ks_RsaEncPadding_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_RSA_ENC_PAD_NONE:          return TAF_PROP_KS_RSA_ENC_PAD_NONE;
+        case TAF_PA_KS_RSA_ENC_PAD_PKCS1_V15:     return TAF_PROP_KS_RSA_ENC_PAD_PKCS1_V15;
+        case TAF_PA_KS_RSA_ENC_PAD_OAEP_MD5:      return TAF_PROP_KS_RSA_ENC_PAD_OAEP_MD5;
+        case TAF_PA_KS_RSA_ENC_PAD_OAEP_SHA1:     return TAF_PROP_KS_RSA_ENC_PAD_OAEP_SHA1;
+        case TAF_PA_KS_RSA_ENC_PAD_OAEP_SHA2_224: return TAF_PROP_KS_RSA_ENC_PAD_OAEP_SHA2_224;
+        case TAF_PA_KS_RSA_ENC_PAD_OAEP_SHA2_256: return TAF_PROP_KS_RSA_ENC_PAD_OAEP_SHA2_256;
+        case TAF_PA_KS_RSA_ENC_PAD_OAEP_SHA2_384: return TAF_PROP_KS_RSA_ENC_PAD_OAEP_SHA2_384;
+        case TAF_PA_KS_RSA_ENC_PAD_OAEP_SHA2_512: return TAF_PROP_KS_RSA_ENC_PAD_OAEP_SHA2_512;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_RsaEncPadding_t value %d", (int)paValue);
+            return TAF_PROP_KS_RSA_ENC_PAD_NONE;
+    }
+}
+
+static taf_prop_ks_SigPurpose_t ConvertSigPurpose(taf_pa_ks_SigPurpose_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_SIGN_VERIFY: return TAF_PROP_KS_SIGN_VERIFY;
+        case TAF_PA_KS_SIGN_ONLY:   return TAF_PROP_KS_SIGN_ONLY;
+        case TAF_PA_KS_VERIFY_ONLY: return TAF_PROP_KS_VERIFY_ONLY;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_SigPurpose_t value %d", (int)paValue);
+            return TAF_PROP_KS_SIGN_VERIFY;
+    }
+}
+
+static taf_prop_ks_RsaSigPadding_t ConvertRsaSigPadding(taf_pa_ks_RsaSigPadding_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_RSA_SIG_PAD_NONE:
+            return TAF_PROP_KS_RSA_SIG_PAD_NONE;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_MD5:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_MD5;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_SHA1:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_SHA1;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_SHA2_224:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_SHA2_224;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_SHA2_256:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_SHA2_256;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_SHA2_384:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_SHA2_384;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_SHA2_512:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_SHA2_512;
+        case TAF_PA_KS_RSA_SIG_PAD_PSS_MD5:
+            return TAF_PROP_KS_RSA_SIG_PAD_PSS_MD5;
+        case TAF_PA_KS_RSA_SIG_PAD_PSS_SHA1:
+            return TAF_PROP_KS_RSA_SIG_PAD_PSS_SHA1;
+        case TAF_PA_KS_RSA_SIG_PAD_PSS_SHA2_224:
+            return TAF_PROP_KS_RSA_SIG_PAD_PSS_SHA2_224;
+        case TAF_PA_KS_RSA_SIG_PAD_PSS_SHA2_256:
+            return TAF_PROP_KS_RSA_SIG_PAD_PSS_SHA2_256;
+        case TAF_PA_KS_RSA_SIG_PAD_PSS_SHA2_384:
+            return TAF_PROP_KS_RSA_SIG_PAD_PSS_SHA2_384;
+        case TAF_PA_KS_RSA_SIG_PAD_PSS_SHA2_512:
+            return TAF_PROP_KS_RSA_SIG_PAD_PSS_SHA2_512;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_MD5:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_MD5;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA1:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA1;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA2_224:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA2_224;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA2_256:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA2_256;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA2_384:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA2_384;
+        case TAF_PA_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA2_512:
+            return TAF_PROP_KS_RSA_SIG_PAD_PKCS1_V15_AND_PSS_SHA2_512;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_RsaSigPadding_t value %d", (int)paValue);
+            return TAF_PROP_KS_RSA_SIG_PAD_NONE;
+    }
+}
+
+static taf_prop_ks_EccKeySize_t ConvertEccKeySize(taf_pa_ks_EccKeySize_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_ECC_SIZE_224: return TAF_PROP_KS_ECC_SIZE_224;
+        case TAF_PA_KS_ECC_SIZE_256: return TAF_PROP_KS_ECC_SIZE_256;
+        case TAF_PA_KS_ECC_SIZE_384: return TAF_PROP_KS_ECC_SIZE_384;
+        case TAF_PA_KS_ECC_SIZE_521: return TAF_PROP_KS_ECC_SIZE_521;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_EccKeySize_t value %d", (int)paValue);
+            return TAF_PROP_KS_ECC_SIZE_256;
+    }
+}
+
+static taf_prop_ks_Digest_t ConvertDigest(taf_pa_ks_Digest_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_DIGEST_MD5:      return TAF_PROP_KS_DIGEST_MD5;
+        case TAF_PA_KS_DIGEST_SHA1:     return TAF_PROP_KS_DIGEST_SHA1;
+        case TAF_PA_KS_DIGEST_SHA2_224: return TAF_PROP_KS_DIGEST_SHA2_224;
+        case TAF_PA_KS_DIGEST_SHA2_256: return TAF_PROP_KS_DIGEST_SHA2_256;
+        case TAF_PA_KS_DIGEST_SHA2_384: return TAF_PROP_KS_DIGEST_SHA2_384;
+        case TAF_PA_KS_DIGEST_SHA2_512: return TAF_PROP_KS_DIGEST_SHA2_512;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_Digest_t value %d", (int)paValue);
+            return TAF_PROP_KS_DIGEST_SHA2_256;
+    }
+}
+
+static taf_prop_ks_AesKeySize_t ConvertAesKeySize(taf_pa_ks_AesKeySize_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_AES_SIZE_128: return TAF_PROP_KS_AES_SIZE_128;
+        case TAF_PA_KS_AES_SIZE_192: return TAF_PROP_KS_AES_SIZE_192;
+        case TAF_PA_KS_AES_SIZE_256: return TAF_PROP_KS_AES_SIZE_256;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_AesKeySize_t value %d", (int)paValue);
+            return TAF_PROP_KS_AES_SIZE_256;
+    }
+}
+
+static taf_prop_ks_AesBlockMode_t ConvertAesBlockMode(taf_pa_ks_AesBlockMode_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_AES_MODE_ECB_PAD_NONE:  return TAF_PROP_KS_AES_MODE_ECB_PAD_NONE;
+        case TAF_PA_KS_AES_MODE_ECB_PAD_PKCS7: return TAF_PROP_KS_AES_MODE_ECB_PAD_PKCS7;
+        case TAF_PA_KS_AES_MODE_CBC_PAD_NONE:  return TAF_PROP_KS_AES_MODE_CBC_PAD_NONE;
+        case TAF_PA_KS_AES_MODE_CBC_PAD_PKCS7: return TAF_PROP_KS_AES_MODE_CBC_PAD_PKCS7;
+        case TAF_PA_KS_AES_MODE_CTR:           return TAF_PROP_KS_AES_MODE_CTR;
+        case TAF_PA_KS_AES_MODE_GCM:           return TAF_PROP_KS_AES_MODE_GCM;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_AesBlockMode_t value %d", (int)paValue);
+            return TAF_PROP_KS_AES_MODE_GCM;
+    }
+}
+
+static taf_prop_ks_KeyUsage_t ConvertKeyUsage(taf_pa_ks_KeyUsage_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_RSA_ENCRYPT_DECRYPT: return TAF_PROP_KS_RSA_ENCRYPT_DECRYPT;
+        case TAF_PA_KS_RSA_ENCRYPT_ONLY:    return TAF_PROP_KS_RSA_ENCRYPT_ONLY;
+        case TAF_PA_KS_RSA_DECRYPT_ONLY:    return TAF_PROP_KS_RSA_DECRYPT_ONLY;
+        case TAF_PA_KS_RSA_SIGN_VERIFY:     return TAF_PROP_KS_RSA_SIGN_VERIFY;
+        case TAF_PA_KS_RSA_SIGN_ONLY:       return TAF_PROP_KS_RSA_SIGN_ONLY;
+        case TAF_PA_KS_RSA_VERIFY_ONLY:     return TAF_PROP_KS_RSA_VERIFY_ONLY;
+        case TAF_PA_KS_AES_ENCRYPT_DECRYPT: return TAF_PROP_KS_AES_ENCRYPT_DECRYPT;
+        case TAF_PA_KS_AES_ENCRYPT_ONLY:    return TAF_PROP_KS_AES_ENCRYPT_ONLY;
+        case TAF_PA_KS_AES_DECRYPT_ONLY:    return TAF_PROP_KS_AES_DECRYPT_ONLY;
+        case TAF_PA_KS_ECDSA_SIGN_VERIFY:   return TAF_PROP_KS_ECDSA_SIGN_VERIFY;
+        case TAF_PA_KS_ECDSA_SIGN_ONLY:     return TAF_PROP_KS_ECDSA_SIGN_ONLY;
+        case TAF_PA_KS_ECDSA_VERIFY_ONLY:   return TAF_PROP_KS_ECDSA_VERIFY_ONLY;
+        case TAF_PA_KS_HMAC_SIGN_VERIFY:    return TAF_PROP_KS_HMAC_SIGN_VERIFY;
+        case TAF_PA_KS_HMAC_SIGN_ONLY:      return TAF_PROP_KS_HMAC_SIGN_ONLY;
+        case TAF_PA_KS_HMAC_VERIFY_ONLY:    return TAF_PROP_KS_HMAC_VERIFY_ONLY;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_KeyUsage_t value %d", (int)paValue);
+            return TAF_PROP_KS_RSA_ENCRYPT_DECRYPT;
+    }
+}
+
+static taf_pa_ks_KeyUsage_t ConvertKeyUsageBack(taf_prop_ks_KeyUsage_t propValue)
+{
+    switch (propValue)
+    {
+        case TAF_PROP_KS_RSA_ENCRYPT_DECRYPT: return TAF_PA_KS_RSA_ENCRYPT_DECRYPT;
+        case TAF_PROP_KS_RSA_ENCRYPT_ONLY:    return TAF_PA_KS_RSA_ENCRYPT_ONLY;
+        case TAF_PROP_KS_RSA_DECRYPT_ONLY:    return TAF_PA_KS_RSA_DECRYPT_ONLY;
+        case TAF_PROP_KS_RSA_SIGN_VERIFY:     return TAF_PA_KS_RSA_SIGN_VERIFY;
+        case TAF_PROP_KS_RSA_SIGN_ONLY:       return TAF_PA_KS_RSA_SIGN_ONLY;
+        case TAF_PROP_KS_RSA_VERIFY_ONLY:     return TAF_PA_KS_RSA_VERIFY_ONLY;
+        case TAF_PROP_KS_AES_ENCRYPT_DECRYPT: return TAF_PA_KS_AES_ENCRYPT_DECRYPT;
+        case TAF_PROP_KS_AES_ENCRYPT_ONLY:    return TAF_PA_KS_AES_ENCRYPT_ONLY;
+        case TAF_PROP_KS_AES_DECRYPT_ONLY:    return TAF_PA_KS_AES_DECRYPT_ONLY;
+        case TAF_PROP_KS_ECDSA_SIGN_VERIFY:   return TAF_PA_KS_ECDSA_SIGN_VERIFY;
+        case TAF_PROP_KS_ECDSA_SIGN_ONLY:     return TAF_PA_KS_ECDSA_SIGN_ONLY;
+        case TAF_PROP_KS_ECDSA_VERIFY_ONLY:   return TAF_PA_KS_ECDSA_VERIFY_ONLY;
+        case TAF_PROP_KS_HMAC_SIGN_VERIFY:    return TAF_PA_KS_HMAC_SIGN_VERIFY;
+        case TAF_PROP_KS_HMAC_SIGN_ONLY:      return TAF_PA_KS_HMAC_SIGN_ONLY;
+        case TAF_PROP_KS_HMAC_VERIFY_ONLY:    return TAF_PA_KS_HMAC_VERIFY_ONLY;
+        default:
+            TAF_PA_WARN("Unknown taf_prop_ks_KeyUsage_t value %d", (int)propValue);
+            return TAF_PA_KS_RSA_ENCRYPT_DECRYPT;
+    }
+}
+
+static taf_prop_ks_CryptoPurpose_t ConvertCryptoPurpose(taf_pa_ks_CryptoPurpose_t paValue)
+{
+    switch (paValue)
+    {
+        case TAF_PA_KS_CRYPTO_ENCRYPT: return TAF_PROP_KS_CRYPTO_ENCRYPT;
+        case TAF_PA_KS_CRYPTO_DECRYPT: return TAF_PROP_KS_CRYPTO_DECRYPT;
+        case TAF_PA_KS_CRYPTO_SIGN:    return TAF_PROP_KS_CRYPTO_SIGN;
+        case TAF_PA_KS_CRYPTO_VERIFY:  return TAF_PROP_KS_CRYPTO_VERIFY;
+        default:
+            TAF_PA_WARN("Unknown taf_pa_ks_CryptoPurpose_t value %d", (int)paValue);
+            return TAF_PROP_KS_CRYPTO_ENCRYPT;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Convert a taf_pa_ks_Tag_t array to taf_prop_ks_Tag_t array.
+ * Writes up to tagListSize entries into outTags[].
+ */
+//--------------------------------------------------------------------------------------------------
+static void ConvertTagList
+(
+    const taf_pa_ks_Tag_t** paTagList,     ///< [IN]  Array of PA-layer tag pointers to convert
+    size_t tagListSize,                    ///< [IN]  Number of entries in paTagList
+    taf_prop_ks_Tag_t* propTagBuf,         ///< [OUT] Caller-allocated buffer for converted tags
+    const taf_prop_ks_Tag_t** propTagList  ///< [OUT] Array of pointers into propTagBuf
+)
+{
+    for (size_t i = 0; i < tagListSize; i++)
+    {
+        const taf_pa_ks_Tag_t* src = paTagList[i];
+        taf_prop_ks_Tag_t* dst = &propTagBuf[i];
+        memset(dst, 0, sizeof(*dst));
+        switch (src->id)
+        {
+            case TAF_PA_KS_TAG_MAX_USES_PER_BOOT:
+                dst->id = TAF_PROP_KS_TAG_MAX_USES_PER_BOOT;
+                dst->maxUsesPerBoot = src->maxUsesPerBoot;
+                break;
+            case TAF_PA_KS_TAG_MIN_SECONDS_BETWEEN_OPS:
+                dst->id = TAF_PROP_KS_TAG_MIN_SECONDS_BETWEEN_OPS;
+                dst->minSecondsBetweenOps = src->minSecondsBetweenOps;
+                break;
+            case TAF_PA_KS_TAG_ACTIVE_DATETIME:
+                dst->id = TAF_PROP_KS_TAG_ACTIVE_DATETIME;
+                dst->activeDateTime = src->activeDateTime;
+                break;
+            case TAF_PA_KS_TAG_ORIGINATION_EXPIRE_DATETIME:
+                dst->id = TAF_PROP_KS_TAG_ORIGINATION_EXPIRE_DATETIME;
+                dst->originationExpireDateTime = src->originationExpireDateTime;
+                break;
+            case TAF_PA_KS_TAG_USAGE_EXPIRE_DATETIME:
+                dst->id = TAF_PROP_KS_TAG_USAGE_EXPIRE_DATETIME;
+                dst->usageExpireDateTime = src->usageExpireDateTime;
+                break;
+            case TAF_PA_KS_TAG_APPLICATION_DATA:
+                dst->id = TAF_PROP_KS_TAG_APPLICATION_DATA;
+                /* appDataPtr points into caller-owned memory; share the pointer */
+                dst->appDataPtr = (taf_prop_ks_Data_t*)src->appDataPtr;
+                break;
+            default:
+                TAF_PA_WARN("Unknown taf_pa_ks_TagId_t value %d", (int)src->id);
+                dst->id = (taf_prop_ks_TagId_t)src->id;
+                break;
+        }
+        propTagList[i] = dst;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Convert a taf_pa_ks_Param_t array to taf_prop_ks_Param_t array.
+ * Writes up to paramListSize entries into propParamBuf[].
+ */
+//--------------------------------------------------------------------------------------------------
+static void ConvertParamList
+(
+    const taf_pa_ks_Param_t** paParamList,     ///< [IN]  Array of PA-layer param pointers
+    size_t paramListSize,                      ///< [IN]  Number of entries in paParamList
+    taf_prop_ks_Param_t* propParamBuf,         ///< [OUT] Caller-allocated buffer for converted
+                                               ///<       params (one entry per paParamList element)
+    const taf_prop_ks_Param_t** propParamList  ///< [OUT] Array of pointers into propParamBuf
+)
+{
+    for (size_t i = 0; i < paramListSize; i++)
+    {
+        const taf_pa_ks_Param_t* src = paParamList[i];
+        taf_prop_ks_Param_t* dst = &propParamBuf[i];
+        memset(dst, 0, sizeof(*dst));
+        switch (src->id)
+        {
+            case TAF_PA_KS_PARAM_NONCE:
+                dst->id = TAF_PROP_KS_PARAM_NONCE;
+                dst->nonceDataPtr = (taf_prop_ks_Nonce_t*)src->nonceDataPtr;
+                break;
+            case TAF_PA_KS_PARAM_APPLICATION_DATA:
+                dst->id = TAF_PROP_KS_PARAM_APPLICATION_DATA;
+                dst->appDataPtr = (taf_prop_ks_Data_t*)src->appDataPtr;
+                break;
+            case TAF_PA_KS_PARAM_RSA_PADDING_TYPE:
+                dst->id = TAF_PROP_KS_PARAM_RSA_PADDING_TYPE;
+                dst->rsaPaddingType = (taf_prop_ks_RsaPaddingType_t)src->rsaPaddingType;
+                break;
+            default:
+                TAF_PA_WARN("Unknown taf_pa_ks_ParamId_t value %d", (int)src->id);
+                dst->id = (taf_prop_ks_ParamId_t)src->id;
+                break;
+        }
+        propParamList[i] = dst;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Copy a taf_prop_ks_sharedAppList_t result back into a taf_pa_ks_sharedAppList_t.
+ */
+//--------------------------------------------------------------------------------------------------
+static void ConvertSharedAppListBack
+(
+    const taf_prop_ks_sharedAppList_t* propList,  ///< [IN]  Prop-layer result to convert back
+    taf_pa_ks_sharedAppList_t* paList             ///< [OUT] PA-layer struct to populate
+)
+{
+    for (int i = 0; i < TAF_PA_KS_MAX_SHARED_APPS; i++)
+    {
+        paList->appInfo[i].keyCap = ConvertKeyUsageBack(propList->appInfo[i].keyCap);
+        paList->appInfo[i].appCap = propList->appInfo[i].appCap;
+        memcpy(paList->appInfo[i].appName, propList->appInfo[i].appName,
+               TAF_PA_KS_MAX_APP_NAME_SIZE + 1);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Convert function pointer types for key creation / sharing handlers.
+ * Both sides use KeyMgt_KeyFileRef_t (void*) so the signatures are ABI-compatible;
+ * a union is used to avoid a direct function-pointer cast.
+ */
+//--------------------------------------------------------------------------------------------------
+static taf_prop_ks_KeyCreationHandler_t ConvertKeyCreationHandler
+(
+    taf_pa_ks_KeyCreationHandler_t paHandler
+)
+{
+    union { taf_pa_ks_KeyCreationHandler_t pa; taf_prop_ks_KeyCreationHandler_t prop; } u;
+    u.pa = paHandler;
+    return u.prop;
+}
+
+static taf_prop_ks_KeySharingHandler_t ConvertKeySharingHandler
+(
+    taf_pa_ks_KeySharingHandler_t paHandler
+)
+{
+    union { taf_pa_ks_KeySharingHandler_t pa; taf_prop_ks_KeySharingHandler_t prop; } u;
+    u.pa = paHandler;
+    return u.prop;
+}
+
 
 // Thread-safe initialization flag
 static _Atomic(bool) g_keystore_initialized = false;
@@ -44,34 +429,40 @@ static const taf_prop_file_vtable_t g_file_vtable = {
  *      LE_FAULT if there was some other error.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_Init(void)
+taf_pa_result_t taf_pa_ks_Init(void)
 {
-    PA_INFO("Telaf keyStore PA initializing ...");
+    TAF_PA_INFO("Telaf keyStore PA initializing ...");
 
     // Initialize RFS vtable injection first
 
     bool expected = false;
     if (!atomic_compare_exchange_strong(&g_file_vtable_initialized, &expected, true))
     {
-        PA_WARN("RFS vtable already initialized");
-        return PA_OK;
+        TAF_PA_WARN("RFS vtable already initialized");
+        return TAF_PA_OK;
     }
 
-    PA_INFO("Injecting RFS vtable into keystore noship component");
+    TAF_PA_INFO("Injecting RFS vtable into keystore noship component");
 
     // Get the vtable from taf_pa_file.c and inject it into noship component
-    taf_prop_file_vtable_Bind(&g_file_vtable);
+    taf_prop_result_t underlyingResult = taf_prop_file_vtable_Bind(&g_file_vtable);
+    if (underlyingResult != TAF_PROP_OK && underlyingResult != TAF_PROP_NOT_IMPLEMENTED)
+    {
+        TAF_PA_ERROR("Failed to bind RFS vtable. Error: %d", (int)underlyingResult);
+        atomic_store(&g_file_vtable_initialized, false);
+        return PropResultToPaResult(underlyingResult, TAF_PROP_UNDERLYING_ERR_NONE);
+    }
 
-    PA_INFO("RFS vtable injection completed successfully");
+    TAF_PA_INFO("RFS vtable injection completed successfully");
 
     // Initialize the proprietary keystore
-    pa_result_t result = taf_prop_ks_Init();
-    if (result == PA_OK)
+    taf_prop_result_t result = taf_prop_ks_Init();
+    if (result == TAF_PROP_OK)
     {
         atomic_store(&g_keystore_initialized, true);
     }
 
-    return result;
+    return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -79,33 +470,38 @@ pa_result_t taf_pa_ks_Init(void)
  * PA deinitialization.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_Deinit(void)
+taf_pa_result_t taf_pa_ks_Deinit(void)
 {
     // Check if initialization was successful before proceeding with deinitialization
     if (!atomic_load(&g_keystore_initialized))
     {
-        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return TAF_PA_FAULT;
     }
 
      if (!atomic_load(&g_file_vtable_initialized))
     {
-        PA_WARN("RFS vtable not initialized - ignoring deinit request");
-        return PA_FAULT;
+        TAF_PA_WARN("RFS vtable not initialized - ignoring deinit request");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Unbinding RFS vtable from keystore noship component");
+    TAF_PA_INFO("Unbinding RFS vtable from keystore noship component");
 
-    // Unbind the vtable
-    taf_prop_file_vtable_Bind(NULL);
+    // Unbind the vtable by passing NULL vtable
+    taf_prop_result_t result = taf_prop_file_vtable_Bind(NULL);
+    if (result != TAF_PROP_OK && result != TAF_PROP_NOT_IMPLEMENTED)
+    {
+        TAF_PA_ERROR("Failed to unbind RFS vtable. Error: %d", (int)result);
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
+    }
 
     // Reset initialization flag
     atomic_store(&g_file_vtable_initialized, false);
-    PA_INFO("RFS vtable unbinding completed successfully");
+    TAF_PA_INFO("RFS vtable unbinding completed successfully");
 
     atomic_store(&g_keystore_initialized, false);
-    PA_INFO("Telaf keyStore PA deinitialized.");
-    return PA_OK;
+    TAF_PA_INFO("Telaf keyStore PA deinitialized.");
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -115,7 +511,7 @@ pa_result_t taf_pa_ks_Deinit(void)
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GenerateRsaEncKey
+taf_pa_result_t taf_pa_ks_GenerateRsaEncKey
 (
     int clientSessionFd,
     const char* keyName,
@@ -129,8 +525,19 @@ pa_result_t taf_pa_ks_GenerateRsaEncKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateRsaEncKey(clientSessionFd, keyName, keySize, purpose, padding,
-               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
+    taf_prop_ks_Tag_t   propTags[tagListSize];
+    const taf_prop_ks_Tag_t* propTagList[tagListSize];
+    ConvertTagList(tagListPtr, tagListSize, propTags, propTagList);
+
+    taf_prop_result_t rc = taf_prop_ks_GenerateRsaEncKey(
+        clientSessionFd, keyName,
+        ConvertRsaKeySize(keySize),
+        ConvertEncPurpose(purpose),
+        ConvertRsaEncPadding(padding),
+        propTagList, tagListSize,
+        impDataPtr, impDataSize,
+        keyFileRefPtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -140,7 +547,7 @@ pa_result_t taf_pa_ks_GenerateRsaEncKey
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GenerateRsaSigKey
+taf_pa_result_t taf_pa_ks_GenerateRsaSigKey
 (
     int clientSessionFd,
     const char* keyName,
@@ -154,8 +561,19 @@ pa_result_t taf_pa_ks_GenerateRsaSigKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateRsaSigKey(clientSessionFd, keyName, keySize, purpose, padding,
-               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
+    taf_prop_ks_Tag_t   propTags[tagListSize];
+    const taf_prop_ks_Tag_t* propTagList[tagListSize];
+    ConvertTagList(tagListPtr, tagListSize, propTags, propTagList);
+
+    taf_prop_result_t rc = taf_prop_ks_GenerateRsaSigKey(
+        clientSessionFd, keyName,
+        ConvertRsaKeySize(keySize),
+        ConvertSigPurpose(purpose),
+        ConvertRsaSigPadding(padding),
+        propTagList, tagListSize,
+        impDataPtr, impDataSize,
+        keyFileRefPtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -165,7 +583,7 @@ pa_result_t taf_pa_ks_GenerateRsaSigKey
  * The impData must be PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GenerateEcdsaKey
+taf_pa_result_t taf_pa_ks_GenerateEcdsaKey
 (
     int clientSessionFd,
     const char* keyName,
@@ -179,8 +597,19 @@ pa_result_t taf_pa_ks_GenerateEcdsaKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateEcdsaKey(clientSessionFd, keyName, keySize, purpose, digest,
-               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
+    taf_prop_ks_Tag_t   propTags[tagListSize];
+    const taf_prop_ks_Tag_t* propTagList[tagListSize];
+    ConvertTagList(tagListPtr, tagListSize, propTags, propTagList);
+
+    taf_prop_result_t rc = taf_prop_ks_GenerateEcdsaKey(
+        clientSessionFd, keyName,
+        ConvertEccKeySize(keySize),
+        ConvertSigPurpose(purpose),
+        ConvertDigest(digest),
+        propTagList, tagListSize,
+        impDataPtr, impDataSize,
+        keyFileRefPtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -190,7 +619,7 @@ pa_result_t taf_pa_ks_GenerateEcdsaKey
  * The impData must be raw key bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GenerateAesKey
+taf_pa_result_t taf_pa_ks_GenerateAesKey
 (
     int clientSessionFd,
     const char* keyName,
@@ -204,8 +633,19 @@ pa_result_t taf_pa_ks_GenerateAesKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateAesKey(clientSessionFd, keyName, keySize, purpose, mode,
-               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
+    taf_prop_ks_Tag_t   propTags[tagListSize];
+    const taf_prop_ks_Tag_t* propTagList[tagListSize];
+    ConvertTagList(tagListPtr, tagListSize, propTags, propTagList);
+
+    taf_prop_result_t rc = taf_prop_ks_GenerateAesKey(
+        clientSessionFd, keyName,
+        ConvertAesKeySize(keySize),
+        ConvertEncPurpose(purpose),
+        ConvertAesBlockMode(mode),
+        propTagList, tagListSize,
+        impDataPtr, impDataSize,
+        keyFileRefPtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -215,7 +655,7 @@ pa_result_t taf_pa_ks_GenerateAesKey
  * Currently only digest DIGEST_SHA2_256 is supported. The impData must be raw key bytes if provided
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GenerateHmacKey
+taf_pa_result_t taf_pa_ks_GenerateHmacKey
 (
     int clientSessionFd,
     const char* keyName,
@@ -229,8 +669,18 @@ pa_result_t taf_pa_ks_GenerateHmacKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GenerateHmacKey(clientSessionFd, keyName, keySize, purpose, digest,
-               tagListPtr, tagListSize, impDataPtr, impDataSize, keyFileRefPtr);
+    taf_prop_ks_Tag_t   propTags[tagListSize];
+    const taf_prop_ks_Tag_t* propTagList[tagListSize];
+    ConvertTagList(tagListPtr, tagListSize, propTags, propTagList);
+
+    taf_prop_result_t rc = taf_prop_ks_GenerateHmacKey(
+        clientSessionFd, keyName, keySize,
+        ConvertSigPurpose(purpose),
+        ConvertDigest(digest),
+        propTagList, tagListSize,
+        impDataPtr, impDataSize,
+        keyFileRefPtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -238,7 +688,7 @@ pa_result_t taf_pa_ks_GenerateHmacKey
  * Export a key into specified key data format.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_ExportKey
+taf_pa_result_t taf_pa_ks_ExportKey
 (
     int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
@@ -248,8 +698,9 @@ pa_result_t taf_pa_ks_ExportKey
     size_t* expDataSizePtr
 )
 {
-    return taf_prop_ks_ExportKey(clientSessionFd, keyFileRef, appDataPtr, appDataSize,
-                                   expDataPtr, expDataSizePtr);
+    taf_prop_result_t rc = taf_prop_ks_ExportKey(clientSessionFd, keyFileRef, appDataPtr,
+                                                  appDataSize, expDataPtr, expDataSizePtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -257,7 +708,7 @@ pa_result_t taf_pa_ks_ExportKey
  * Share a key.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_ShareKey
+taf_pa_result_t taf_pa_ks_ShareKey
 (
     int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
@@ -266,7 +717,11 @@ pa_result_t taf_pa_ks_ShareKey
     const char* appName
 )
 {
-    return taf_prop_ks_ShareKey(clientSessionFd, keyFileRef, keyCap, appCap, appName);
+    taf_prop_result_t rc = taf_prop_ks_ShareKey(
+        clientSessionFd, keyFileRef,
+        ConvertKeyUsage(keyCap),
+        appCap, appName);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -274,13 +729,14 @@ pa_result_t taf_pa_ks_ShareKey
  * Delete a key file by key name.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_DeleteKey
+taf_pa_result_t taf_pa_ks_DeleteKey
 (
     int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef
 )
 {
-    return taf_prop_ks_DeleteKey(clientSessionFd, keyFileRef);
+    taf_prop_result_t rc = taf_prop_ks_DeleteKey(clientSessionFd, keyFileRef);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -288,14 +744,15 @@ pa_result_t taf_pa_ks_DeleteKey
  * Get a key file reference by key name.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GetKey
+taf_pa_result_t taf_pa_ks_GetKey
 (
     int clientSessionFd,
     const char* keyName,
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GetKey(clientSessionFd, keyName, keyFileRefPtr);
+    taf_prop_result_t rc = taf_prop_ks_GetKey(clientSessionFd, keyName, keyFileRefPtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -303,7 +760,7 @@ pa_result_t taf_pa_ks_GetKey
  * Get a shared key file reference by key name and app name.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GetSharedKey
+taf_pa_result_t taf_pa_ks_GetSharedKey
 (
     int clientSessionFd,
     const char* keyName,
@@ -311,7 +768,9 @@ pa_result_t taf_pa_ks_GetSharedKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr
 )
 {
-    return taf_prop_ks_GetSharedKey(clientSessionFd, keyName, appName, keyFileRefPtr);
+    taf_prop_result_t rc = taf_prop_ks_GetSharedKey(clientSessionFd, keyName, appName,
+                                                     keyFileRefPtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -319,14 +778,15 @@ pa_result_t taf_pa_ks_GetSharedKey
  * Cancel key sharing to an application.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_CancelKeySharing
+taf_pa_result_t taf_pa_ks_CancelKeySharing
 (
     int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
     const char* appName
 )
 {
-    return taf_prop_ks_CancelKeySharing(clientSessionFd, keyFileRef, appName);
+    taf_prop_result_t rc = taf_prop_ks_CancelKeySharing(clientSessionFd, keyFileRef, appName);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -334,28 +794,41 @@ pa_result_t taf_pa_ks_CancelKeySharing
  * Get a shared app list for a shared key.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GetSharedAppList
+taf_pa_result_t taf_pa_ks_GetSharedAppList
 (
     int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
     taf_pa_ks_sharedAppList_t* appListPtr
 )
 {
-    return taf_prop_ks_GetSharedAppList(clientSessionFd, keyFileRef, appListPtr);
+    taf_prop_ks_sharedAppList_t propAppList;
+    taf_prop_result_t rc = taf_prop_ks_GetSharedAppList(clientSessionFd, keyFileRef, &propAppList);
+    if (rc == TAF_PROP_OK)
+    {
+        ConvertSharedAppListBack(&propAppList, appListPtr);
+    }
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Get key usage
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_GetKeyUsage
+taf_pa_result_t taf_pa_ks_GetKeyUsage
 (
     int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
     taf_pa_ks_KeyUsage_t* keyUsagePtr
 )
 {
-    return taf_prop_ks_GetKeyUsage(clientSessionFd, keyFileRef, keyUsagePtr);
+    taf_prop_ks_KeyUsage_t propKeyUsage;
+    taf_prop_result_t rc = taf_prop_ks_GetKeyUsage(clientSessionFd, keyFileRef, &propKeyUsage);
+    if (rc == TAF_PROP_OK)
+    {
+        *keyUsagePtr = ConvertKeyUsageBack(propKeyUsage);
+    }
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -363,7 +836,7 @@ pa_result_t taf_pa_ks_GetKeyUsage
  * Start the session for the given crypto operation.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_CryptoSessionStart
+taf_pa_result_t taf_pa_ks_CryptoSessionStart
 (
     int clientSessionFd,
     KeyMgt_KeyFileRef_t keyFileRef,
@@ -373,23 +846,34 @@ pa_result_t taf_pa_ks_CryptoSessionStart
     uint64_t* opHandlePtr
 )
 {
-    return taf_prop_ks_CryptoSessionStart(clientSessionFd, keyFileRef, cryptoPurpose,
-                                          paramListPtr, paramListSize, opHandlePtr);
+    taf_prop_ks_Param_t   propParams[paramListSize];
+    const taf_prop_ks_Param_t* propParamList[paramListSize];
+    ConvertParamList(paramListPtr, paramListSize, propParams, propParamList);
+
+    taf_prop_result_t rc = taf_prop_ks_CryptoSessionStart(
+        clientSessionFd, keyFileRef,
+        ConvertCryptoPurpose(cryptoPurpose),
+        propParamList, paramListSize,
+        opHandlePtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Provides AES AEAD to the running crypto session started with CryptoSessionStart API for AES GCM mode.
+ * Provides AES AEAD to the running crypto session started with CryptoSessionStart API
+ * for AES GCM mode.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_CryptoSessionProcessAead
+taf_pa_result_t taf_pa_ks_CryptoSessionProcessAead
 (
     uint64_t opHandle,
     const uint8_t* inputDataPtr,
     size_t inputDataSize
 )
 {
-    return taf_prop_ks_CryptoSessionProcessAead(opHandle, inputDataPtr, inputDataSize);
+    taf_prop_result_t rc = taf_prop_ks_CryptoSessionProcessAead(opHandle, inputDataPtr,
+                                                                  inputDataSize);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -397,7 +881,7 @@ pa_result_t taf_pa_ks_CryptoSessionProcessAead
  * Provides data to, and possibly receives output from, a running crypto operation.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_CryptoSessionProcess
+taf_pa_result_t taf_pa_ks_CryptoSessionProcess
 (
     uint64_t opHandle,
     const uint8_t* inputDataPtr,
@@ -406,7 +890,9 @@ pa_result_t taf_pa_ks_CryptoSessionProcess
     size_t* outputDataSizePtr
 )
 {
-    return taf_prop_ks_CryptoSessionProcess(opHandle, inputDataPtr, inputDataSize, outputDataPtr, outputDataSizePtr);
+    taf_prop_result_t rc = taf_prop_ks_CryptoSessionProcess(opHandle, inputDataPtr, inputDataSize,
+                                                             outputDataPtr, outputDataSizePtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -414,7 +900,7 @@ pa_result_t taf_pa_ks_CryptoSessionProcess
  * Finalizes and stops a crypto operation session.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_CryptoSessionEnd
+taf_pa_result_t taf_pa_ks_CryptoSessionEnd
 (
     uint64_t opHandle,
     const uint8_t* inputDataPtr,
@@ -423,7 +909,9 @@ pa_result_t taf_pa_ks_CryptoSessionEnd
     size_t* outputDataSizePtr
 )
 {
-    return taf_prop_ks_CryptoSessionEnd(opHandle, inputDataPtr, inputDataSize, outputDataPtr, outputDataSizePtr);
+    taf_prop_result_t rc = taf_prop_ks_CryptoSessionEnd(opHandle, inputDataPtr, inputDataSize,
+                                                         outputDataPtr, outputDataSizePtr);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -431,12 +919,13 @@ pa_result_t taf_pa_ks_CryptoSessionEnd
  * Abort crypto operation session.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_CryptoSessionAbort
+taf_pa_result_t taf_pa_ks_CryptoSessionAbort
 (
     uint64_t opHandle
 )
 {
-    return taf_prop_ks_CryptoSessionAbort(opHandle);
+    taf_prop_result_t rc = taf_prop_ks_CryptoSessionAbort(opHandle);
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -444,12 +933,14 @@ pa_result_t taf_pa_ks_CryptoSessionAbort
  * Register Key creation handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_RegKeyCreationHandler
+taf_pa_result_t taf_pa_ks_RegKeyCreationHandler
 (
     taf_pa_ks_KeyCreationHandler_t handlerFunc
 )
 {
-    return taf_prop_ks_RegKeyCreationHandler(handlerFunc);
+    taf_prop_result_t rc = taf_prop_ks_RegKeyCreationHandler(
+        ConvertKeyCreationHandler(handlerFunc));
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -457,10 +948,12 @@ pa_result_t taf_pa_ks_RegKeyCreationHandler
  * Register Key sharing state change handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_ks_RegKeySharingHandler
+taf_pa_result_t taf_pa_ks_RegKeySharingHandler
 (
     taf_pa_ks_KeySharingHandler_t handlerFunc
 )
 {
-    return taf_prop_ks_RegKeySharingHandler(handlerFunc);
+    taf_prop_result_t rc = taf_prop_ks_RegKeySharingHandler(
+        ConvertKeySharingHandler(handlerFunc));
+    return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
