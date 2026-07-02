@@ -943,9 +943,9 @@ typedef void (*taf_pa_radio_DataAvailSysStatusHdlrFunc_t)
 
 typedef enum
 {
-    TAF_PA_RADIO_SYS_INFO_IND_LIMIT_NONE = 0,
-    TAF_PA_RADIO_SYS_INFO_IND_LIMIT_BY_STATE_TOGGLE = (1 << 0),
-    TAF_PA_RADIO_SYS_INFO_IND_LIMIT_BY_SRV_STATUS = (1 << 1)
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_NONE = 0,
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_BY_STATE_TOGGLE = (1 << 0),
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_BY_SRV_STATUS = (1 << 1)
 } taf_pa_radio_SysInfoIndLimitMask_t;
 
 typedef enum
@@ -954,7 +954,6 @@ typedef enum
     TAF_PA_RADIO_DISABLE_IND_MODE_ALL,
     TAF_PA_RADIO_DISABLE_IND_MODE_SKIP_NAS_SYS_INFO_IND
 } taf_pa_radio_DisableIndicationMode_t;
-
 
 PA_SHARED pa_result_t taf_pa_radio_Init
 (
@@ -1399,11 +1398,11 @@ PA_SHARED pa_result_t taf_pa_radio_SetSysInfoIndLimit
     taf_pa_radio_SysInfoIndLimitMask_t limitMask
 );
 
-PA_SHARED pa_result_t  taf_pa_radio_GetServiceStatus
+PA_SHARED pa_result_t taf_pa_radio_GetServiceStatus
 (
     uint32_t instance,
-    taf_pa_radio_Rat_t *servingRat,
-    taf_pa_radio_RatServiceStatus_t* statusPtr
+    taf_pa_radio_Rat_t *servingRatPtr,
+    taf_pa_radio_RatServiceStatus_t *statusPtr
 );
 
 PA_SHARED pa_result_t taf_pa_radio_GetSysInfoIndLimit

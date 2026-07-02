@@ -8,8 +8,7 @@
 
 #include "taf_prop_common.h"
 #include <stddef.h>
-
-typedef void* KeyMgt_KeyFileRef_t;
+#include "tafKeystorePa.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
