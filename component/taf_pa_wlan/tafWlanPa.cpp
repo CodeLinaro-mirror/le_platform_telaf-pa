@@ -9,10 +9,14 @@
 #include <any>
 #include <cstring>
 #include <future>
+#include <atomic>
 #include <telux/data/DataFactory.hpp>
 #include <telux/wlan/WlanDefines.hpp>
 #include <telux/wlan/WlanDeviceManager.hpp>
 #include <telux/wlan/WlanFactory.hpp>
+
+// Global initialization state for WLAN PA
+static std::atomic<bool> g_wlanPaInitialized(false);
 
 class WlanPAController
 {
@@ -829,7 +833,20 @@ pa_result_t taf::pa::wlan::Init
 )
 {
     PA_INFO("Init called");
-    return WlanPAController::getInstance()->initialize();
+
+    // Check if already initialized
+    if (g_wlanPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Init() called multiple times; already initialized");
+        return PA_OK;
+    }
+
+    auto result = WlanPAController::getInstance()->initialize();
+    if (result == PA_OK)
+    {
+        g_wlanPaInitialized.store(true, std::memory_order_release);
+    }
+    return result;
 }
 
 pa_result_t taf::pa::wlan::RegisterDeviceListener
@@ -1006,5 +1023,17 @@ pa_result_t taf::pa::wlan::Deinit
 )
 {
     PA_INFO("Deinit called");
-    return WlanPAController::getInstance()->deinitialize();
+
+    // Step 0: Check if Init() was called successfully
+    if (!g_wlanPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+    auto result = WlanPAController::getInstance()->deinitialize();
+    if (result == PA_OK)
+    {
+        g_wlanPaInitialized.store(false, std::memory_order_release);
+    }
+    return result;
 }

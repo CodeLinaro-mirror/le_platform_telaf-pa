@@ -829,13 +829,13 @@ PA_SHARED  pa_result_t taf_pa_location_Init();
 
 PA_SHARED pa_result_t taf_pa_location_Deinit();
 
-PA_SHARED  taf_pa_location_LocationId taf_pa_location_CreateClient();
+PA_SHARED  pa_result_t taf_pa_location_CreateClient(taf_pa_location_LocationId* clientIdPtr);
 PA_SHARED  pa_result_t taf_pa_location_DeleteClient(taf_pa_location_LocationId clientId);
 
 PA_SHARED  pa_result_t taf_pa_location_RegisterListener(taf_pa_location_LocationId clientId, taf_pa_location_EventListener* eventListener, std::any context);
 PA_SHARED  pa_result_t taf_pa_location_startDetailedEngineReports(taf_pa_location_LocationId clientId, uint32_t optInterval, uint16_t engineType, taf_pa_location_GeneralCb callback, uint32_t reportMask, std::any context);
 PA_SHARED  pa_result_t taf_pa_location_stopReports(taf_pa_location_LocationId clientId, taf_pa_location_GeneralCb callback, std::any context);
-PA_SHARED  uint32_t taf_pa_location_getCapabilities(taf_pa_location_LocationId clientId, std::any context);
+PA_SHARED  pa_result_t taf_pa_location_getCapabilities(taf_pa_location_LocationId clientId, uint32_t* capabilitiesPtr, std::any context);
 
 
 PA_SHARED  pa_result_t taf_pa_location_configureConstellations(const std::vector<taf_pa_location_SvBlackListInfo_t>& svBlackListData, taf_pa_location_GeneralCb callback, bool deviceReset, std::any context);

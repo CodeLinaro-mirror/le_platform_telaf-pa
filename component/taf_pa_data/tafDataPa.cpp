@@ -16,6 +16,10 @@
 #include "tafDataTeluxDataPa.hpp"
 #include "tafDataTeluxDataProfilePa.hpp"
 #include "tafDataTeluxDataConnectionPa.hpp"
+#include <atomic>
+
+// Thread-safe initialization flag
+static std::atomic<bool> gDataPaInitialized(false);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -83,6 +87,9 @@ pa_result_t taf::pa::data::Init
         {
             PA_INFO("Data PA ready.");
             state = taf::pa::data::SubsystemState_e::AVAILABLE;
+            // Mark initialization as complete
+            gDataPaInitialized.store(true, std::memory_order_release);
+            PA_INFO("Data PA initialization flag set to true.");
             return PA_OK;
         }
     }
@@ -114,6 +121,9 @@ pa_result_t taf::pa::data::Init
         {
             PA_INFO("Data PA ready for both slots.");
             state = taf::pa::data::SubsystemState_e::AVAILABLE;
+            // Mark initialization as complete
+            gDataPaInitialized.store(true, std::memory_order_release);
+            PA_INFO("Data PA initialization flag set to true.");
             return PA_OK;
         }
         else if (slot1Ready || slot2Ready)
@@ -123,6 +133,9 @@ pa_result_t taf::pa::data::Init
                     slot2Ready ? "READY" : "FAILED"
                     );
             state = taf::pa::data::SubsystemState_e::UNAVAILABLE;
+            // Mark initialization as complete (partial success)
+            gDataPaInitialized.store(true, std::memory_order_release);
+            PA_INFO("Data PA initialization flag set to true (partial).");
             return PA_UNAVAILABLE;
         }
     }
@@ -131,17 +144,27 @@ pa_result_t taf::pa::data::Init
     return PA_FAULT;
 }
 
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Deinitialize the Telux data PA state.
  *
  * @return
- *  - PA_OK              PA completely initialized
+ *  - PA_OK              PA completely deinitialized
+ *  - PA_FAULT           Deinit called before Init
  */
 //--------------------------------------------------------------------------------------------------
 pa_result_t taf::pa::data::Deinit()
 {
     PA_DEBUG("PA implementation.");
+
+    // Check if Init() was called before Deinit()
+    if (!gDataPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     // Init data profile sub system
     auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
     teluxPaDataProfile.Deinit();
@@ -153,6 +176,10 @@ pa_result_t taf::pa::data::Deinit()
     // Deinit other subsystems.
     auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     teluxPaData.Deinit();
+
+    // Reset initialization flag
+    gDataPaInitialized.store(false, std::memory_order_release);
+    PA_INFO("Data PA initialization flag reset to false.");
 
     return PA_OK;
 }

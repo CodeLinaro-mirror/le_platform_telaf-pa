@@ -6,11 +6,15 @@
 #include <cstring>
 #include <string>
 #include <future>
+#include <atomic>
 #include <unistd.h>
 
 #include <telux/platform/PlatformFactory.hpp>
 #include "tafCommonPa.h"
 #include "tafDeviceinfoPa.hpp"
+
+// Thread-safe initialization flag
+static std::atomic<bool> gDeviceinfoPaInitialized(false);
 
 #define MAX_INIT_TIMEOUT 5
 
@@ -132,11 +136,22 @@ pa_result_t DeviceInfoPAController::initialize()
         return PA_FAULT;
     }
 
+    // Mark initialization as complete
+    gDeviceinfoPaInitialized.store(true, std::memory_order_release);
+    PA_INFO("DeviceInfo PA initialization flag set to true.");
+
     return PA_OK;
 }
 
 pa_result_t DeviceInfoPAController::deinitialize()
 {
+    // Check if Init() was called before Deinit()
+    if (!gDeviceinfoPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     PA_INFO("Starting DeviceInfo PA deinitialization...");
 
     // Step 1: Deregister the service status listener from the device info manager
@@ -157,6 +172,10 @@ pa_result_t DeviceInfoPAController::deinitialize()
     // Step 2: Reset device info manager shared pointer
     PA_INFO("Resetting deviceInfoManager_");
     deviceInfoManager_.reset();
+
+    // Reset initialization flag
+    gDeviceinfoPaInitialized.store(false, std::memory_order_release);
+    PA_INFO("DeviceInfo PA initialization flag reset to false.");
 
     PA_INFO("DeviceInfo PA deinitialization complete");
     return PA_OK;

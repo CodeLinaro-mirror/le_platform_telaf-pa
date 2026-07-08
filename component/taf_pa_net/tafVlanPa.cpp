@@ -11,6 +11,7 @@
 #include <string>
 #include <iostream>
 #include <shared_mutex>
+#include <atomic>
 #include <glib.h>
 
 #include <telux/data/DataFactory.hpp>
@@ -20,6 +21,7 @@
 #define OPERATION_TIMEOUT 30
 
 static bool bVlanListenerRegistered = {false};
+static std::mutex vlanHandlerMutex;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -48,6 +50,8 @@ class taf_VlanAdaptor
 
             pa_result_t initialize();
 
+            std::atomic<bool> isInitialized{false};
+
             std::shared_ptr<telux::data::net::IVlanManager> getVlanManager()
             {
               return vlanManager;
@@ -65,8 +69,11 @@ class taf_VlanAdaptor
 
             std::shared_ptr<telux::data::net::IVlanListener>   vlanListener;
             std::shared_ptr<taf_VlanListener>   tafVlanListener;
-            std::shared_mutex regVlanListenerMutex_;
-            std::shared_mutex deregVlanListenerMutex_;
+            // single mutex used by both RegVlanListener and DeregVlanListener
+            // so the two operations are mutually exclusive.  Replaced the two separate
+            // shared_mutex objects (regVlanListenerMutex_ / deregVlanListenerMutex_) that
+            // were not mutually exclusive with each other.
+            std::mutex vlanListenerMutex_;
 
             void resetManagers()
             {
@@ -169,7 +176,12 @@ pa_result_t taf_VlanAdaptor::ConvertVlanBindInfo(const telux::data::net::VlanBin
 
 void taf_VlanListener::onHwAccelerationChanged(const telux::data::ServiceState state)
 {
-    if (HwAccelarationHandlerPtr != nullptr)
+    taf_pa_vlan_HardwareAccelerationHandler_t handler = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(vlanHandlerMutex);
+        handler = HwAccelarationHandlerPtr;
+    }
+    if (handler != nullptr)
     {
         taf_pa_vlan_hwacc_state_t stateHdlr = TAF_PA_VLAN_HW_ACC_STATE_INACTIVE;
         // If active, return TAF_NET_VLAN_HW_ACC_STATE_ACTIVE
@@ -177,7 +189,7 @@ void taf_VlanListener::onHwAccelerationChanged(const telux::data::ServiceState s
         {
             stateHdlr = TAF_PA_VLAN_HW_ACC_STATE_ACTIVE;
         } //  TAF_PA_VLAN_HW_ACC_STATE_INACTIVE in all other cases
-        HwAccelarationHandlerPtr(stateHdlr);
+        handler(stateHdlr);
     }
 }
 
@@ -366,10 +378,12 @@ pa_result_t taf_pa_vlan_Init()
     if (result == PA_OK)
     {
         PA_INFO("VLAN platform adapter initialization is done");
+        pVlanAdaptor.isInitialized = true;
     }
     else
     {
         PA_INFO("Failed to initialize VLAN platform adapter, ret: %d", result);
+        pVlanAdaptor.isInitialized = false;
     }
 
     return result;
@@ -387,15 +401,26 @@ pa_result_t taf_pa_vlan_RegHwAccelarationUpdateHandler
 )
 
 {
-    if ((handlerFunc != nullptr) && (HwAccelarationHandlerPtr == nullptr))
+    if (handlerFunc == nullptr)
     {
-        HwAccelarationHandlerPtr = handlerFunc;
-        PA_INFO("hardware acceleration Handler registered.");
-        return PA_OK;
+        PA_ERROR("handlerFunc is null.");
+        return PA_FAULT;
     }
-
-    PA_ERROR("hardware acceleration handler registered.");
-    return PA_FAULT;
+    // perform the HwAccelarationHandlerPtr == nullptr check INSIDE the lock
+    // so the check and the write are atomic with respect to the SB callback
+    // (onHwAccelerationChanged) which also holds vlanHandlerMutex when reading the pointer.
+    // Previously the check was outside the lock, creating a TOCTOU window.
+    {
+        std::lock_guard<std::mutex> lock(vlanHandlerMutex);
+        if (HwAccelarationHandlerPtr != nullptr)
+        {
+            PA_ERROR("hardware acceleration handler already registered.");
+            return PA_FAULT;
+        }
+        HwAccelarationHandlerPtr = handlerFunc;
+    }
+    PA_INFO("hardware acceleration Handler registered.");
+    return PA_OK;
 }
 
 pa_result_t taf_pa_net_AddVlanInterface
@@ -998,7 +1023,12 @@ pa_result_t taf_pa_net_RegVlanListener()
         return PA_FAULT;
     }
 
-        std::shared_lock<std::shared_mutex> lock(tafVlan.regVlanListenerMutex_);
+        // use the single vlanListenerMutex_ (exclusive lock) so that
+        // register and deregister are mutually exclusive.  Previously regVlanListenerMutex_
+        // and deregVlanListenerMutex_ were two different objects, so they did not exclude
+        // each other.  Also changed from shared_lock (read) to unique_lock (write) since
+        // bVlanListenerRegistered is being modified.
+        std::unique_lock<std::mutex> lock(tafVlan.vlanListenerMutex_);
 
         // Register vlan listener for each slot it
         if (bVlanListenerRegistered)
@@ -1033,7 +1063,9 @@ pa_result_t taf_pa_net_DeregVlanListener()
     auto &tafVlan = taf_VlanAdaptor::getInstance();
     auto vlanManager = tafVlan.getVlanManager();
 
-    std::shared_lock<std::shared_mutex> lock(tafVlan.deregVlanListenerMutex_);
+    // use the single vlanListenerMutex_ (exclusive lock) so that
+    // deregister and register are mutually exclusive.
+    std::unique_lock<std::mutex> lock(tafVlan.vlanListenerMutex_);
 
     // Deregister vlan listener for each slot it
     if (!bVlanListenerRegistered)
@@ -1765,6 +1797,14 @@ pa_result_t taf_pa_vlan_Deinit()
     PA_INFO("Starting VLAN platform adaptor deinitialization...");
 
     auto &tafVlan = taf_VlanAdaptor::getInstance();
+
+    // Check if Init() was successfully called
+    if (!tafVlan.isInitialized)
+    {
+        PA_WARN("VLAN Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     auto vlanManager = tafVlan.getVlanManager();
 
     // Step 1: Deregister the VLAN listener if it is currently registered.
@@ -1791,6 +1831,7 @@ pa_result_t taf_pa_vlan_Deinit()
     // Step 3: Reset manager shared pointers via the public helper.
     PA_INFO("Resetting vlanManager and dataSettingsManager");
     tafVlan.resetManagers();
+    tafVlan.isInitialized = false;
 
     PA_INFO("VLAN platform adaptor deinitialization complete.");
     return PA_OK;

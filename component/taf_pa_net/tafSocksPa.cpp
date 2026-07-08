@@ -7,16 +7,24 @@
 #include <memory>
 #include <vector>
 #include <iostream>
+#include <atomic>
 
 
 #include "tafSocksPa.hpp"
-#include "taf_ns_net.hpp"
+#include "taf_prop_net.hpp"
 #include "tafInternalCommonPa.h"
 
 #include <telux/data/DataFactory.hpp>
 #include <telux/data/net/SocksManager.hpp>
 
 #define ENABLE_SOCKS_TIMEOUT 30
+
+class taf_SocksListener : public telux::data::net::ISocksListener
+{
+    public:
+        taf_SocksListener(){};
+        void onServiceStatusChange(telux::common::ServiceStatus status) override;
+};
 
 class taf_SocksAdaptor
 {
@@ -25,12 +33,15 @@ class taf_SocksAdaptor
 
             pa_result_t initialize();
 
+            std::atomic<bool> isInitialized{false};
+
             std::shared_ptr<telux::data::net::ISocksManager> getSocksManager()
             {
               return socksManager;
             }
 
             std::shared_ptr<telux::data::net::ISocksManager> socksManager = nullptr;
+            std::shared_ptr<taf_SocksListener> socksListener = nullptr;
 
             taf_pa_socks_CallCb callCbEnableAsync;
             taf_pa_socks_CallCb callCbDisableAsync;
@@ -196,6 +207,62 @@ pa_result_t taf_SocksAdaptor::initialize()
 
 /* Implementation */
 
+void taf_SocksListener::onServiceStatusChange
+(
+    telux::common::ServiceStatus status
+)
+{
+    auto &pSocksAdaptor = taf_SocksAdaptor::getInstance();
+
+    if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+    {
+        PA_INFO("SocksManager service status changed to available. Re-initializing.");
+
+        int32_t nsRes = taf_prop_net_Init();
+        if (nsRes == TAF_PROP_NET_RESULT_OK)
+        {
+            PA_INFO("taf_prop_net_Init() completed successfully after service recovery.");
+        }
+        else if (nsRes == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
+        {
+            PA_INFO("taf_prop_net_Init() not implemented (stub).");
+        }
+        else
+        {
+            PA_ERROR("taf_prop_net_Init() failed with result %d after service recovery.", nsRes);
+        }
+
+        pSocksAdaptor.isInitialized = true;
+        return;
+    }
+
+    PA_WARN("SocksManager service status changed to unavailable. Calling deinit.");
+
+    if (!pSocksAdaptor.isInitialized)
+    {
+        PA_INFO("Skipping deinit because Socks was not initialized.");
+        return;
+    }
+
+    pSocksAdaptor.callCbEnableAsync = nullptr;
+    pSocksAdaptor.callCbDisableAsync = nullptr;
+    pSocksAdaptor.isInitialized = false;
+
+    int32_t nsRes = taf_prop_net_Deinit();
+    if (nsRes == TAF_PROP_NET_RESULT_OK)
+    {
+        PA_INFO("taf_prop_net_Deinit() completed successfully.");
+    }
+    else if (nsRes == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
+    {
+        PA_INFO("taf_prop_net_Deinit() not implemented (stub).");
+    }
+    else
+    {
+        PA_ERROR("taf_prop_net_Deinit() failed with result %d.", nsRes);
+    }
+}
+
 pa_result_t taf_pa_socks_Init()
 {
     PA_INFO("Default platform adatper implementation");
@@ -206,10 +273,23 @@ pa_result_t taf_pa_socks_Init()
     if (result == PA_OK)
     {
         PA_INFO("Socks platform adapter initialization is done");
+        pSocksAdaptor.isInitialized = true;
+
+        pSocksAdaptor.socksListener = std::make_shared<taf_SocksListener>();
+        if (pSocksAdaptor.socksManager->registerListener(pSocksAdaptor.socksListener) ==
+            telux::common::Status::SUCCESS)
+        {
+            PA_INFO("Socks service status listener registered.");
+        }
+        else
+        {
+            PA_ERROR("Failed to register socks service status listener.");
+        }
     }
     else
     {
         PA_CRIT("Failed to initialize Socks platform adapter, ret: %d", result);
+        pSocksAdaptor.isInitialized = false;
     }
 
     return result;
@@ -241,11 +321,13 @@ pa_result_t taf_pa_net_SetDeviceMode
  *
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_net_DeviceMode_t taf_pa_net_GetDeviceMode
+pa_result_t taf_pa_net_GetDeviceMode
 (
+    taf_pa_net_DeviceMode_t* deviceModePtr
 )
 {
-    return TAF_PA_NET_DEVICE_NONE;
+    if (deviceModePtr) *deviceModePtr = TAF_PA_NET_DEVICE_NONE;
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -276,17 +358,16 @@ pa_result_t taf_pa_net_SetSocksAuthMethod
  * Get SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_net_AuthMethod_t taf_pa_net_GetSocksAuthMethod
+pa_result_t taf_pa_net_GetSocksAuthMethod
 (
+    taf_pa_net_AuthMethod_t* authMethodPtr
 )
 {
     PA_INFO("Actual taf_pa_net_GetSocksAuthMethod implementation");
 
     taf_prop_net_AuthMethod_t auth = taf_prop_net_GetSocksAuthMethod();
-
-    taf_pa_net_AuthMethod_t authMethod = static_cast<taf_pa_net_AuthMethod_t>(auth);
-
-    return authMethod;
+    if (authMethodPtr) *authMethodPtr = static_cast<taf_pa_net_AuthMethod_t>(auth);
+    return PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -598,11 +679,36 @@ pa_result_t taf_pa_socks_Deinit()
 {
     PA_INFO("Starting SOCKS platform adaptor deinitialization...");
     auto &pSocksAdaptor = taf_SocksAdaptor::getInstance();
+
+    // Check if Init() was successfully called
+    if (!pSocksAdaptor.isInitialized)
+    {
+        PA_WARN("SOCKS Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     PA_INFO("Clearing SOCKS callbacks");
     pSocksAdaptor.callCbEnableAsync = nullptr;
     pSocksAdaptor.callCbDisableAsync = nullptr;
+
+    if (pSocksAdaptor.socksListener && pSocksAdaptor.socksManager)
+    {
+        if (pSocksAdaptor.socksManager->deregisterListener(pSocksAdaptor.socksListener) ==
+            telux::common::Status::SUCCESS)
+        {
+            PA_INFO("Socks service status listener deregistered.");
+        }
+        else
+        {
+            PA_ERROR("Failed to deregister socks service status listener.");
+        }
+    }
+    pSocksAdaptor.socksListener.reset();
+
     PA_INFO("Resetting socksManager");
     pSocksAdaptor.socksManager.reset();
+    pSocksAdaptor.isInitialized = false;
     PA_INFO("SOCKS platform adaptor deinitialization complete.");
     return PA_OK;
 }
+

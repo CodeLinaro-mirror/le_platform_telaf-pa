@@ -18,6 +18,7 @@
 #include "telux/common/CommonDefines.hpp"
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
+#include "telux/data/ServingSystemManager.hpp"
 #include <telux/tel/PhoneFactory.hpp>
 #include "tafDataTeluxDataServingSysPa.hpp"
 #include "tafInternalCommonPa.h"
@@ -115,6 +116,12 @@ class TafPaTeluxData
 
         pa_result_t PaGetRoamingStatus(const PhoneId_e phoneId, RoamingStatus_t &roamingStatus);
 
+        pa_result_t PaGetServiceStatus
+        (
+            const taf::pa::data::SlotId_e slotId,
+            telux::data::ServiceStatus &serviceStatus
+        );
+
         pa_result_t PaAddRoamingEventsCallback
         (
             taf_pa_data_RoamingEventsCb callBack,
@@ -172,6 +179,9 @@ class TafPaTeluxData
 
         // Mutex for synchronizing registering, deregistering and calling client callbacks.
         std::mutex roamingEventsCbksMtx_;
+
+        // Mutex for protecting servingSystemManagersInitStateMap_ (NB reads, SB writes).
+        std::shared_mutex servingSystemStateMapMtx_;
 
         // The callback entry vector for subsystem events
         std::vector<SubsystemEventsCallbackEntry_t> subsystemEventsCallbacks_;

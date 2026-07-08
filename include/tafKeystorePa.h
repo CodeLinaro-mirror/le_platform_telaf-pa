@@ -462,7 +462,7 @@ PA_SHARED pa_result_t taf_pa_ks_Init
  * @return
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED void taf_pa_ks_Deinit
+PA_SHARED pa_result_t taf_pa_ks_Deinit
 (
     void
 );

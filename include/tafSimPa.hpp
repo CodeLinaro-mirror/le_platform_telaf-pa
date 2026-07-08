@@ -22,7 +22,6 @@ extern "C" {
 #define TAF_PA_SIM_RESULT_TIMEOUT -8
 #define TAF_PA_SIM_RESULT_BAD_PARAMETER -15
 #define TAF_PA_SIM_RESULT_UNSUPPORTED -18
-#define TAF_PA_SIM_RESULT_NOT_IMPLEMENTED -20
 
 #define MAX_SIM_PATH 10
 #define MAX_SIM_REFRESH_FILES 100
@@ -66,9 +65,17 @@ typedef enum
 }taf_pa_sim_RefreshStage_t;
 
 typedef struct {
+    uint16_t file_id;
+    uint32_t path_len;
+    uint8_t path[MAX_SIM_PATH];
+}taf_pa_sim_RefreshFile_t;
+
+typedef struct {
     taf_pa_sim_SessionType_t sessionType;
     taf_pa_sim_RefreshMode_t refreshMode;
     taf_pa_sim_RefreshStage_t refreshStage;
+    uint32_t filesLen;
+    taf_pa_sim_RefreshFile_t files[MAX_SIM_REFRESH_FILES];
 }taf_pa_sim_RefreshChangeInd_t;
 
 typedef enum
@@ -226,12 +233,6 @@ struct taf_pa_sim_EventListener
     taf_pa_sim_setCardLockResponseCb setCardLockResponseCb;
 };
 
-typedef struct {
-    uint16_t file_id;
-    uint32_t path_len;
-    uint8_t path[MAX_SIM_PATH];
-}taf_pa_sim_RefreshFile_t;
-
 typedef void (*taf_pa_sim_RefreshChangeHandlerFunc_t)
 (
     taf_pa_sim_RefreshChangeInd_t refreshChangeInd, void* contextPtr
@@ -275,16 +276,18 @@ typedef struct
 } taf_pa_sim_ProfileInfo_t;
 
 // Number of profiles for a given slot
-PA_SHARED uint8_t taf_pa_sim_GetProfileNum
+PA_SHARED pa_result_t taf_pa_sim_GetProfileNum
 (
-    taf_pa_sim_SlotId_t slot
+    taf_pa_sim_SlotId_t slot,
+    uint8_t* profileNumPtr
 );
 
 // Get profile info by slot and index
-PA_SHARED taf_pa_sim_ProfileInfo_t taf_pa_sim_GetProfile
+PA_SHARED pa_result_t taf_pa_sim_GetProfile
 (
     taf_pa_sim_SlotId_t slot,
-    uint8_t index
+    uint8_t index,
+    taf_pa_sim_ProfileInfo_t* profileInfoPtr
 );
 
 // Set active profile (also enables profile by default)
@@ -300,6 +303,18 @@ PA_SHARED pa_result_t taf_pa_sim_SetActiveProfile
  */
 //--------------------------------------------------------------------------------------------------
 PA_SHARED pa_result_t taf_pa_sim_RefreshRegister
+(
+    taf_pa_sim_SessionType_t sessionType,
+    uint32_t filesLen,
+    taf_pa_sim_RefreshFile_t* files
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ *  PA refresh unregister.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t taf_pa_sim_RefreshUnregister
 (
     taf_pa_sim_SessionType_t sessionType,
     uint32_t filesLen,
@@ -332,10 +347,11 @@ PA_SHARED pa_result_t taf_pa_sim_RefreshComplete
  * Add handler for SIM refresh
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED taf_pa_sim_RefreshChangeHandlerRef_t taf_pa_sim_AddRefreshChangeHandler
+PA_SHARED pa_result_t taf_pa_sim_AddRefreshChangeHandler
 (
     taf_pa_sim_RefreshChangeHandlerFunc_t handlerFuncPtr,
-    void* contextPtr
+    void* contextPtr,
+    taf_pa_sim_RefreshChangeHandlerRef_t* handlerRefPtr
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -343,7 +359,7 @@ PA_SHARED taf_pa_sim_RefreshChangeHandlerRef_t taf_pa_sim_AddRefreshChangeHandle
  * Remove handler for SIM refresh
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED void taf_pa_sim_RemoveRefreshChangeHandler
+PA_SHARED pa_result_t taf_pa_sim_RemoveRefreshChangeHandler
 (
    taf_pa_sim_RefreshChangeHandlerRef_t handlerRef ///< [IN] Handler reference.
 );
@@ -817,6 +833,21 @@ PA_SHARED pa_result_t taf_pa_sim_GetRemainingPukTries
 (
     taf_pa_sim_Id_t simId,
     uint32_t*  remainingPukTries
+);
+
+//----------------------------------------------------------------------------------------------
+/**
+ * Get EID string.
+ * @return
+ *  - PA_OK on success
+ *  - PA_FAULT on failure
+ *
+ */
+//----------------------------------------------------------------------------------------------
+PA_SHARED PA_WEAK pa_result_t taf_pa_sim_GetEID
+(
+    taf_pa_sim_Id_t simId,
+    std::string&  eidStr
 );
 #ifdef __cplusplus
 }

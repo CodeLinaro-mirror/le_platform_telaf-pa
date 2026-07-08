@@ -10,9 +10,10 @@
 #include "tafVlanPa.hpp"
 #include "tafL2tpPa.hpp"
 
-#include "taf_ns_net.hpp"
+#include "taf_prop_net.hpp"
 
 #include <telux/tel/PhoneFactory.hpp>
+#include <atomic>
 
 /* Implementation */
 
@@ -22,6 +23,8 @@ class taf_NetAdaptor
             static taf_NetAdaptor &getInstance();
 
             pa_result_t initialize();
+
+            std::atomic<bool> isInitialized{false};
 
             std::shared_ptr<telux::tel::IPhoneManager> getPhoneManager()
             {
@@ -109,10 +112,10 @@ pa_result_t taf_pa_net_Init()
 {
     PA_INFO("Actual platform adatper implementation");
 
-    int32_t result_ns = taf_ns_net_Init();
-    if (result_ns == TAF_NS_NET_RESULT_NOT_IMPLEMENTED)
+    int32_t result_ns = taf_prop_net_Init();
+    if (result_ns == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
         PA_INFO("NET proprietary platform adaptor is not implemented.");
-    else if (result_ns == TAF_NS_NET_RESULT_OK)
+    else if (result_ns == TAF_PROP_NET_RESULT_OK)
         PA_INFO("NET proprietary platform adaptor initialization is done.");
 
     auto &pNetAdaptor = taf_NetAdaptor::getInstance();
@@ -121,10 +124,12 @@ pa_result_t taf_pa_net_Init()
     if (result == PA_OK)
     {
         PA_INFO("Net platform adapter initialization is done");
+        pNetAdaptor.isInitialized = true;
     }
     else
     {
         PA_CRIT("Failed to initialize Net platform adapter, ret: %d", result);
+        pNetAdaptor.isInitialized = false;
     }
 
     return PA_OK;
@@ -278,8 +283,33 @@ pa_result_t taf_pa_net_Deinit()
 {
     PA_INFO("Starting Net platform adaptor deinitialization...");
     auto &pNetAdaptor = taf_NetAdaptor::getInstance();
+
+    // Check if Init() was successfully called
+    if (!pNetAdaptor.isInitialized)
+    {
+        PA_WARN("Net Deinit() called before Init() was successfully called");
+        return PA_FAULT;
+    }
+
     PA_INFO("Resetting phoneManager");
     pNetAdaptor.phoneManager.reset();
+
+    int32_t nsRes = taf_prop_net_Deinit();
+    if (nsRes == TAF_PROP_NET_RESULT_OK)
+    {
+        PA_INFO("taf_prop_net_Deinit() completed successfully.");
+    }
+    else if (nsRes == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
+    {
+        PA_INFO("taf_prop_net_Deinit() not implemented (stub).");
+    }
+    else
+    {
+        PA_ERROR("taf_prop_net_Deinit() failed with result %d.", nsRes);
+    }
+
+    pNetAdaptor.isInitialized = false;
     PA_INFO("Net platform adaptor deinitialization complete.");
     return PA_OK;
 }
+

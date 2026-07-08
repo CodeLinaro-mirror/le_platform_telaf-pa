@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -6,23 +6,31 @@
 #include "tafPmsPa.hpp"
 
 #include <assert.h>
+#include <atomic>
+#include <mutex>
 #include <telux/power/PowerFactory.hpp>
 #include <telux/power/TcuActivityDefines.hpp>
 #include <telux/power/TcuActivityListener.hpp>
 #include <telux/power/TcuActivityManager.hpp>
 
-#include "taf_ns_pa_pms.hpp"
+#include "taf_prop_pa_pms.hpp"
 
 static SendEventFunc_t SendEvent;
+static std::mutex pmsSendEventMutex;
 
 static inline void RaiseEvent
 (
     taf_pa_pms_Event_t * ev
 )
 {
-    if (SendEvent != NULL)
+    SendEventFunc_t handler = nullptr;
     {
-        SendEvent(ev);
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        handler = SendEvent;
+    }
+    if (handler != NULL)
+    {
+        handler(ev);
     }
 }
 
@@ -30,10 +38,16 @@ using namespace telux::power;
 using namespace telux::common;
 using namespace std;
 
+// Thread-safe initialization flag
+static std::atomic<bool> gPmsPaInitialized(false);
+static std::mutex gPmsPaMutex;
+
+#define TAF_MODEM_NAS_SVC_ID                          (0x03)
 #define TAF_MODEM_WMS_SVC_ID                          (0x05)
 #define TAF_MODEM_VOICE_CALL_SVC_ID                   (0x09)
 #define TAF_MODEM_SIM_SVC_ID                          (0x0B)
 
+#define TAF_MODEM_SYS_INFO_MSG_ID                     (0x004E)
 #define TAF_MODEM_SMS_COMING_MSG_ID                   (0x0001)
 #define TAF_MODEM_VCALL_COMING_MSG_ID                 (0x002E)
 #define TAF_MODEM_SIM_PROFILE_SWAP_MSG_ID             (0x0033)
@@ -41,10 +55,11 @@ using namespace std;
 #define TAF_MODEM_WS_BIT_MASK_SMS                     (0x0001)
 #define TAF_MODEM_WS_BIT_MASK_VOICE_CALL              (0x0002)
 #define TAF_MODEM_WS_BIT_MASK_REMOTE_SIM_PROFILE_SWAP (0x0004)
+#define TAF_MODEM_WS_BIT_MASK_SYS_INFO                (0x0008)
 
 struct taf_pa_pms_RefStruct_t
 {
-    taf_ns_pa_pms_MpssRef_t mpssRef;
+    taf_prop_pa_pms_MpssRef_t mpssRef;
 
     std::shared_ptr<telux::power::ITcuActivityManager>     masterMgr_;
     std::shared_ptr<telux::power::ITcuActivityManager>     slaveMgr_;
@@ -122,6 +137,14 @@ public:
                         wakeupInfo.qmiWakeupInfo.serviceId,
                         wakeupInfo.qmiWakeupInfo.msgId);
                 wsBitset = TAF_MODEM_WS_BIT_MASK_REMOTE_SIM_PROFILE_SWAP;
+            }
+            else if (TAF_MODEM_NAS_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
+            &&       TAF_MODEM_SYS_INFO_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
+            {
+                PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
+                         wakeupInfo.qmiWakeupInfo.serviceId,
+                         wakeupInfo.qmiWakeupInfo.msgId);
+                wsBitset = TAF_MODEM_WS_BIT_MASK_SYS_INFO;
             }
             else
             {
@@ -373,13 +396,13 @@ public :
 
 static void PaMpssErrorCallback
 (
-    taf_ns_pa_pms_ErrCode_t errCode,
+    taf_prop_pa_pms_ErrCode_t errCode,
     void * cbCtx
 )
 {
     switch (errCode)
     {
-        case TAF_NS_PA_PMS_ERR_SVC_GONE:
+        case TAF_PROP_PA_PMS_ERR_SVC_GONE:
         {
             PA_INFO("prop-pms: SVC_GONE event captured");
         }
@@ -572,8 +595,28 @@ pa_result_t taf_pa_pms_Init
     uint32_t                 timeoutMs
 )
 {
+    PA_DEBUG("PA implementation.");
+    std::lock_guard<std::mutex> paLock(gPmsPaMutex);
+
+    if (paRefPtr == NULL)
+    {
+        PA_ERROR("Bad paRefPtr");
+        return PA_FAULT;
+    }
+
+    // Check if already initialized (idempotent pattern)
+    if (gPmsPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("PMS platform adaptor already initialized");
+        *paRefPtr = &pa;
+        return PA_OK;  // Idempotent - safe to call multiple times
+    }
+
     // Loaded the Event-Reporter for the PA layer
-    SendEvent = fnSendEvent;
+    {
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        SendEvent = fnSendEvent;
+    }
 
     PA_INFO("Loading PMS [ACTUAL] PA ...");
 
@@ -603,6 +646,10 @@ pa_result_t taf_pa_pms_Init
     if (nullptr == pa.masterMgr_)
     {
         PA_ERROR("Failed to getTcuActivityManager for [masterMgr]");
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
@@ -610,6 +657,11 @@ pa_result_t taf_pa_pms_Init
 
     if (! IsOkForCheckingFuture(fuMaster, timeoutMs, "/masterMgr"))
     {
+        pa.masterMgr_.reset();
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
@@ -638,6 +690,12 @@ pa_result_t taf_pa_pms_Init
 
     if (! IsOkForCheckingFuture(fuSlave, timeoutMs, "/slaveMgr"))
     {
+        pa.slaveMgr_.reset();
+        pa.masterMgr_.reset();
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
@@ -659,6 +717,12 @@ pa_result_t taf_pa_pms_Init
     if (nullptr == pa.wakeupMgr_)
     {
         PA_ERROR("Failed to getWakeupManager for [wakeupMgr]");
+        pa.slaveMgr_.reset();
+        pa.masterMgr_.reset();
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
@@ -666,6 +730,13 @@ pa_result_t taf_pa_pms_Init
 
     if (! IsOkForCheckingFuture(fuWakeup, timeoutMs, "/wakeupMgr"))
     {
+        pa.wakeupMgr_.reset();
+        pa.slaveMgr_.reset();
+        pa.masterMgr_.reset();
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
@@ -681,6 +752,14 @@ pa_result_t taf_pa_pms_Init
     if (err != telux::common::ErrorCode::SUCCESS)
     {
         PA_ERROR("Failed to register wakeup listener");
+        pa.wakeupReasonListener_.reset();
+        pa.wakeupMgr_.reset();
+        pa.slaveMgr_.reset();
+        pa.masterMgr_.reset();
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
@@ -700,6 +779,24 @@ pa_result_t taf_pa_pms_Init
     if (sdkStatus != telux::common::Status::SUCCESS)
     {
         PA_ERROR("Failed to register the ITcuActivityListener for /masterMgr");
+        if (pa.masterMgr_ != nullptr && pa.masterSvcListener_ != nullptr)
+        {
+            (void)pa.masterMgr_->deregisterServiceStateListener(pa.masterSvcListener_);
+        }
+        if (pa.wakeupMgr_ != nullptr && pa.wakeupReasonListener_ != nullptr)
+        {
+            (void)pa.wakeupMgr_->deRegisterListener(pa.wakeupReasonListener_);
+        }
+        pa.masterStateUpdateListener_.reset();
+        pa.masterSvcListener_.reset();
+        pa.wakeupReasonListener_.reset();
+        pa.wakeupMgr_.reset();
+        pa.slaveMgr_.reset();
+        pa.masterMgr_.reset();
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
@@ -709,47 +806,121 @@ pa_result_t taf_pa_pms_Init
     if (sdkStatus != telux::common::Status::SUCCESS)
     {
         PA_ERROR("Failed to register the ITcuActivityListener for /slaveMgr");
+        if (pa.masterMgr_ != nullptr && pa.masterStateUpdateListener_ != nullptr)
+        {
+            (void)pa.masterMgr_->deregisterListener(pa.masterStateUpdateListener_);
+        }
+        if (pa.masterMgr_ != nullptr && pa.masterSvcListener_ != nullptr)
+        {
+            (void)pa.masterMgr_->deregisterServiceStateListener(pa.masterSvcListener_);
+        }
+        if (pa.wakeupMgr_ != nullptr && pa.wakeupReasonListener_ != nullptr)
+        {
+            (void)pa.wakeupMgr_->deRegisterListener(pa.wakeupReasonListener_);
+        }
+        pa.slaveStateUpdateListener_.reset();
+        pa.masterStateUpdateListener_.reset();
+        pa.masterSvcListener_.reset();
+        pa.wakeupReasonListener_.reset();
+        pa.wakeupMgr_.reset();
+        pa.slaveMgr_.reset();
+        pa.masterMgr_.reset();
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
-    taf_ns_pa_pms_Result_t result =
-        taf_ns_pa_pms_Init(
+    taf_prop_pa_pms_Result_t result =
+        taf_prop_pa_pms_Init(
             &pa.mpssRef,
             PaMpssErrorCallback,
             NULL);
 
-    if (result != taf_ns_pa_pms_Result_OK)
+    if (result != taf_prop_pa_pms_Result_OK)
     {
-        PA_ERROR("Failed to taf_ns_pa_pms_Init: err(%d)", result);
+        PA_ERROR("Failed to taf_prop_pa_pms_Init: err(%d)", result);
+        if (pa.slaveMgr_ != nullptr && pa.slaveStateUpdateListener_ != nullptr)
+        {
+            (void)pa.slaveMgr_->deregisterListener(pa.slaveStateUpdateListener_);
+        }
+        if (pa.masterMgr_ != nullptr && pa.masterStateUpdateListener_ != nullptr)
+        {
+            (void)pa.masterMgr_->deregisterListener(pa.masterStateUpdateListener_);
+        }
+        if (pa.masterMgr_ != nullptr && pa.masterSvcListener_ != nullptr)
+        {
+            (void)pa.masterMgr_->deregisterServiceStateListener(pa.masterSvcListener_);
+        }
+        if (pa.wakeupMgr_ != nullptr && pa.wakeupReasonListener_ != nullptr)
+        {
+            (void)pa.wakeupMgr_->deRegisterListener(pa.wakeupReasonListener_);
+        }
+        pa.slaveStateUpdateListener_.reset();
+        pa.masterStateUpdateListener_.reset();
+        pa.masterSvcListener_.reset();
+        pa.wakeupReasonListener_.reset();
+        pa.wakeupMgr_.reset();
+        pa.slaveMgr_.reset();
+        pa.masterMgr_.reset();
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
         return PA_FAULT;
     }
 
     *paRefPtr = &pa;
 
+    gPmsPaInitialized.store(true, std::memory_order_release);
+    PA_INFO("PMS platform adaptor initialization flag set to true.");
     PA_INFO("PMS [ACTUAL] PA loaded");
     return PA_OK;
 }
 
-void taf_pa_pms_Deinit
+pa_result_t taf_pa_pms_Deinit
 (
     taf_pa_pms_Reference_t *paRefPtr
 )
 {
+    PA_DEBUG("PA implementation.");
+    std::lock_guard<std::mutex> paLock(gPmsPaMutex);
+
+    // Check if initialized before attempting deinit
+    if (!gPmsPaInitialized.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     if (paRefPtr == NULL || *paRefPtr != &pa)
     {
         PA_ERROR("Bad paRefPtr");
-        return;
+        return PA_FAULT;
     }
 
     PA_INFO("Starting PMS PA deinitialization...");
 
+    // Clear the event-reporter callback first so callbacks racing with deinit
+    // cannot raise events after teardown starts.
+    PA_INFO("Clearing SendEvent callback");
+    {
+        std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+        SendEvent = NULL;
+    }
+
     // Step 1: Deregister wakeup listener and release its shared pointer so no
     // further wakeup callbacks are dispatched after this point.
-    PA_INFO("Deregistering wakeup listener [wakeupMgr]");
-    telux::common::ErrorCode err = pa.wakeupMgr_->deRegisterListener(pa.wakeupReasonListener_);
-    if (err != telux::common::ErrorCode::SUCCESS)
+    telux::common::ErrorCode err;
+    if (pa.wakeupMgr_ != nullptr && pa.wakeupReasonListener_ != nullptr)
     {
-        PA_ERROR("Failed to call SDK deRegisterListener [wakeupMgr]");
+        PA_INFO("Deregistering wakeup listener [wakeupMgr]");
+        err = pa.wakeupMgr_->deRegisterListener(pa.wakeupReasonListener_);
+        if (err != telux::common::ErrorCode::SUCCESS)
+        {
+            PA_ERROR("Failed to call SDK deRegisterListener [wakeupMgr]");
+        }
     }
     pa.wakeupReasonListener_.reset();
 
@@ -757,41 +928,53 @@ void taf_pa_pms_Deinit
 
     // Step 2: Deregister service state listener from master manager and release
     // its shared pointer.
-    PA_INFO("Deregistering service state listener [masterMgr]");
-    sdkStatus = pa.masterMgr_->deregisterServiceStateListener(pa.masterSvcListener_);
-    if (sdkStatus != telux::common::Status::SUCCESS)
+    if (pa.masterMgr_ != nullptr && pa.masterSvcListener_ != nullptr)
     {
-        PA_ERROR("Failed to call SDK deregisterServiceStateListener [masterMgr]");
+        PA_INFO("Deregistering service state listener [masterMgr]");
+        sdkStatus = pa.masterMgr_->deregisterServiceStateListener(pa.masterSvcListener_);
+        if (sdkStatus != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to call SDK deregisterServiceStateListener [masterMgr]");
+        }
     }
     pa.masterSvcListener_.reset();
 
     // Step 3: Deregister TCU activity listener from master manager and release
     // its shared pointer.
-    PA_INFO("Deregistering state update listener [masterMgr]");
-    sdkStatus = pa.masterMgr_->deregisterListener(pa.masterStateUpdateListener_);
-    if (sdkStatus != telux::common::Status::SUCCESS)
+    if (pa.masterMgr_ != nullptr && pa.masterStateUpdateListener_ != nullptr)
     {
-        PA_ERROR("Failed to call SDK deregisterListener [masterMgr]");
+        PA_INFO("Deregistering state update listener [masterMgr]");
+        sdkStatus = pa.masterMgr_->deregisterListener(pa.masterStateUpdateListener_);
+        if (sdkStatus != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to call SDK deregisterListener [masterMgr]");
+        }
     }
     pa.masterStateUpdateListener_.reset();
 
     // Step 4: Deregister TCU activity listener from slave manager and release
     // its shared pointer.
-    PA_INFO("Deregistering state update listener [slaveMgr]");
-    sdkStatus = pa.slaveMgr_->deregisterListener(pa.slaveStateUpdateListener_);
-    if (sdkStatus != telux::common::Status::SUCCESS)
+    if (pa.slaveMgr_ != nullptr && pa.slaveStateUpdateListener_ != nullptr)
     {
-        PA_ERROR("Failed to call SDK deregisterListener [slaveMgr]");
+        PA_INFO("Deregistering state update listener [slaveMgr]");
+        sdkStatus = pa.slaveMgr_->deregisterListener(pa.slaveStateUpdateListener_);
+        if (sdkStatus != telux::common::Status::SUCCESS)
+        {
+            PA_ERROR("Failed to call SDK deregisterListener [slaveMgr]");
+        }
     }
     pa.slaveStateUpdateListener_.reset();
 
     // Step 5: Deinitialize the ns-layer QMI client to release modem resources.
-    PA_INFO("Deinitializing ns-layer PMS QMI client");
-    taf_ns_pa_pms_Result_t nsResult = taf_ns_pa_pms_Deinit(&pa.mpssRef);
-    if (nsResult != taf_ns_pa_pms_Result_OK)
+    if (pa.mpssRef != nullptr)
     {
-        PA_ERROR("taf_ns_pa_pms_Deinit failed: err(%d)", nsResult);
-        // Continue cleanup even if ns-layer deinit failed
+        PA_INFO("Deinitializing ns-layer PMS QMI client");
+        taf_prop_pa_pms_Result_t nsResult = taf_prop_pa_pms_Deinit(&pa.mpssRef);
+        if (nsResult != taf_prop_pa_pms_Result_OK)
+        {
+            PA_ERROR("taf_prop_pa_pms_Deinit failed: err(%d)", nsResult);
+            // Continue cleanup even if ns-layer deinit failed
+        }
     }
 
     // Step 6: Reset SDK manager shared pointers so the underlying SDK objects
@@ -801,13 +984,12 @@ void taf_pa_pms_Deinit
     pa.masterMgr_.reset();
     pa.slaveMgr_.reset();
 
-    // Step 7: Clear the event-reporter callback so no further events are raised.
-    PA_INFO("Clearing SendEvent callback");
-    SendEvent = NULL;
-
     *paRefPtr = NULL; // Reset caller reference pointer
 
+    gPmsPaInitialized.store(false, std::memory_order_release);
+    PA_INFO("PMS platform adaptor initialization flag reset to false.");
     PA_INFO("PMS PA deinitialization complete.");
+    return PA_OK;
 }
 
 pa_result_t taf_pa_pms_SetPowerStateAsMaster
@@ -946,13 +1128,13 @@ pa_result_t taf_pa_pms_SetModemWakeupFilter
     uint32_t                  wsBitmask
 )
 {
-    taf_ns_pa_pms_Result_t result =
-        taf_ns_pa_pms_SetWsFilter(pa.mpssRef,
-                (taf_ns_pa_pms_ModemWakeupSource_t) wsBitmask);
+    taf_prop_pa_pms_Result_t result =
+        taf_prop_pa_pms_SetWsFilter(pa.mpssRef,
+                (taf_prop_pa_pms_ModemWakeupSource_t) wsBitmask);
 
-    if (result != taf_ns_pa_pms_Result_OK)
+    if (result != taf_prop_pa_pms_Result_OK)
     {
-        PA_ERROR("Failed to taf_ns_pa_pms_SetWsFilter");
+        PA_ERROR("Failed to taf_prop_pa_pms_SetWsFilter");
         return PA_FAULT;
     }
 
@@ -965,16 +1147,17 @@ pa_result_t taf_pa_pms_GetModemWakeupFilter
     uint32_t                 *wsBitmaskPtr
 )
 {
-    taf_ns_pa_pms_Result_t result =
-        taf_ns_pa_pms_GetWsFilter(pa.mpssRef,
-                (taf_ns_pa_pms_ModemWakeupSource_t *) wsBitmaskPtr);
+    taf_prop_pa_pms_Result_t result =
+        taf_prop_pa_pms_GetWsFilter(pa.mpssRef,
+                (taf_prop_pa_pms_ModemWakeupSource_t *) wsBitmaskPtr);
 
-    if (result != taf_ns_pa_pms_Result_OK)
+    if (result != taf_prop_pa_pms_Result_OK)
     {
         *wsBitmaskPtr = 0;
-        PA_ERROR("Failed to taf_ns_pa_pms_GetWsFilter");
+        PA_ERROR("Failed to taf_prop_pa_pms_GetWsFilter");
         return PA_FAULT;
     }
 
     return PA_OK;
 }
+

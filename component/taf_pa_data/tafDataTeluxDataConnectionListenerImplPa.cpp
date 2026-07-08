@@ -97,9 +97,14 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
     std::future<bool> fut = promisePtr->get_future();
     std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
 
-    // requestDataCallBitRate callback lambda - captures promisePtr by value
-    auto respCb = [&bitRate, promisePtr](telux::data::BitRateInfo &cbkBitRate,
-                                          telux::common::ErrorCode errorCode)
+    // use a heap-allocated shared_ptr<BitRateInfo> captured by value so
+    // the callback can never write to a dangling reference if updateBitRate() returns
+    // early (e.g. on timeout) before the SDK fires the callback.
+    auto bitRatePtr = std::make_shared<telux::data::BitRateInfo>();
+
+    // requestDataCallBitRate callback lambda - captures bitRatePtr and promisePtr by value
+    auto respCb = [bitRatePtr, promisePtr](telux::data::BitRateInfo &cbkBitRate,
+                                            telux::common::ErrorCode errorCode)
     {
         SET_SDK_THREAD_NAME();
         bool bResult = false;
@@ -110,8 +115,8 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
                 // Success
                 PA_DEBUG("maxRxRate: %" PRIu64 "", cbkBitRate.maxRxRate);
                 PA_DEBUG("maxTxRate: %" PRIu64 "", cbkBitRate.maxTxRate);
-                bitRate.maxRxRate = cbkBitRate.maxRxRate;
-                bitRate.maxTxRate = cbkBitRate.maxTxRate;
+                bitRatePtr->maxRxRate = cbkBitRate.maxRxRate;
+                bitRatePtr->maxTxRate = cbkBitRate.maxTxRate;
                 bResult = true;
             }
             else
@@ -154,6 +159,8 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
         if (bFutResult)
         {
             PA_DEBUG("requestDataCallBitRate SUCCESS");
+            // Copy the result from the shared object back to the caller's output parameter.
+            bitRate = *bitRatePtr;
             return PA_OK;
         }
     }
@@ -289,10 +296,19 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
     // Fill the data bearer technology and update the IDataCall call status map.
     if (telux::data::DataCallStatus::NET_NO_NET != datacallStatus)
     {
-        // TODO: getCurrentBearerTech() is deprecated. Update the Telux API.
-        eventInfo.bearerTech = taf::pa::data::Utils::ConvertBearerTech(
-                                                                iDataCall->getCurrentBearerTech());
-        PA_DEBUG("Bearer tech obtained");
+        telux::data::ServiceStatus svcStatus{};
+        pa_result_t svcResult = teluxPaData.PaGetServiceStatus(eventInfo.slotId, svcStatus);
+        if (PA_OK == svcResult)
+        {
+            eventInfo.bearerTech = taf::pa::data::Utils::ConvertNetworkRat(svcStatus.networkRat);
+            PA_DEBUG("Bearer tech from ServiceStatus NetworkRat: %s",
+                     taf::pa::data::Utils::NetworkRatToString(svcStatus.networkRat));
+        }
+        else
+        {
+            PA_WARN("PaGetServiceStatus failed (%d), bearer tech set to UNKNOWN", svcResult);
+            eventInfo.bearerTech = DataBearerTechnology_e::BEARER_UNKNOWN;
+        }
 
         // For debugging
         void *rawPtr = static_cast<void *>(iDataCall.get());

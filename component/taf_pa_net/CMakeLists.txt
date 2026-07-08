@@ -26,6 +26,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/taf_pa_net)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../taf_pa_common/stub/include)
 
 
 add_library(${TARGET_NAME} SHARED ${TAF_PA_NET_SOURCES})
@@ -46,7 +47,7 @@ target_link_libraries(${TARGET_NAME}
     PRIVATE telux_common telux_tel telux_data
     PRIVATE taf_pa_common
 )
-target_link_libraries(${TARGET_NAME} PRIVATE taf_ns_net)
+target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_net)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib

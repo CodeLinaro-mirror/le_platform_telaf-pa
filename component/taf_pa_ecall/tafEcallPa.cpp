@@ -8,8 +8,10 @@
 #include "telux/common/CommonDefines.hpp"
 #include <telux/platform/SubsystemFactory.hpp>
 #include <telux/platform/SubsystemManager.hpp>
+#include <atomic>
 
 #define MAX_INIT_TIMEOUT 5
+#define NETWORK_COMMAND_TIMEOUT 30
 
 using namespace telux::tel;
 using namespace telux::common;
@@ -59,7 +61,9 @@ public:
     {
         if (eventListener != nullptr)
         {
+            std::lock_guard<std::mutex> lock(listenerMutex_);
             eventListener_ = eventListener;
+            contextPtr_ = context;
         }
         else
         {
@@ -67,7 +71,6 @@ public:
             return PA_NOT_FOUND;
         }
 
-        contextPtr_ = context;
         return PA_OK;
     }
 
@@ -111,7 +114,8 @@ public:
         EcallPaController* controller_;
     };
 
-    class CommandCallback : public telux::common::ICommandResponseCallback
+    class CommandCallback : public telux::common::ICommandResponseCallback,
+                            public std::enable_shared_from_this<CommandCallback>
     {
         public:
         CommandCallback() = default;
@@ -125,13 +129,34 @@ public:
 
         void commandResponse(telux::common::ErrorCode error) override
         {
+                // Hold a self-reference so this object is not destroyed while its members
+                // are still in use, even if the NB thread has already returned and released
+                // its shared_ptr (e.g. on an early-failure path).
+                auto self = shared_from_this();
                 PA_INFO("Command response trigger %d",(int)error);
                 auto paCtrl =  EcallPaController::getInstance();
-                callProm_.set_value(error);
                 pa_result_t result = paCtrl->MapErrorCode(error);
                 if(callback_)
                 {
                     callback_(result,ctxPtr_);
+                }
+                // Set the promise last: the NB thread is only unblocked after we have
+                // finished using all members of this object.
+                try
+                {
+                    callProm_.set_value(error);
+                }
+                catch (const std::future_error &e)
+                {
+                    PA_ERROR("Future error while setting command promise: %s", e.what());
+                }
+                catch (const std::exception &e)
+                {
+                    PA_ERROR("Exception while setting command promise: %s", e.what());
+                }
+                catch (...)
+                {
+                    PA_ERROR("Unknown error while setting command promise");
                 }
         }
 
@@ -146,7 +171,8 @@ public:
         std::any ctxPtr_;
     };
 
-    class MakeCallCallback : public telux::tel::IMakeCallCallback
+    class MakeCallCallback : public telux::tel::IMakeCallCallback,
+                             public std::enable_shared_from_this<MakeCallCallback>
     {
         public:
         MakeCallCallback() = default;
@@ -160,6 +186,10 @@ public:
 
         void makeCallResponse(telux::common::ErrorCode error,std::shared_ptr<telux::tel::ICall> icall) override
         {
+                // Hold a self-reference so this object is not destroyed while its members
+                // are still in use, even if the NB thread has already returned and released
+                // its shared_ptr (e.g. on an early-failure path).
+                auto self = shared_from_this();
                 PA_INFO("Call response trigger %d",(int)error);
                 auto paCtrl = EcallPaController::getInstance();
                 pa_result_t result = paCtrl->MapErrorCode(error);
@@ -171,9 +201,26 @@ public:
                 callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
                 callInfo->remotePartyNumber = icall->getRemotePartyNumber();
                 callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
-                callProm_.set_value(error);
                 if(callback_){
                     callback_(callInfo,result,ctxPtr_);
+                }
+                // Set the promise last: the NB thread is only unblocked after we have
+                // finished using all members of this object.
+                try
+                {
+                    callProm_.set_value(error);
+                }
+                catch (const std::future_error &e)
+                {
+                    PA_ERROR("Future error while setting make-call promise: %s", e.what());
+                }
+                catch (const std::exception &e)
+                {
+                    PA_ERROR("Exception while setting make-call promise: %s", e.what());
+                }
+                catch (...)
+                {
+                    PA_ERROR("Unknown error while setting make-call promise");
                 }
         }
 
@@ -199,8 +246,10 @@ private:
     std::shared_ptr<tafPaECallListener> ecallListener_;
     std::shared_ptr<tafPaECallPhoneListener> ecallPhoneListener_;
     std::shared_ptr<tafPaECallModemEvtListener> ecallModemListener_;
+    std::mutex listenerMutex_;
     const taf_pa_ecall_event_listener_t* eventListener_;
     std::any contextPtr_;
+    std::atomic<bool> isInitialized_{false};
 };
 
 void EcallPaController::tafPaECallModemEvtListener::onStateChange(telux::common::SubsystemInfo
@@ -217,8 +266,18 @@ void EcallPaController::tafPaECallModemEvtListener::onStateChange(telux::common:
             PA_INFO("Subsystem intialize after reboot");
         }
     }
-    if(controller_ && controller_->eventListener_){
-        controller_->eventListener_->onStateChange(info,status,controller_->contextPtr_);
+    if(controller_)
+    {
+        const taf_pa_ecall_event_listener_t* listener = nullptr;
+        std::any context;
+        {
+            std::lock_guard<std::mutex> lock(controller_->listenerMutex_);
+            listener = controller_->eventListener_;
+            context = controller_->contextPtr_;
+        }
+        if(listener){
+            listener->onStateChange(info,status,context);
+        }
     }
 }
 
@@ -227,9 +286,18 @@ void EcallPaController::tafPaECallPhoneListener::onECallOperatingModeChange(int 
 {
     std::shared_ptr<taf_pa_ecall_mode_info_t> modeinfo  = std::make_shared<taf_pa_ecall_mode_info_t>();
     modeinfo->mode = static_cast<taf_pa_ecall_mode_t>(static_cast<int>(info.mode));
-    if(controller_ && controller_->eventListener_){
-        controller_->eventListener_->onEcallOperatingModeChange(phoneId,
-            modeinfo,controller_->contextPtr_);
+    if(controller_)
+    {
+        const taf_pa_ecall_event_listener_t* listener = nullptr;
+        std::any context;
+        {
+            std::lock_guard<std::mutex> lock(controller_->listenerMutex_);
+            listener = controller_->eventListener_;
+            context = controller_->contextPtr_;
+        }
+        if(listener){
+            listener->onEcallOperatingModeChange(phoneId, modeinfo, context);
+        }
     }
 }
 
@@ -248,21 +316,31 @@ void EcallPaController::tafPaECallListener::onIncomingCall(std::shared_ptr<telux
         return;
     }
 
-    if(controller_ && controller_->eventListener_)
+    if(controller_)
     {
-        std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
-                std::make_shared<taf_pa_ecall_CallInfo_t>();
-        callInfo->phoneId = icall->getPhoneId();
-        callInfo->callIndex = icall->getCallIndex();
-        callInfo->callState = paCtrl->stateToEvent(icall->getCallState());
-        callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
-        callInfo->remotePartyNumber = icall->getRemotePartyNumber();
-        callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
-        controller_->eventListener_->onIncomingCall(callInfo, PA_OK, controller_->contextPtr_);
-    }
-    else
-    {
-        PA_ERROR("No listener is registered!, skip state");
+        const taf_pa_ecall_event_listener_t* listener = nullptr;
+        std::any context;
+        {
+            std::lock_guard<std::mutex> lock(controller_->listenerMutex_);
+            listener = controller_->eventListener_;
+            context = controller_->contextPtr_;
+        }
+        if(listener)
+        {
+            std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
+                    std::make_shared<taf_pa_ecall_CallInfo_t>();
+            callInfo->phoneId = icall->getPhoneId();
+            callInfo->callIndex = icall->getCallIndex();
+            callInfo->callState = paCtrl->stateToEvent(icall->getCallState());
+            callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
+            callInfo->remotePartyNumber = icall->getRemotePartyNumber();
+            callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
+            listener->onIncomingCall(callInfo, PA_OK, context);
+        }
+        else
+        {
+            PA_ERROR("No listener is registered!, skip state");
+        }
     }
 }
 
@@ -274,21 +352,31 @@ void EcallPaController::tafPaECallListener::onCallInfoChange(
         PA_ERROR("Null icall received");
         return;
     }
-    if(controller_ && controller_->eventListener_)
+    if(controller_)
     {
-        std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
-                std::make_shared<taf_pa_ecall_CallInfo_t>();
-        callInfo->phoneId = icall->getPhoneId();
-        callInfo->callIndex = icall->getCallIndex();
-        callInfo->callState = paCtrl->stateToEvent(icall->getCallState());
-        callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
-        callInfo->remotePartyNumber = icall->getRemotePartyNumber();
-        callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
-        controller_->eventListener_->onCallInfoChange(callInfo, PA_OK, controller_->contextPtr_);
-    }
-    else
-    {
-        PA_ERROR("No listener is registered!, skip state");
+        const taf_pa_ecall_event_listener_t* listener = nullptr;
+        std::any context;
+        {
+            std::lock_guard<std::mutex> lock(controller_->listenerMutex_);
+            listener = controller_->eventListener_;
+            context = controller_->contextPtr_;
+        }
+        if(listener)
+        {
+            std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
+                    std::make_shared<taf_pa_ecall_CallInfo_t>();
+            callInfo->phoneId = icall->getPhoneId();
+            callInfo->callIndex = icall->getCallIndex();
+            callInfo->callState = paCtrl->stateToEvent(icall->getCallState());
+            callInfo->dir =  paCtrl->directionToPaDirection(icall->getCallDirection());
+            callInfo->remotePartyNumber = icall->getRemotePartyNumber();
+            callInfo->endCause = paCtrl->convertToPaTermination(icall->getCallEndCause());
+            listener->onCallInfoChange(callInfo, PA_OK, context);
+        }
+        else
+        {
+            PA_ERROR("No listener is registered!, skip state");
+        }
     }
 
 }
@@ -299,8 +387,18 @@ void EcallPaController::tafPaECallListener::onECallMsdTransmissionStatus(
     PA_INFO("onECallMsdTransmissionStatus response trigger with phone id %d",phoneId);
     taf_pa_ecall_msd_status_t msdStatus =
         static_cast<taf_pa_ecall_msd_status_t>(static_cast<int>(msdTransmissionStatus));
-    if(controller_ && controller_->eventListener_){
-        controller_->eventListener_->onMsdTransmissionStatus(phoneId,msdStatus,controller_->contextPtr_);
+    if(controller_)
+    {
+        const taf_pa_ecall_event_listener_t* listener = nullptr;
+        std::any context;
+        {
+            std::lock_guard<std::mutex> lock(controller_->listenerMutex_);
+            listener = controller_->eventListener_;
+            context = controller_->contextPtr_;
+        }
+        if(listener){
+            listener->onMsdTransmissionStatus(phoneId,msdStatus,context);
+        }
     }
 }
 
@@ -322,16 +420,36 @@ void EcallPaController::tafPaECallListener::onECallHlapTimerEvent(int phoneId,
     event->t7 = static_cast<taf_pa_ecall_hlap_event_t>(static_cast<int>(timerEvents.t7));
     event->t9 = static_cast<taf_pa_ecall_hlap_event_t>(static_cast<int>(timerEvents.t9));
     event->t10 = static_cast<taf_pa_ecall_hlap_event_t>(static_cast<int>(timerEvents.t10));
-    if(controller_ && controller_->eventListener_){
-        controller_->eventListener_->onHlapTimerEvent(phoneId,event,controller_->contextPtr_);
+    if(controller_)
+    {
+        const taf_pa_ecall_event_listener_t* listener = nullptr;
+        std::any context;
+        {
+            std::lock_guard<std::mutex> lock(controller_->listenerMutex_);
+            listener = controller_->eventListener_;
+            context = controller_->contextPtr_;
+        }
+        if(listener){
+            listener->onHlapTimerEvent(phoneId,event,context);
+        }
     }
 }
 
 void EcallPaController::tafPaECallListener::OnMsdUpdateRequest(int phoneId)
 {
     PA_INFO("OnMsdUpdateRequest response trigger with phone id %d",phoneId);
-    if(controller_ && controller_->eventListener_){
-        controller_->eventListener_->onMsdUpdateRequest(phoneId,controller_->contextPtr_);
+    if(controller_)
+    {
+        const taf_pa_ecall_event_listener_t* listener = nullptr;
+        std::any context;
+        {
+            std::lock_guard<std::mutex> lock(controller_->listenerMutex_);
+            listener = controller_->eventListener_;
+            context = controller_->contextPtr_;
+        }
+        if(listener){
+            listener->onMsdUpdateRequest(phoneId,context);
+        }
     }
 }
 
@@ -343,8 +461,18 @@ void EcallPaController::tafPaECallListener::onECallRedial(int phoneId,
         std::make_shared<taf_pa_ecall_redial_info_t>();
     redialInfo->willEcallRedial = info.willECallRedial;
     redialInfo->reason = static_cast<taf_pa_ecall_reason_type_t>(static_cast<int>(info.reason));
-    if(controller_ && controller_->eventListener_){
-       controller_->eventListener_->onRedial(phoneId,redialInfo,controller_->contextPtr_);
+    if(controller_)
+    {
+        const taf_pa_ecall_event_listener_t* listener = nullptr;
+        std::any context;
+        {
+            std::lock_guard<std::mutex> lock(controller_->listenerMutex_);
+            listener = controller_->eventListener_;
+            context = controller_->contextPtr_;
+        }
+        if(listener){
+            listener->onRedial(phoneId,redialInfo,context);
+        }
     }
 }
 
@@ -949,6 +1077,7 @@ pa_result_t EcallPaController::initialize()
         PA_ERROR("Failed to register phone listener");
         return PA_FAULT;
     }
+    isInitialized_.store(true, std::memory_order_release);
     return PA_OK;
 }
 
@@ -1349,12 +1478,45 @@ pa_result_t tafpa::ecall::taf_pa_ecall_UpdateMsd(
         PA_ERROR("Unable to convert msd data");
         return res;
     }
+
+    // Create callback object with promise to keep it alive
     auto cbPtr = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback,context);
+
+    // Get future for synchronization
+    auto future = cbPtr->getFuture();
+
+    // Make SDK call
     Status status = callMngr->updateECallMsd(phoneId,ecallMsdData,cbPtr);
     if(status != Status::SUCCESS){
         PA_ERROR("Unable to update Msd");
+        return paCtrl->MapStatus(status);
     }
-    return paCtrl->MapStatus(status);
+
+    // Wait for callback to complete (cbPtr stays alive on stack)
+    PA_DEBUG("Waiting for updateECallMsd callback...");
+    std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);  // 30 seconds
+    std::future_status waitStatus = future.wait_for(timeout);
+
+    if (std::future_status::timeout == waitStatus) {
+        PA_ERROR("updateECallMsd timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+        return PA_TIMEOUT;
+    }
+
+    // Get result from callback
+    try {
+        telux::common::ErrorCode errorCode = future.get();
+        if (errorCode != telux::common::ErrorCode::SUCCESS) {
+            PA_ERROR("updateECallMsd failed with error: %d", (int)errorCode);
+            return paCtrl->MapErrorCode(errorCode);
+        }
+    }
+    catch (const std::exception& e) {
+        PA_ERROR("Exception getting future result: %s", e.what());
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("updateECallMsd completed successfully");
+    return PA_OK;
 }
 
 pa_result_t tafpa::ecall::taf_pa_ecall_UpdateHlapTimer(
@@ -1586,30 +1748,34 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     return paCtrl->MapStatus(ret);
 }
 
-std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>
-    tafpa::ecall::taf_pa_ecall_GetInProgressCalls()
+pa_result_t tafpa::ecall::taf_pa_ecall_GetInProgressCalls
+(
+    std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>>* callListPtr
+)
 {
+    if (!callListPtr) {
+        PA_ERROR("callListPtr is null");
+        return PA_BAD_PARAMETER;
+    }
     auto paCtrl =  EcallPaController::getInstance();
     auto callMngr =  paCtrl->getCallManager();
     if(!callMngr){
         PA_ERROR("Call Manager is Null");
-        return {} ;
+        return PA_FAULT;
     }
     auto activeCall = callMngr->getInProgressCalls();
-    std::vector<std::shared_ptr<taf_pa_ecall_CallInfo_t>> calls;
     for (auto icall = std::begin(activeCall); icall != std::end(activeCall); icall++)
     {
-        std::shared_ptr<taf_pa_ecall_CallInfo_t>  callInfo =
-                std::make_shared<taf_pa_ecall_CallInfo_t>();
+        auto callInfo = std::make_shared<taf_pa_ecall_CallInfo_t>();
         callInfo->phoneId = (*icall)->getPhoneId();
         callInfo->callIndex = (*icall)->getCallIndex();
         callInfo->callState = paCtrl->stateToEvent((*icall)->getCallState());
         callInfo->dir =  paCtrl->directionToPaDirection((*icall)->getCallDirection());
         callInfo->remotePartyNumber = (*icall)->getRemotePartyNumber();
         callInfo->endCause = paCtrl->convertToPaTermination((*icall)->getCallEndCause());
-        calls.push_back(callInfo);
+        callListPtr->push_back(callInfo);
     }
-    return calls;
+    return PA_OK;
 }
 
 pa_result_t tafpa::ecall::taf_pa_ecall_RequestNetworkDeregistration(
@@ -1758,16 +1924,20 @@ pa_result_t tafpa::ecall::taf_pa_ecall_MakeECall(
     return paCtrl->MapStatus(ret);
 }
 
-int8_t tafpa::ecall::taf_pa_ecall_GetPhoneIdFromSlotId(int8_t slotId)
+pa_result_t tafpa::ecall::taf_pa_ecall_GetPhoneIdFromSlotId
+(
+    int8_t slotId,
+    int8_t* phoneIdPtr
+)
 {
     auto paCtrl =  EcallPaController::getInstance();
     auto phnMngr = paCtrl->getPhoneManager();
     if(!phnMngr){
         PA_ERROR("phone Manager is Null");
-        return -1;
+        return PA_FAULT;
     }
-    int8_t phoneId = phnMngr->getPhoneIdFromSlotId(slotId);
-    return phoneId;
+    if (phoneIdPtr) *phoneIdPtr = phnMngr->getPhoneIdFromSlotId(slotId);
+    return PA_OK;
 }
 
 pa_result_t tafpa::ecall::taf_pa_ecall_Answer(
@@ -1795,16 +1965,41 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Answer(
             (paCtrl->directionToPaDirection((*iCall)->getCallDirection())== callInfo.dir))
         {
             auto cbObj = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback, context);
+
+            // Get future for synchronization
+            auto future = cbObj->getFuture();
+
             Status status = (*iCall)->answer(cbObj);
-            if (status == telux::common::Status::SUCCESS &&
-            cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS)
-            {
-                PA_INFO("Success on answer ecall");
-                return PA_OK;
+            if (status != telux::common::Status::SUCCESS) {
+                PA_ERROR("Failed to answer call, status: %d", (int)status);
+                return paCtrl->MapStatus(status);
             }
 
-            PA_ERROR("Failed to answer call, status: %d", (int)status);
-            return PA_FAULT;
+            // Wait for callback with timeout
+            PA_DEBUG("Waiting for answer callback...");
+            std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
+            std::future_status waitStatus = future.wait_for(timeout);
+
+            if (std::future_status::timeout == waitStatus) {
+                PA_ERROR("answer timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return PA_TIMEOUT;
+            }
+
+            // Get result from callback
+            try {
+                telux::common::ErrorCode errorCode = future.get();
+                if (errorCode == telux::common::ErrorCode::SUCCESS) {
+                    PA_INFO("Success on answer ecall");
+                    return PA_OK;
+                } else {
+                    PA_ERROR("answer failed with error: %d", (int)errorCode);
+                    return paCtrl->MapErrorCode(errorCode);
+                }
+            }
+            catch (const std::exception& e) {
+                PA_ERROR("Exception getting future result: %s", e.what());
+                return PA_FAULT;
+            }
         }
     }
     return PA_NOT_FOUND;
@@ -1839,17 +2034,43 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Hangup(
                 PA_ERROR("Call is already ended");
                 return PA_DUPLICATE;
             }
+
             auto cbObj = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback, context);
+
+            // Get future for synchronization
+            auto future = cbObj->getFuture();
+
             Status status = (*iCall)->hangup(cbObj);
-            if (status == telux::common::Status::SUCCESS &&
-            cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS)
-            {
-                PA_INFO("Success on answer ecall");
-                return PA_OK;
+            if (status != telux::common::Status::SUCCESS) {
+                PA_ERROR("Failed to hangup call, status: %d", (int)status);
+                return paCtrl->MapStatus(status);
             }
 
-            PA_ERROR("Failed to hangup call, status: %d", (int)status);
-            return PA_FAULT;
+            // Wait for callback with timeout
+            PA_DEBUG("Waiting for hangup callback...");
+            std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
+            std::future_status waitStatus = future.wait_for(timeout);
+
+            if (std::future_status::timeout == waitStatus) {
+                PA_ERROR("hangup timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return PA_TIMEOUT;
+            }
+
+            // Get result from callback
+            try {
+                telux::common::ErrorCode errorCode = future.get();
+                if (errorCode == telux::common::ErrorCode::SUCCESS) {
+                    PA_INFO("Success on hangup ecall");
+                    return PA_OK;
+                } else {
+                    PA_ERROR("hangup failed with error: %d", (int)errorCode);
+                    return paCtrl->MapErrorCode(errorCode);
+                }
+            }
+            catch (const std::exception& e) {
+                PA_ERROR("Exception getting future result: %s", e.what());
+                return PA_FAULT;
+            }
         }
     }
     return PA_NOT_FOUND;
@@ -1884,17 +2105,43 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
                 PA_ERROR("Call is already ended");
                 return PA_DUPLICATE;
             }
+
             auto cbObj = std::make_shared<EcallPaController::CommandCallback>(callMngr,callback, context);
+
+            // Get future for synchronization
+            auto future = cbObj->getFuture();
+
             Status status = (*iCall)->reject(cbObj);
-            if (status == telux::common::Status::SUCCESS &&
-            cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS)
-            {
-                PA_INFO("Success on answer ecall");
-                return PA_OK;
+            if (status != telux::common::Status::SUCCESS) {
+                PA_ERROR("Failed to reject call, status: %d", (int)status);
+                return paCtrl->MapStatus(status);
             }
 
-            PA_ERROR("Failed to reject call, status: %d", (int)status);
-            return PA_FAULT;
+            // Wait for callback with timeout
+            PA_DEBUG("Waiting for reject callback...");
+            std::chrono::seconds timeout(NETWORK_COMMAND_TIMEOUT);
+            std::future_status waitStatus = future.wait_for(timeout);
+
+            if (std::future_status::timeout == waitStatus) {
+                PA_ERROR("reject timeout after %d seconds", NETWORK_COMMAND_TIMEOUT);
+                return PA_TIMEOUT;
+            }
+
+            // Get result from callback
+            try {
+                telux::common::ErrorCode errorCode = future.get();
+                if (errorCode == telux::common::ErrorCode::SUCCESS) {
+                    PA_INFO("Success on reject ecall");
+                    return PA_OK;
+                } else {
+                    PA_ERROR("reject failed with error: %d", (int)errorCode);
+                    return paCtrl->MapErrorCode(errorCode);
+                }
+            }
+            catch (const std::exception& e) {
+                PA_ERROR("Exception getting future result: %s", e.what());
+                return PA_FAULT;
+            }
         }
     }
     return PA_NOT_FOUND;
@@ -1902,6 +2149,13 @@ pa_result_t tafpa::ecall::taf_pa_ecall_Reject(
 
 pa_result_t EcallPaController::deinitialize()
 {
+    // Check if initialization was successful before proceeding with deinitialization
+    if (!isInitialized_.load(std::memory_order_acquire))
+    {
+        PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
+        return PA_FAULT;
+    }
+
     PA_INFO("Starting ECall PA deinitialization...");
 
     // Step 1: Deregister ecall call listener from CallManager
@@ -1960,12 +2214,18 @@ pa_result_t EcallPaController::deinitialize()
     PA_INFO("Clearing Phones vector");
     Phones.clear();
 
-    // Step 6: Clear event listener pointer and context
+    // Step 6: Clear event listener pointer and context.
+    // Hold listenerMutex_ so the clear is mutually exclusive with any in-flight
+    // SB callback that reads eventListener_ under the same mutex.
     PA_INFO("Clearing eventListener_ and contextPtr_");
-    eventListener_ = nullptr;
-    contextPtr_.reset();
+    {
+        std::lock_guard<std::mutex> lock(listenerMutex_);
+        eventListener_ = nullptr;
+        contextPtr_.reset();
+    }
 
     PA_INFO("ECall PA deinitialization complete");
+    isInitialized_.store(false, std::memory_order_release);
     return PA_OK;
 }
 

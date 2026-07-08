@@ -272,8 +272,9 @@ PA_SHARED pa_result_t taf_pa_audio_StopPlayback(
     PaStreamConfig streamConfig
 );
 
-PA_SHARED std::shared_ptr<PaAudioCaptureStream> taf_pa_audio_GetCaptureStream(
-    PaStreamDirection streamDir
+PA_SHARED pa_result_t taf_pa_audio_GetCaptureStream(
+    PaStreamDirection streamDir,
+    std::shared_ptr<PaAudioCaptureStream>& captureStream
 );
 
 PA_SHARED pa_result_t taf_pa_audio_SetVolume(
