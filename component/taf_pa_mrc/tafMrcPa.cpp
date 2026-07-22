@@ -595,7 +595,6 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
     taf_pa_mrc_EfsUsageStats_t* statsPtr
 )
 {
-#if 0
     if (statsPtr == nullptr)
     {
         PA_ERROR("statsPtr is nullptr.");
@@ -646,11 +645,6 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
     statsPtr->clientListLen = i;
     PA_INFO("result = %d, EFS clientListLen = %u", result, statsPtr->clientListLen);
     return result;
-#else
-    (void)statsPtr;
-    PA_WARN("GetEfsUsageStats not supported");
-    return PA_UNSUPPORTED;
-#endif
 }
 
 pa_result_t taf_pa_mrc_SetTimerPeriod
