@@ -24,6 +24,8 @@ extern "C" {
 #define TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES 256
 #define TAF_PA_RADIO_LTE_BAND_GROUP_COUNT 4
 
+#define TAF_PA_STRENGTH_VALUE_UNKNOWN INVALID_SIGNAL_STRENGTH_VALUE
+
 #define TAF_PA_RADIO_BITMASK_RAT_GSM 0x1
 #define TAF_PA_RADIO_BITMASK_RAT_CDMA 0x2
 #define TAF_PA_RADIO_BITMASK_RAT_UMTS 0x4
@@ -163,7 +165,8 @@ typedef enum
     TAF_PA_RADIO_SIGNAL_METRIC_RSCP = 5,
     TAF_PA_RADIO_SIGNAL_METRIC_RSRP = 6,
     TAF_PA_RADIO_SIGNAL_METRIC_RSRQ = 7,
-    TAF_PA_RADIO_SIGNAL_METRIC_SNR = 8
+    TAF_PA_RADIO_SIGNAL_METRIC_SNR = 8,
+    TAF_PA_RADIO_SIGNAL_METRIC_SS = 9
 } taf_pa_radio_SignalMetric_t;
 
 typedef enum
@@ -391,6 +394,7 @@ typedef struct
 {
     int32_t rssi;
     int32_t ber;
+    int32_t ss;
 } taf_pa_radio_GsmSignalStrengthInfo_t;
 
 typedef struct
@@ -424,6 +428,7 @@ typedef struct
     int32_t rsrq;
     int32_t rsrp;
     int32_t snr;
+    int32_t ss;
 } taf_pa_radio_LteSignalStrengthInfo_t;
 
 typedef struct
@@ -431,6 +436,7 @@ typedef struct
     int32_t rsrq;
     int32_t rsrp;
     int32_t snr;
+    int32_t ss;
 } taf_pa_radio_Nr5gSignalStrengthInfo_t;
 
 typedef struct
