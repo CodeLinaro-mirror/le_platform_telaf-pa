@@ -182,8 +182,21 @@ void taf::pa::data::TafPaTeluxDataConnection::LogDataCallInfo
 
     PA_DEBUG("tech preference:      %s", taf::pa::data::Utils::TechPreferenceToString(
                                              dataCall->getTechPreference()));
-    PA_DEBUG("DataBearerTechnology: %s", taf::pa::data::Utils::DataBearerToString(
-                                             dataCall->getCurrentBearerTech()));
+    {
+        auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
+        taf::pa::data::SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(
+                                                                         dataCall->getSlotId());
+        telux::data::ServiceStatus svcStatus{};
+        if (PA_OK == teluxPaData.PaGetServiceStatus(slotIdPa, svcStatus))
+        {
+            PA_DEBUG("NetworkRat (bearer tech): %s",
+                     taf::pa::data::Utils::NetworkRatToString(svcStatus.networkRat));
+        }
+        else
+        {
+            PA_DEBUG("NetworkRat (bearer tech): unavailable");
+        }
+    }
 
     return;
 }
@@ -883,6 +896,12 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
 
     teluxParams.profileId = static_cast<int>(params.profileId);
     teluxParams.ipFamilyType = taf::pa::data::Utils::ConvertIpType(params.ipType);
+    teluxParams.interfaceName = params.interfaceName;
+
+    PA_DEBUG("PaStartDataSessionAsync - teluxParams (after): profileId=%d, ipFamilyType=%d, "
+            "interfaceName='%s', operationType=%d",
+            teluxParams.profileId, TO_INT(teluxParams.ipFamilyType),
+            teluxParams.interfaceName.c_str(), TO_INT(teluxParams.operationType));
 
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();

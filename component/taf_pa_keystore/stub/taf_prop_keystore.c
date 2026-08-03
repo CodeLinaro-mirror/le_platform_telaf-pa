@@ -17,7 +17,7 @@ void taf_prop_ks_Component_Init
     void
 )
 {
-    NS_INFO("Telaf keyStore noship stub initialized.");
+    PROP_INFO("Telaf keyStore noship stub initialized.");
     return;
 }
 
@@ -30,12 +30,12 @@ void taf_prop_ks_Component_Init
  *      LE_FAULT if there was some other error.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_Init
+prop_result_t taf_prop_ks_Init
 (
     void
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ ns_result_t taf_prop_ks_Init
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GenerateRsaEncKey
+prop_result_t taf_prop_ks_GenerateRsaEncKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -59,7 +59,7 @@ ns_result_t taf_prop_ks_GenerateRsaEncKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -69,7 +69,7 @@ ns_result_t taf_prop_ks_GenerateRsaEncKey
  * The impData must be a PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GenerateRsaSigKey
+prop_result_t taf_prop_ks_GenerateRsaSigKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -83,7 +83,7 @@ ns_result_t taf_prop_ks_GenerateRsaSigKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -93,7 +93,7 @@ ns_result_t taf_prop_ks_GenerateRsaSigKey
  * The impData must be PKCS#8 der bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GenerateEcdsaKey
+prop_result_t taf_prop_ks_GenerateEcdsaKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -107,7 +107,7 @@ ns_result_t taf_prop_ks_GenerateEcdsaKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -117,7 +117,7 @@ ns_result_t taf_prop_ks_GenerateEcdsaKey
  * The impData must be raw key bytes if provided.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GenerateAesKey
+prop_result_t taf_prop_ks_GenerateAesKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -131,7 +131,7 @@ ns_result_t taf_prop_ks_GenerateAesKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -141,7 +141,7 @@ ns_result_t taf_prop_ks_GenerateAesKey
  * Currently only digest DIGEST_SHA2_256 is supported. The impData must be raw key bytes if provided
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GenerateHmacKey
+prop_result_t taf_prop_ks_GenerateHmacKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -155,7 +155,7 @@ ns_result_t taf_prop_ks_GenerateHmacKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -163,7 +163,7 @@ ns_result_t taf_prop_ks_GenerateHmacKey
  * Export a key into specified key data format.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_ExportKey
+prop_result_t taf_prop_ks_ExportKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -173,7 +173,7 @@ ns_result_t taf_prop_ks_ExportKey
     size_t* expDataSizePtr                ///< [INOUT]
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -181,7 +181,7 @@ ns_result_t taf_prop_ks_ExportKey
  * Share a key.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_ShareKey
+prop_result_t taf_prop_ks_ShareKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
@@ -190,7 +190,7 @@ ns_result_t taf_prop_ks_ShareKey
     const char* appName                   ///< [IN] Shared application name
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -198,13 +198,13 @@ ns_result_t taf_prop_ks_ShareKey
  * Delete a key file by key name.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_DeleteKey
+prop_result_t taf_prop_ks_DeleteKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef        ///< [IN] Key file reference
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -212,14 +212,14 @@ ns_result_t taf_prop_ks_DeleteKey
  * Get a key file reference by key name.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GetKey
+prop_result_t taf_prop_ks_GetKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference.
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -227,7 +227,7 @@ ns_result_t taf_prop_ks_GetKey
  * Get a shared key file reference by key name and app name.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GetSharedKey
+prop_result_t taf_prop_ks_GetSharedKey
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     const char* keyName,                  ///< [IN] Key Name
@@ -235,7 +235,7 @@ ns_result_t taf_prop_ks_GetSharedKey
     KeyMgt_KeyFileRef_t* keyFileRefPtr    ///< [OUT] Key file reference.
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -243,14 +243,14 @@ ns_result_t taf_prop_ks_GetSharedKey
  * Cancel key sharing to an application.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_CancelKeySharing
+prop_result_t taf_prop_ks_CancelKeySharing
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
     const char* appName                   ///< [IN] Shared application name
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -258,14 +258,14 @@ ns_result_t taf_prop_ks_CancelKeySharing
  * Get a shared app list for a shared key.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GetSharedAppList
+prop_result_t taf_prop_ks_GetSharedAppList
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
     taf_pa_ks_sharedAppList_t* appListPtr ///< [OUT] Shared app list.
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -273,14 +273,14 @@ ns_result_t taf_prop_ks_GetSharedAppList
  * Get key usage
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_GetKeyUsage
+prop_result_t taf_prop_ks_GetKeyUsage
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t keyFileRef,       ///< [IN] Key file reference
     taf_pa_ks_KeyUsage_t*    keyUsagePtr  ///< [OUT] Key usage
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -288,7 +288,7 @@ ns_result_t taf_prop_ks_GetKeyUsage
  * Start the session for the given crypto operation.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_CryptoSessionStart
+prop_result_t taf_prop_ks_CryptoSessionStart
 (
     int clientSessionFd,                  ///< [IN] Client session fd
     KeyMgt_KeyFileRef_t     keyFileRef,   ///< [IN] Key file reference
@@ -298,7 +298,7 @@ ns_result_t taf_prop_ks_CryptoSessionStart
     uint64_t*                 opHandlePtr ///< [OUT]Cyrpto operation handle
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -309,7 +309,7 @@ ns_result_t taf_prop_ks_CryptoSessionStart
  * This API can be called for multiple times but must before CryptoSessionProcess API.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_CryptoSessionProcessAead
+prop_result_t taf_prop_ks_CryptoSessionProcessAead
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] Data buffer to hold the AEAD data
@@ -317,7 +317,7 @@ ns_result_t taf_prop_ks_CryptoSessionProcessAead
 
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -327,7 +327,7 @@ ns_result_t taf_prop_ks_CryptoSessionProcessAead
  * CryptoEndSession API is called.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_CryptoSessionProcess
+prop_result_t taf_prop_ks_CryptoSessionProcess
 (
     uint64_t           opHandle,          ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] InputData can be one of below 4 cases:
@@ -343,7 +343,7 @@ ns_result_t taf_prop_ks_CryptoSessionProcess
     size_t*        outputDataSizePtr      ///< [INOUT]
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -351,7 +351,7 @@ ns_result_t taf_prop_ks_CryptoSessionProcess
  * Finalizes and stop a crypto operation session started with CryptoStartSession API.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_CryptoSessionEnd
+prop_result_t taf_prop_ks_CryptoSessionEnd
 (
     uint64_t               opHandle,      ///< [IN] Cyrpto operation handle
     const uint8_t*     inputDataPtr,      ///< [IN] Signature to verify for verification session
@@ -365,7 +365,7 @@ ns_result_t taf_prop_ks_CryptoSessionEnd
     size_t*        outputDataSizePtr      ///< [INOUT]
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -373,12 +373,12 @@ ns_result_t taf_prop_ks_CryptoSessionEnd
  * Abort crypto operation session started with CryptoStartSession API.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_CryptoSessionAbort
+prop_result_t taf_prop_ks_CryptoSessionAbort
 (
     uint64_t                opHandle      ///< [IN] Cyrpto operation handle
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -386,12 +386,12 @@ ns_result_t taf_prop_ks_CryptoSessionAbort
  * Register Key creation handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_RegKeyCreationHandler
+prop_result_t taf_prop_ks_RegKeyCreationHandler
 (
     taf_pa_ks_KeyCreationHandler_t handlerFunc
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -399,10 +399,10 @@ ns_result_t taf_prop_ks_RegKeyCreationHandler
  * Register Key sharing state change handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_ks_RegKeySharingHandler
+prop_result_t taf_prop_ks_RegKeySharingHandler
 (
     taf_pa_ks_KeySharingHandler_t handlerFunc
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }

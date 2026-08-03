@@ -947,6 +947,20 @@ typedef void (*taf_pa_radio_DataAvailSysStatusHdlrFunc_t)
     void* contextPtr
 );
 
+typedef enum
+{
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_NONE = 0,
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_BY_STATE_TOGGLE = (1 << 0),
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_BY_SRV_STATUS = (1 << 1)
+} taf_pa_radio_SysInfoIndLimitMask_t;
+
+typedef enum
+{
+    TAF_PA_RADIO_DISABLE_IND_MODE_NONE,
+    TAF_PA_RADIO_DISABLE_IND_MODE_ALL,
+    TAF_PA_RADIO_DISABLE_IND_MODE_SKIP_NAS_SYS_INFO_IND
+} taf_pa_radio_DisableIndicationMode_t;
+
 PA_SHARED pa_result_t taf_pa_radio_Init
 (
     void
@@ -1011,7 +1025,7 @@ PA_SHARED pa_result_t taf_pa_radio_GetVoiceServiceInfo
     taf_pa_radio_VoiceServiceInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetDataServieState
+PA_SHARED pa_result_t taf_pa_radio_GetDataServiceState
 (
     uint32_t instance,
     taf_pa_radio_DataServiceState_t* statePtr
@@ -1311,7 +1325,8 @@ PA_SHARED pa_result_t taf_pa_radio_AddNrIconChangeHandler
 PA_SHARED pa_result_t taf_pa_radio_RegisterIndication
 (
     uint32_t instance,
-    uint8_t registration
+    uint8_t registration,
+    taf_pa_radio_DisableIndicationMode_t mode
 );
 
 PA_SHARED pa_result_t taf_pa_radio_PerformPciNetworkScan
@@ -1381,6 +1396,25 @@ PA_SHARED pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
 (
     uint32_t instance,
     taf_pa_radio_DataRoamingStatus_t* statusPtr
+);
+
+PA_SHARED pa_result_t taf_pa_radio_SetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_pa_radio_SysInfoIndLimitMask_t limitMask
+);
+
+PA_SHARED pa_result_t taf_pa_radio_GetServiceStatus
+(
+    uint32_t instance,
+    taf_pa_radio_Rat_t *servingRatPtr,
+    taf_pa_radio_RatServiceStatus_t *statusPtr
+);
+
+PA_SHARED pa_result_t taf_pa_radio_GetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_pa_radio_SysInfoIndLimitMask_t *limitMaskPtr
 );
 
 #ifdef __cplusplus

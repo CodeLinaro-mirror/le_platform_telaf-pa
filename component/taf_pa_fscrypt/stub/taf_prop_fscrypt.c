@@ -15,7 +15,7 @@ void taf_prop_fsc_Init
     void* cryptoFunc
 )
 {
-    NS_INFO("Telaf fscrypt noship stub initialized.");
+    PROP_INFO("Telaf fscrypt noship stub initialized.");
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -23,7 +23,7 @@ void taf_prop_fsc_Init
  * Get a key file reference by directory name.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_fsc_GetKey
+prop_result_t taf_prop_fsc_GetKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
@@ -32,7 +32,7 @@ ns_result_t taf_prop_fsc_GetKey
     size_t keyLen                           ///< [OUT] Length of raw key
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -40,7 +40,7 @@ ns_result_t taf_prop_fsc_GetKey
  * Create AES key and return a key file reference.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_fsc_GenerateAesKey
+prop_result_t taf_prop_fsc_GenerateAesKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
@@ -49,7 +49,7 @@ ns_result_t taf_prop_fsc_GenerateAesKey
     size_t keyLen                           ///< [OUT] Length of raw key
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -57,11 +57,11 @@ ns_result_t taf_prop_fsc_GenerateAesKey
  * Delete a key file.
  */
 //--------------------------------------------------------------------------------------------------
-ns_result_t taf_prop_fsc_DeleteKey
+prop_result_t taf_prop_fsc_DeleteKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     KeyMgt_KeyFileRef_t keyFileRef          ///< [IN] Key file reference
 )
 {
-    return NS_NOT_IMPLEMENTED;
+    return TAF_PROP_NOT_IMPLEMENTED;
 }

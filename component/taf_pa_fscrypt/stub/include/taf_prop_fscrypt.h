@@ -6,16 +6,16 @@
 #ifndef TAF_PROP_FSCRYPT_H
 #define TAF_PROP_FSCRYPT_H
 
-#include "taf_ns_common.h"
-
-typedef void* KeyMgt_KeyFileRef_t;
+#include "taf_prop_common.h"
+#include <stddef.h>
+#include "tafKeystorePa.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Get a key file reference by key name.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_fsc_GetKey
+PROP_SHARED prop_result_t taf_prop_fsc_GetKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
@@ -29,7 +29,7 @@ NS_SHARED ns_result_t taf_prop_fsc_GetKey
  * Create AES key and return a key file reference.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_fsc_GenerateAesKey
+PROP_SHARED prop_result_t taf_prop_fsc_GenerateAesKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
@@ -43,7 +43,7 @@ NS_SHARED ns_result_t taf_prop_fsc_GenerateAesKey
  * Delete a key file.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED ns_result_t taf_prop_fsc_DeleteKey
+PROP_SHARED prop_result_t taf_prop_fsc_DeleteKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     KeyMgt_KeyFileRef_t keyFileRef          ///< [IN] Key file reference
@@ -54,7 +54,7 @@ NS_SHARED ns_result_t taf_prop_fsc_DeleteKey
  * The FSCrypt initialization function.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED void taf_prop_fsc_Init
+PROP_SHARED void taf_prop_fsc_Init
 (
     void* cryptoFunc
 );
@@ -64,7 +64,7 @@ NS_SHARED void taf_prop_fsc_Init
  * The FSCrypt component initialization function.
  */
 //--------------------------------------------------------------------------------------------------
-NS_SHARED void taf_prop_fsc_Component_Init
+PROP_SHARED void taf_prop_fsc_Component_Init
 (
     void
 );

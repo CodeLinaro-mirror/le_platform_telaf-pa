@@ -24,7 +24,7 @@ class taf_NatAdaptor
             static taf_NatAdaptor &getInstance();
 
             pa_result_t initialize();
-            
+
             std::atomic<bool> isInitialized{false};
 
             std::shared_ptr<telux::data::net::INatManager> getNatManager()
@@ -119,7 +119,7 @@ pa_result_t taf_NatAdaptor::initialize()
 pa_result_t taf_pa_nat_Init()
 {
     PA_INFO("Actual platform adatper implementation");
-    
+
     auto &pNatAdaptor = taf_NatAdaptor::getInstance();
 
     pa_result_t result = pNatAdaptor.initialize();
@@ -158,7 +158,7 @@ pa_result_t taf_pa_nat_AddDestNatEntry(
         PA_ERROR("staticNatManager is null");
         return PA_FAULT;
     }
-    
+
     if (natConfig == nullptr)
     {
         PA_ERROR("natConfig is null");
@@ -173,7 +173,7 @@ pa_result_t taf_pa_nat_AddDestNatEntry(
     teluxNatConfig.proto = natConfig->proto;
 
     PA_DEBUG("AddDestNatEntry: profileId=%u, slotId=%u, addr=%s, port=%u, globalPort=%u, proto=%u",
-             profileId, slotId, natConfig->addr, natConfig->port, 
+             profileId, slotId, natConfig->addr, natConfig->port,
              natConfig->globalPort, natConfig->proto);
 
     // Create promise for synchronous operation
@@ -210,8 +210,11 @@ pa_result_t taf_pa_nat_AddDestNatEntry(
 
     // Call telux SDK
     SlotId slot = static_cast<SlotId>(slotId);
-    Status status = staticNatManager->addStaticNatEntry(profileId, teluxNatConfig,
-                                                        natCallback, slot);
+    telux::data::BackhaulInfo bhInfo;
+    bhInfo.backhaul = telux::data::BackhaulType::WWAN;
+    bhInfo.slotId = slot;
+    bhInfo.profileId = static_cast<int>(profileId);
+    Status status = staticNatManager->addStaticNatEntry(bhInfo, teluxNatConfig, natCallback);
 
     if (status == Status::SUCCESS)
     {
@@ -251,28 +254,28 @@ pa_result_t taf_pa_nat_RemoveDestNatEntry(
     auto staticNatManager = natAdaptor.getNatManager();
     std::chrono::seconds span(OPERATION_TIMEOUT);
     pa_result_t result;
-    
+
     if (staticNatManager == nullptr)
     {
         PA_ERROR("staticNatManager is null");
         return PA_FAULT;
     }
-    
+
     if (natConfig == nullptr)
     {
         PA_ERROR("natConfig is null");
         return PA_BAD_PARAMETER;
     }
-    
+
     // Convert PA NAT config to telux NAT config
     telux::data::net::NatConfig teluxNatConfig;
     teluxNatConfig.addr = natConfig->addr;
     teluxNatConfig.port = natConfig->port;
     teluxNatConfig.globalPort = natConfig->globalPort;
     teluxNatConfig.proto = natConfig->proto;
-    
+
     PA_DEBUG("RemoveDestNatEntry: profileId=%u, slotId=%u, addr=%s, port=%u, globalPort=%u, proto=%u",
-             profileId, slotId, natConfig->addr, natConfig->port, 
+             profileId, slotId, natConfig->addr, natConfig->port,
              natConfig->globalPort, natConfig->proto);
 
     // Create promise for synchronous operation
@@ -306,11 +309,14 @@ pa_result_t taf_pa_nat_RemoveDestNatEntry(
          PA_ERROR("Unknown error in NAT callback.");
       }
    };
-    
+
     // Call telux SDK
     SlotId slot = static_cast<SlotId>(slotId);
-    Status status = staticNatManager->removeStaticNatEntry(profileId, teluxNatConfig, 
-                                                           natCallback, slot);
+    telux::data::BackhaulInfo bhInfo;
+    bhInfo.backhaul = telux::data::BackhaulType::WWAN;
+    bhInfo.slotId = slot;
+    bhInfo.profileId = static_cast<int>(profileId);
+    Status status = staticNatManager->removeStaticNatEntry(bhInfo, teluxNatConfig, natCallback);
     if (status == Status::SUCCESS)
     {
         std::future<pa_result_t> futureResult = natSyncPromise->get_future();
@@ -347,37 +353,40 @@ pa_result_t taf_pa_nat_QueryDestNatEntryList(
 {
     auto &natAdaptor = taf_NatAdaptor::getInstance();
     auto staticNatManager = natAdaptor.getNatManager();
-    
+
     if (staticNatManager == nullptr)
     {
         PA_ERROR("staticNatManager is null");
         return PA_FAULT;
     }
-    
+
     std::chrono::seconds span(30);  // 30 second timeout
-    
+
     std::promise<telux::common::ErrorCode> errorPromise;
     std::promise<const std::vector<telux::data::net::NatConfig>> dataPromise;
-    
+
     auto queryCallback = [&errorPromise, &dataPromise](
         const std::vector<telux::data::net::NatConfig> &natConfigs,
         telux::common::ErrorCode error)
     {
-        PA_DEBUG("QueryDestNatEntryList callback: error=%d, size=%zu", 
+        PA_DEBUG("QueryDestNatEntryList callback: error=%d, size=%zu",
                  static_cast<int>(error), natConfigs.size());
         errorPromise.set_value(error);
         dataPromise.set_value(natConfigs);
     };
-    
+
     SlotId slot = static_cast<SlotId>(slotId);
-    telux::common::Status status = staticNatManager->requestStaticNatEntries(
-        profileId, queryCallback, slot);
-    
+    telux::data::BackhaulInfo bhInfo;
+    bhInfo.backhaul = telux::data::BackhaulType::WWAN;
+    bhInfo.slotId = slot;
+    bhInfo.profileId = static_cast<int>(profileId);
+    telux::common::Status status = staticNatManager->requestStaticNatEntries(bhInfo, queryCallback);
+
     if (status == telux::common::Status::SUCCESS)
     {
         std::future<telux::common::ErrorCode> futureError = errorPromise.get_future();
         std::future_status waitStatus = futureError.wait_for(span);
-        
+
         if (std::future_status::timeout == waitStatus)
         {
             PA_ERROR("Query NAT entry list timeout for 30 seconds");
@@ -387,10 +396,10 @@ pa_result_t taf_pa_nat_QueryDestNatEntryList(
         {
             telux::common::ErrorCode error = futureError.get();
             PA_INFO("QueryDestNatEntryList response error code: %d", static_cast<int>(error));
-            
+
             if (error == telux::common::ErrorCode::SUCCESS)
             {
-                const std::vector<telux::data::net::NatConfig> teluxNatConfigs = 
+                const std::vector<telux::data::net::NatConfig> teluxNatConfigs =
                     dataPromise.get_future().get();
                 PA_INFO("Size of NAT entry list: %zu", teluxNatConfigs.size());
 
@@ -414,7 +423,7 @@ pa_result_t taf_pa_nat_QueryDestNatEntryList(
                     paConfig.proto = teluxConfig.proto;
                     natEntryInfo.push_back(paConfig);
                 }
-                
+
                 return PA_OK;
             }
             else

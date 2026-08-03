@@ -9,6 +9,7 @@
 #include <future>
 #include <condition_variable>
 #include <atomic>
+#include <mutex>
 
 #include <telux/common/CommonDefines.hpp>
 #include <telux/platform/PlatformFactory.hpp>
@@ -17,7 +18,7 @@
 
 #include "tafMrcPa.hpp"
 
-#include "taf_ns_mrc.h"
+#include "taf_prop_mrc.h"
 
 #define SERVICE_TIMEOUT 5
 
@@ -27,6 +28,7 @@ using namespace telux::platform;
 
 // Thread-safe initialization flag
 static std::atomic<bool> gMrcPaInitialized(false);
+static std::mutex gMrcPaMutex;
 
 #define SERVICE_PROMISE_AND_CALLBACK(name)                                \
     auto name##Promise = make_shared<promise<ServiceStatus>>();           \
@@ -112,30 +114,30 @@ class Utility
             public:
                 static taf_pa_mrc_Result_t Result
                 (
-                    taf_ns_mrc_Result_t result
+                    taf_prop_mrc_Result_t result
                 );
 
-                static taf_ns_mrc_Process_t Process
+                static taf_prop_mrc_Process_t Process
                 (
                     taf_pa_mrc_Process_t process
                 );
 
                 static taf_pa_mrc_Process_t Process
                 (
-                    taf_ns_mrc_Process_t process
+                    taf_prop_mrc_Process_t process
                 );
 
-                static taf_ns_mrc_Status_t Status
+                static taf_prop_mrc_Status_t Status
                 (
                     taf_pa_mrc_Status_t status
                 );
 
                 static taf_pa_mrc_Status_t Status
                 (
-                    taf_ns_mrc_Status_t status
+                    taf_prop_mrc_Status_t status
                 );
 
-                static taf_ns_mrc_Timer_t Timer
+                static taf_prop_mrc_Timer_t Timer
                 (
                     taf_pa_mrc_Timer_t timer
                 );
@@ -144,14 +146,14 @@ class Utility
 
 taf_pa_mrc_Result_t Utility::Convert::Result
 (
-    taf_ns_mrc_Result_t result
+    taf_prop_mrc_Result_t result
 )
 {
     switch (result)
     {
-        case TAF_NS_MRC_RESULT_SUCCESS:
+        case TAF_PROP_MRC_RESULT_SUCCESS:
             return TAF_PA_MRC_RESULT_SUCCESS;
-        case TAF_NS_MRC_RESULT_FAILURE:
+        case TAF_PROP_MRC_RESULT_FAILURE:
             return TAF_PA_MRC_RESULT_FAILURE;
         default:
             PA_DEBUG("Unknown result %d.", result);
@@ -160,7 +162,7 @@ taf_pa_mrc_Result_t Utility::Convert::Result
     return TAF_PA_MRC_RESULT_UNKNOWN;
 }
 
-taf_ns_mrc_Process_t Utility::Convert::Process
+taf_prop_mrc_Process_t Utility::Convert::Process
 (
     taf_pa_mrc_Process_t process
 )
@@ -168,26 +170,26 @@ taf_ns_mrc_Process_t Utility::Convert::Process
     switch (process)
     {
         case TAF_PA_MRC_PROCESS_ABSYNC:
-            return TAF_NS_MRC_PROCESS_ABSYNC;
+            return TAF_PROP_MRC_PROCESS_ABSYNC;
         case TAF_PA_MRC_PROCESS_OTA:
-            return TAF_NS_MRC_PROCESS_OTA;
+            return TAF_PROP_MRC_PROCESS_OTA;
         default:
             PA_DEBUG("Unknown process %d.", process);
     }
 
-    return TAF_NS_MRC_PROCESS_UNKNOWN;
+    return TAF_PROP_MRC_PROCESS_UNKNOWN;
 }
 
 taf_pa_mrc_Process_t Utility::Convert::Process
 (
-    taf_ns_mrc_Process_t process
+    taf_prop_mrc_Process_t process
 )
 {
     switch (process)
     {
-        case TAF_NS_MRC_PROCESS_ABSYNC:
+        case TAF_PROP_MRC_PROCESS_ABSYNC:
             return TAF_PA_MRC_PROCESS_ABSYNC;
-        case TAF_NS_MRC_PROCESS_OTA:
+        case TAF_PROP_MRC_PROCESS_OTA:
             return TAF_PA_MRC_PROCESS_OTA;
         default:
             PA_DEBUG("Unknown process %d.", process);
@@ -196,7 +198,7 @@ taf_pa_mrc_Process_t Utility::Convert::Process
     return TAF_PA_MRC_PROCESS_UNKNOWN;
 }
 
-taf_ns_mrc_Status_t Utility::Convert::Status
+taf_prop_mrc_Status_t Utility::Convert::Status
 (
     taf_pa_mrc_Status_t status
 )
@@ -204,34 +206,34 @@ taf_ns_mrc_Status_t Utility::Convert::Status
     switch (status)
     {
         case TAF_PA_MRC_STATUS_INITIATED:
-            return TAF_NS_MRC_STATUS_INITIATED;
+            return TAF_PROP_MRC_STATUS_INITIATED;
         case TAF_PA_MRC_STATUS_RESUMED:
-            return TAF_NS_MRC_STATUS_RESUMED;
+            return TAF_PROP_MRC_STATUS_RESUMED;
         case TAF_PA_MRC_STATUS_SUCCEEDED:
-            return TAF_NS_MRC_STATUS_SUCCEEDED;
+            return TAF_PROP_MRC_STATUS_SUCCEEDED;
         case TAF_PA_MRC_STATUS_FAILED:
-            return TAF_NS_MRC_STATUS_FAILED;
+            return TAF_PROP_MRC_STATUS_FAILED;
         default:
             PA_DEBUG("Unknown status %d.", status);
     }
 
-    return TAF_NS_MRC_STATUS_UNKNOWN;
+    return TAF_PROP_MRC_STATUS_UNKNOWN;
 }
 
 taf_pa_mrc_Status_t Utility::Convert::Status
 (
-    taf_ns_mrc_Status_t status
+    taf_prop_mrc_Status_t status
 )
 {
     switch (status)
     {
-        case TAF_NS_MRC_STATUS_INITIATED:
+        case TAF_PROP_MRC_STATUS_INITIATED:
             return TAF_PA_MRC_STATUS_INITIATED;
-        case TAF_NS_MRC_STATUS_RESUMED:
+        case TAF_PROP_MRC_STATUS_RESUMED:
             return TAF_PA_MRC_STATUS_RESUMED;
-        case TAF_NS_MRC_STATUS_SUCCEEDED:
+        case TAF_PROP_MRC_STATUS_SUCCEEDED:
             return TAF_PA_MRC_STATUS_SUCCEEDED;
-        case TAF_NS_MRC_STATUS_FAILED:
+        case TAF_PROP_MRC_STATUS_FAILED:
             return TAF_PA_MRC_STATUS_FAILED;
         default:
             PA_DEBUG("Unknown status %d.", status);
@@ -240,7 +242,7 @@ taf_pa_mrc_Status_t Utility::Convert::Status
     return TAF_PA_MRC_STATUS_UNKNOWN;
 }
 
-taf_ns_mrc_Timer_t Utility::Convert::Timer
+taf_prop_mrc_Timer_t Utility::Convert::Timer
 (
     taf_pa_mrc_Timer_t timer
 )
@@ -248,18 +250,18 @@ taf_ns_mrc_Timer_t Utility::Convert::Timer
     switch (timer)
     {
         case TAF_PA_MRC_TIMER_SCRUB:
-            return TAF_NS_MRC_TIMER_SCRUB;
+            return TAF_PROP_MRC_TIMER_SCRUB;
         case TAF_PA_MRC_TIMER_EFS_BACKUP:
-            return TAF_NS_MRC_TIMER_EFS_BACKUP;
+            return TAF_PROP_MRC_TIMER_EFS_BACKUP;
         case TAF_PA_MRC_TIMER_SUSPEND:
-            return TAF_NS_MRC_TIMER_SUSPEND;
+            return TAF_PROP_MRC_TIMER_SUSPEND;
         case TAF_PA_MRC_TIMER_DEFER:
-            return TAF_NS_MRC_TIMER_DEFER;
+            return TAF_PROP_MRC_TIMER_DEFER;
         default:
             PA_DEBUG("Unknown timer %d.", timer);
     }
 
-    return TAF_NS_MRC_TIMER_UNKNOWN;
+    return TAF_PROP_MRC_TIMER_UNKNOWN;
 }
 
 PlatformAdaptor& PlatformAdaptor::GetInstance
@@ -273,7 +275,7 @@ PlatformAdaptor& PlatformAdaptor::GetInstance
 
 static void ProcessStatusHandler
 (
-    taf_ns_mrc_ProcessStatusIndication_t indication,
+    taf_prop_mrc_ProcessStatusIndication_t indication,
     void* contextPtr
 )
 {
@@ -309,7 +311,7 @@ static void ProcessStatusHandler
 
 static void ScrubStatusHandler
 (
-    taf_ns_mrc_ScrubStatusIndication_t indication,
+    taf_prop_mrc_ScrubStatusIndication_t indication,
     void* contextPtr
 )
 {
@@ -335,6 +337,7 @@ static void ScrubStatusHandler
 pa_result_t taf_pa_mrc_Init()
 {
     PA_DEBUG("PA implementation.");
+    std::lock_guard<std::mutex> paLock(gMrcPaMutex);
 
     // Check if already initialized (idempotent pattern)
     if (gMrcPaInitialized.load(std::memory_order_acquire))
@@ -356,13 +359,13 @@ pa_result_t taf_pa_mrc_Init()
     SERVICE_READY(fs)
 
     PA_INFO("MRC platform adaptor initialization is done.");
-    int32_t result = taf_ns_mrc_Init();
+    int32_t result = taf_prop_mrc_Init();
     if (result == -ENOSYS)
         PA_INFO("MRC proprietary platform adaptor is not implemented.");
     else if (result == 0)
     {
-        taf_ns_mrc_AddProcessStatusHandler(ProcessStatusHandler, nullptr);
-        taf_ns_mrc_AddScrubStatusHandler(ScrubStatusHandler, nullptr);
+        taf_prop_mrc_AddProcessStatusHandler(ProcessStatusHandler, nullptr);
+        taf_prop_mrc_AddScrubStatusHandler(ScrubStatusHandler, nullptr);
         PA_INFO("MRC proprietary platform adaptor initialization is done.");
     }
 
@@ -376,7 +379,7 @@ pa_result_t taf_pa_mrc_RegisterIndication
     uint8_t registration
 )
 {
-    return taf_ns_mrc_RegisterIndication(registration);
+    return taf_prop_mrc_RegisterIndication(registration);
 }
 
 pa_result_t taf_pa_mrc_SetProcessStatus
@@ -390,8 +393,8 @@ pa_result_t taf_pa_mrc_SetProcessStatus
     {
         case TAF_PA_MRC_PROCESS_ABSYNC:
         {
-            taf_ns_mrc_Status_t nsStatus = Utility::Convert::Status(status);
-            result = taf_ns_mrc_SetProcessStatus(TAF_NS_MRC_PROCESS_ABSYNC, nsStatus);
+            taf_prop_mrc_Status_t nsStatus = Utility::Convert::Status(status);
+            result = taf_prop_mrc_SetProcessStatus(TAF_PROP_MRC_PROCESS_ABSYNC, nsStatus);
             break;
         }
         case TAF_PA_MRC_PROCESS_OTA:
@@ -562,10 +565,10 @@ pa_result_t taf_pa_mrc_GetEfsPeStatus
     taf_pa_mrc_EfsPeStatus_t* statusPtr
 )
 {
-    taf_ns_mrc_EfsPeStatus_t status;
-    int32_t result = taf_ns_mrc_GetEfsPeStatus(&status);
+    taf_prop_mrc_EfsPeStatus_t status;
+    int32_t result = taf_prop_mrc_GetEfsPeStatus(&status);
     uint32_t i;
-    for (i = 0; i < TAF_PA_MRC_EFS_PARTITION_BLOCKS && i < TAF_NS_MRC_EFS_PARTITION_BLOCKS
+    for (i = 0; i < TAF_PA_MRC_EFS_PARTITION_BLOCKS && i < TAF_PROP_MRC_EFS_PARTITION_BLOCKS
         && i < status.peCountLen; i++)
         statusPtr->peCount[i] = status.peCount[i];
 
@@ -579,8 +582,8 @@ pa_result_t taf_pa_mrc_GetEfsBlockStatus
     taf_pa_mrc_EfsBlockStatus_t* statusPtr
 )
 {
-    taf_ns_mrc_EfsBlockStatus_t status;
-    int32_t result = taf_ns_mrc_GetEfsBlockStatus(&status);
+    taf_prop_mrc_EfsBlockStatus_t status;
+    int32_t result = taf_prop_mrc_GetEfsBlockStatus(&status);
     statusPtr->maxEraseCount = status.maxEraseCount;
     statusPtr->totalBadBlocks = status.totalBadBlocks;
 
@@ -602,16 +605,16 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
     memset(statsPtr, 0, sizeof(*statsPtr));
     PA_INFO("statsPtr = %p", (void *)statsPtr);
 
-    taf_ns_mrc_EfsUsageStats_t stats;
+    taf_prop_mrc_EfsUsageStats_t stats;
     memset(&stats, 0, sizeof(stats));
 
-    int32_t result = taf_ns_mrc_GetEfsUsageStats(&stats);
-    PA_INFO("result from taf_ns_mrc_GetEfsUsageStats = %d", result);
+    int32_t result = taf_prop_mrc_GetEfsUsageStats(&stats);
+    PA_INFO("result from taf_prop_mrc_GetEfsUsageStats = %d", result);
     if (result != 0)
         return result;
 
     uint32_t i;
-    for (i = 0; i < TAF_PA_MRC_EFS_PARTITION_BLOCKS && i < TAF_NS_MRC_EFS_PARTITION_BLOCKS
+    for (i = 0; i < TAF_PA_MRC_EFS_PARTITION_BLOCKS && i < TAF_PROP_MRC_EFS_PARTITION_BLOCKS
         && i < stats.blockStatsLen; i++)
     {
         statsPtr->blockStats[i].blockReadStats = stats.blockStats[i].blockReadStats;
@@ -625,7 +628,7 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
     statsPtr->blockStatsLen = i;
     PA_INFO("EFS blockStatsLen = %u", statsPtr->blockStatsLen);
 
-    for (i = 0; i < TAF_PA_MRC_EFS_WRITE_TASKS && i < TAF_NS_MRC_EFS_WRITE_TASKS
+    for (i = 0; i < TAF_PA_MRC_EFS_WRITE_TASKS && i < TAF_PROP_MRC_EFS_WRITE_TASKS
         && i < stats.clientListLen; i++)
     {
         statsPtr->clientList[i].writeCallCounters = stats.clientList[i].writeCallCounters;
@@ -656,8 +659,8 @@ pa_result_t taf_pa_mrc_SetTimerPeriod
     uint32_t period
 )
 {
-    taf_ns_mrc_Timer_t nsTimer = Utility::Convert::Timer(timer);
-    return taf_ns_mrc_SetTimerPeriod(nsTimer, period);
+    taf_prop_mrc_Timer_t nsTimer = Utility::Convert::Timer(timer);
+    return taf_prop_mrc_SetTimerPeriod(nsTimer, period);
 }
 
 pa_result_t taf_pa_mrc_AddScrubStatusHandler
@@ -682,12 +685,13 @@ pa_result_t taf_pa_mrc_AckSlotToggle
     int32_t success
 )
 {
-    return taf_ns_mrc_AckSlotToggle(success);
+    return taf_prop_mrc_AckSlotToggle(success);
 }
 
 pa_result_t taf_pa_mrc_Deinit()
 {
     PA_DEBUG("PA implementation.");
+    std::lock_guard<std::mutex> paLock(gMrcPaMutex);
 
     // Check if initialized before attempting deinit
     if (!gMrcPaInitialized.load(std::memory_order_acquire))
@@ -715,6 +719,21 @@ pa_result_t taf_pa_mrc_Deinit()
         pa.indicators.scrubStatus.contextPtr = nullptr;
     }
 
+    // Step 2: Ask the ns-layer to release QMI clients and clear its handlers.
+    int32_t nsResult = taf_prop_mrc_Deinit();
+    if (nsResult == -ENOSYS)
+    {
+        PA_INFO("MRC proprietary platform adaptor is not implemented.");
+    }
+    else if (nsResult == -EINVAL)
+    {
+        PA_WARN("MRC proprietary platform adaptor was not initialized.");
+    }
+    else if (nsResult != 0)
+    {
+        PA_ERROR("taf_prop_mrc_Deinit failed: err(%d)", nsResult);
+    }
+
     // Step 3: Reset the IFsManager shared pointer.
     // Take fsMutex so reset is mutually exclusive with NB calls copying pa.managers.fs.
     // NB operations keep a local shared_ptr after releasing fsMutex, so Deinit does not
@@ -730,3 +749,4 @@ pa_result_t taf_pa_mrc_Deinit()
     PA_INFO("MRC platform adaptor deinitialization complete.");
     return 0;
 }
+
