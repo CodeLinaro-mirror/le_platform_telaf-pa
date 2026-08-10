@@ -674,8 +674,6 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         // NORMAL: Normal call clearing
         case telux::tel::CallEndCause::NORMAL:
         case telux::tel::CallEndCause::NORMAL_UNSPECIFIED:
-        case telux::tel::CallEndCause::CLIENT_END:
-        case telux::tel::CallEndCause::NORMAL_CALL_CLEARING:
             termination = TAF_PA_VOICECALL_TERM_NORMAL;
         break;
 
@@ -690,8 +688,6 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::RESOURCES_UNAVAILABLE_OR_UNSPECIFIED:
         case telux::tel::CallEndCause::USER_BUSY:
         case telux::tel::CallEndCause::SIP_BUSY:
-        case telux::tel::CallEndCause::BUSY_EVERYWHERE:
-        case telux::tel::CallEndCause::NORMAL_CALL_RINGBACK_TIMEOUT:
             termination = TAF_PA_VOICECALL_TERM_BUSY;
         break;
 
@@ -700,12 +696,8 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::SIP_REQUEST_CANCELLED:
         case telux::tel::CallEndCause::SIP_USER_REJECTED:
         case telux::tel::CallEndCause::USER_REJECT:
-        case telux::tel::CallEndCause::REJECTED_BY_USER:
-        case telux::tel::CallEndCause::INCOM_REJ:
         case telux::tel::CallEndCause::USER_REJECTED_SESSION_MODIFICATION:
         case telux::tel::CallEndCause::REJECTED_ELSEWHERE:
-        case telux::tel::CallEndCause::UPGRADE_DOWNGRADE_REJ:
-        case telux::tel::CallEndCause::CALL_DEFLECTED:
             termination = TAF_PA_VOICECALL_TERM_REJECTED;
         break;
 
@@ -718,7 +710,6 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::LOW_BATTERY:
         case telux::tel::CallEndCause::BLACKLISTED_CALL_ID:
         case telux::tel::CallEndCause::USER_CANCELLED_SESSION_MODIFICATION:
-        case telux::tel::CallEndCause::UPGRADE_DOWNGRADE_CANCELLED:
             termination = TAF_PA_VOICECALL_TERM_LOCAL;
         break;
 
@@ -726,10 +717,6 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         case telux::tel::CallEndCause::ANSWERED_ELSEWHERE:
         case telux::tel::CallEndCause::PULL_OUT_OF_SYNC:
         case telux::tel::CallEndCause::CAUSE_CALL_PULLED:
-        case telux::tel::CallEndCause::CALL_COMPLETED_ELSEWHERE:
-        case telux::tel::CallEndCause::CALL_PULLED:
-        case telux::tel::CallEndCause::CALL_PULL_OUT_OF_SYNC:
-        case telux::tel::CallEndCause::MERGED_TO_CONFERENCE:
             termination = TAF_PA_VOICECALL_TERM_REMOTE;
         break;
 
