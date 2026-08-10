@@ -16,7 +16,9 @@
 #include <telux/platform/FsDefines.hpp>
 #include <telux/platform/FsManager.hpp>
 
+#include "tafInternalCommonPa.h"
 #include "tafMrcPa.hpp"
+#include "tafInternalCommonPa.h"
 
 #include "taf_prop_mrc.h"
 
@@ -732,8 +734,8 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
         statsPtr->clientList[i].writeCallCounters = stats.clientList[i].writeCallCounters;
         statsPtr->clientList[i].maxNbyte = stats.clientList[i].maxNbyte;
         statsPtr->clientList[i].taskNameLen = stats.clientList[i].taskNameLen;
-        memcpy(statsPtr->clientList[i].taskName, stats.clientList[i].taskName,
-            TAF_PA_MRC_EFS_TASK_NAME_LEN);
+        taf_pa_memscpy(statsPtr->clientList[i].taskName, TAF_PA_MRC_EFS_TASK_NAME_LEN,
+            stats.clientList[i].taskName, TAF_PA_MRC_EFS_TASK_NAME_LEN);
         PA_INFO("EFS clientList[%u]: writeCalls=%u maxNbyte=%u taskNameLen=%u taskName=%.*s", i,
             (unsigned int)statsPtr->clientList[i].writeCallCounters,
             (unsigned int)statsPtr->clientList[i].maxNbyte,

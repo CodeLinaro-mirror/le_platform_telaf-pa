@@ -11,6 +11,7 @@ set(OUTPUT_NAME Component_${TARGET_NAME})
 
 # common headers
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
 add_library(${TARGET_NAME} SHARED tafDeviceinfoPa.cpp)
 
 # link glib-2.0
