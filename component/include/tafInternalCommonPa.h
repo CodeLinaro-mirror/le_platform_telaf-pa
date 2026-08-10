@@ -194,4 +194,28 @@ static inline taf_pa_result_t PropResultToPaResult(
     }
 }
 
+/**
+ * @brief Secure memory copy — copies MIN(dst_size, src_size) bytes.
+ *
+ * Prevents buffer overflow by clamping the copy to the destination buffer
+ * size. Returns the number of bytes actually copied; if returned < src_size,
+ * truncation occurred and the caller should handle it.
+ *
+ * @param dst       Destination buffer (must be non-NULL).
+ * @param dst_size  Size of the destination buffer in bytes.
+ * @param src       Source buffer (must be non-NULL).
+ * @param src_size  Number of bytes requested to copy from src.
+ * @return          Bytes copied = MIN(dst_size, src_size). Returns 0 if dst or src is NULL.
+ */
+static inline size_t taf_pa_memscpy(void *dst, size_t dst_size,
+                                    const void *src, size_t src_size)
+{
+    if (!dst || !src) return 0;
+    size_t copy_size = (dst_size <= src_size) ? dst_size : src_size;
+    if (copy_size > 0)
+        memcpy(dst, src, copy_size);
+
+    return copy_size;
+}
+
 #endif // TAF_INTERNAL_COMMON_PA_H

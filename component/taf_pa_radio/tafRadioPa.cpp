@@ -887,16 +887,8 @@ void Utility::Convert::String
         }
 
         size_t bytes = str.size();
-        if (bytes < size)
-        {
-            memcpy(strPtr, str.c_str(), bytes);
-            strPtr[bytes] = '\0';
-        }
-        else
-        {
-            memcpy(strPtr, str.c_str(), size - 1);
-            strPtr[size - 1] = '\0';
-        }
+        size_t copied = taf_pa_memscpy(strPtr, size - 1, str.c_str(), bytes);
+        strPtr[copied] = '\0';
     }
 }
 
@@ -5520,17 +5512,9 @@ taf_pa_result_t taf_pa_radio_PerformPlmnNetworkScan
     for (auto info : pa.listeners.networkSelections[instance]->operatorInfoList)
     {
         size_t bytes = info.getName().size();
-        if (bytes < TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES)
-        {
-            memcpy(informationPtr->plmnInfo[i].description, info.getName().c_str(), bytes);
-            informationPtr->plmnInfo[i].description[bytes] = '\0';
-        }
-        else
-        {
-            memcpy(informationPtr->plmnInfo[i].description, info.getName().c_str(),
-               TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES -1);
-            informationPtr->plmnInfo[i].description[TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES - 1] = '\0';
-        }
+        size_t copied = taf_pa_memscpy(informationPtr->plmnInfo[i].description,
+            TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES - 1, info.getName().c_str(), bytes);
+        informationPtr->plmnInfo[i].description[copied] = '\0';
 
         informationPtr->plmnInfo[i].plmnIdValid = 1;
         taf_pa_result_t result = Utility::Convert::StringToU16(info.getMcc(),
@@ -6352,16 +6336,8 @@ taf_pa_result_t taf_pa_radio_GetImsUserAgent
         return request->result;
 
     size_t bytes = request->imsSipUserAgent.size();
-    if (bytes < namePtrSize)
-    {
-        memcpy(namePtr, request->imsSipUserAgent.c_str(), bytes);
-        namePtr[bytes] = '\0';
-    }
-    else
-    {
-        memcpy(namePtr, request->imsSipUserAgent.c_str(), namePtrSize - 1);
-        namePtr[namePtrSize - 1] = '\0';
-    }
+    size_t copied = taf_pa_memscpy(namePtr, namePtrSize - 1, request->imsSipUserAgent.c_str(), bytes);
+    namePtr[copied] = '\0';
 
     return TAF_PA_OK;
 }

@@ -12,6 +12,7 @@
 #include <telux/platform/PlatformFactory.hpp>
 #include "tafCommonPa.h"
 #include "tafDeviceinfoPa.hpp"
+#include "tafInternalCommonPa.h"
 
 // Thread-safe initialization flag
 static std::atomic<bool> gDeviceinfoPaInitialized(false);
@@ -204,7 +205,7 @@ taf_pa_result_t tafpa::deviceinfo::taf_pa_deviceinfo_GetIMEI(char* imeiPtr, size
         return TAF_PA_FAULT;
     }
 
-    std::memcpy(imeiPtr, imei.c_str(), numElements + 1);
+    taf_pa_memscpy(imeiPtr, numElements + 1, imei.c_str(), imei.size() + 1);
     return TAF_PA_OK;
 }
 
