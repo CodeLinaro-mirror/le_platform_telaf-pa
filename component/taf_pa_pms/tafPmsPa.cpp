@@ -13,7 +13,7 @@
 #include <telux/power/TcuActivityListener.hpp>
 #include <telux/power/TcuActivityManager.hpp>
 
-#include "taf_prop_pa_pms.h"
+#include "taf_prop_pms.h"
 #include "tafInternalCommonPa.h"
 
 static SendEventFunc_t SendEvent;
@@ -60,7 +60,7 @@ static std::mutex gPmsPaMutex;
 
 struct taf_pa_pms_RefStruct_t
 {
-    taf_prop_pa_pms_MpssRef_t mpssRef;
+    taf_prop_pms_MpssRef_t mpssRef;
 
     std::shared_ptr<telux::power::ITcuActivityManager>     masterMgr_;
     std::shared_ptr<telux::power::ITcuActivityManager>     slaveMgr_;
@@ -834,13 +834,13 @@ taf_pa_result_t taf_pa_pms_Init
     }
 
     taf_prop_result_t result =
-        taf_prop_pa_pms_Init(
+        taf_prop_pms_Init(
             &pa.mpssRef,
             PaMpssErrorCallback,
             NULL);
     if (result != TAF_PROP_OK)
     {
-        TAF_PA_ERROR("Failed to taf_prop_pa_pms_Init: err(%d)", result);
+        TAF_PA_ERROR("Failed to taf_prop_pms_Init: err(%d)", result);
         if (pa.slaveMgr_ != nullptr && pa.slaveStateUpdateListener_ != nullptr)
         {
             (void)pa.slaveMgr_->deregisterListener(pa.slaveStateUpdateListener_);
@@ -969,10 +969,10 @@ taf_pa_result_t taf_pa_pms_Deinit
     if (pa.mpssRef != nullptr)
     {
         TAF_PA_INFO("Deinitializing ns-layer PMS QMI client");
-        taf_prop_result_t nsResult = taf_prop_pa_pms_Deinit(&pa.mpssRef);
+        taf_prop_result_t nsResult = taf_prop_pms_Deinit(&pa.mpssRef);
         if (nsResult != TAF_PROP_OK)
         {
-            TAF_PA_ERROR("taf_prop_pa_pms_Deinit failed: err(%d)", nsResult);
+            TAF_PA_ERROR("taf_prop_pms_Deinit failed: err(%d)", nsResult);
             // Continue cleanup even if ns-layer deinit failed
         }
     }
@@ -1129,11 +1129,11 @@ taf_pa_result_t taf_pa_pms_SetModemWakeupFilter
 )
 {
     taf_prop_result_t result =
-        taf_prop_pa_pms_SetWsFilter(pa.mpssRef,
-                (taf_prop_pa_pms_ModemWakeupSource_t) wsBitmask);
+        taf_prop_pms_SetWsFilter(pa.mpssRef,
+                (taf_prop_pms_ModemWakeupSource_t) wsBitmask);
     if (result != TAF_PROP_OK)
     {
-        TAF_PA_ERROR("Failed to taf_prop_pa_pms_SetWsFilter");
+        TAF_PA_ERROR("Failed to taf_prop_pms_SetWsFilter");
         return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
@@ -1147,12 +1147,12 @@ taf_pa_result_t taf_pa_pms_GetModemWakeupFilter
 )
 {
     taf_prop_result_t result =
-        taf_prop_pa_pms_GetWsFilter(pa.mpssRef,
-                (taf_prop_pa_pms_ModemWakeupSource_t *) wsBitmaskPtr);
+        taf_prop_pms_GetWsFilter(pa.mpssRef,
+                (taf_prop_pms_ModemWakeupSource_t *) wsBitmaskPtr);
     if (result != TAF_PROP_OK)
     {
         *wsBitmaskPtr = 0;
-        TAF_PA_ERROR("Failed to taf_prop_pa_pms_GetWsFilter");
+        TAF_PA_ERROR("Failed to taf_prop_pms_GetWsFilter");
         return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
