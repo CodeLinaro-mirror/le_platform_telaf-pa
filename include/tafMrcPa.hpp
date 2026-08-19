@@ -112,6 +112,18 @@ typedef struct
     ///< EFS write statistics for client tasks.
 } taf_pa_mrc_EfsUsageStats_t;
 
+typedef struct
+{
+    uint32_t numFsCorrupt;
+    ///< Number of consecutive times FS threw error fatal which could lead to corruption.
+
+    uint32_t numFsNotCorrupt;
+    ///< Number of consecutive times FS threw error fatal but not directly linked to corruption.
+
+    uint32_t numFsRestore;
+    ///< Number of times FS restore was attempted (reset to 0 only if restore is success).
+} taf_pa_mrc_EfsCorruptionStats_t;
+
 typedef struct taf_pa_mrc_ProcessStatusHandler* taf_pa_mrc_ProcessStatusHandlerRef_t;
 
 typedef void (*taf_pa_mrc_ProcessStatusHdlrFunc_t)
@@ -197,6 +209,11 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_mrc_AddScrubStatusHandler
 TAF_PA_SHARED taf_pa_result_t taf_pa_mrc_AckSlotToggle
 (
     int32_t success
+);
+
+TAF_PA_SHARED taf_pa_result_t taf_pa_mrc_GetEfsCorruptionStats
+(
+    taf_pa_mrc_EfsCorruptionStats_t* statsPtr
 );
 
 #ifdef __cplusplus

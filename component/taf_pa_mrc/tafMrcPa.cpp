@@ -700,6 +700,31 @@ taf_pa_result_t taf_pa_mrc_AckSlotToggle
     return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
+taf_pa_result_t taf_pa_mrc_GetEfsCorruptionStats
+(
+    taf_pa_mrc_EfsCorruptionStats_t* statsPtr
+)
+{
+    if (statsPtr == nullptr)
+    {
+        TAF_PA_ERROR("statsPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    *statsPtr = {};
+
+    taf_prop_mrc_EfsCorruptionStats_t stats {};
+    taf_prop_result_t result = taf_prop_mrc_GetEfsCorruptionStats(&stats);
+    if (result == TAF_PROP_OK)
+    {
+        statsPtr->numFsCorrupt = stats.numFsCorrupt;
+        statsPtr->numFsNotCorrupt = stats.numFsNotCorrupt;
+        statsPtr->numFsRestore = stats.numFsRestore;
+    }
+
+    return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
+}
+
 taf_pa_result_t taf_pa_mrc_Deinit()
 {
     TAF_PA_DEBUG("PA implementation.");
