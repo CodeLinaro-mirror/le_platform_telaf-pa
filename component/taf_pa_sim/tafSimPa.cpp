@@ -434,8 +434,22 @@ void tafPaSubscriptionListener::onSubscriptionInfoChanged
         PA_DEBUG("ICCID: %s", subscription->getIccId().c_str());
         PA_DEBUG("IMSI: %s", subscription->getImsi().c_str());
         PA_DEBUG("Phone Number: %s", subscription->getPhoneNumber().c_str());
+        // In single active mode the SDK always reports slotId = TAF_PA_DEFAULT_SLOT_ID
+        // regardless of which physical slot is active.  The nullptr-check below is
+        // unreliable when Slot 1 holds an inactive but physically-present SIM card
+        // (cards[1] is non-null), so apply the same authoritative remapping used in
+        // onCardInfoChanged: read the tracked active slot directly.
+        if (pa.isSingleActive && slotId == TAF_PA_DEFAULT_SLOT_ID)
         {
-            // Acquire write lock on cardsMutex_ before modifying managers.cards
+            int activeSlot = pa.GetCurrentSlot();
+            PA_INFO("Single active mode: remapping subscription slotId %d to active slot %d",
+                    slotId, activeSlot);
+            slotId = activeSlot;
+        }
+        {
+            // Acquire write lock on cardsMutex_ before modifying managers.cards.
+            // Fallback: if the resolved slot still has no card entry, remap to slot 2
+            // (handles dual-active or edge cases where slot tracking is not yet set).
             std::unique_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
             auto it = pa.managers.cards.find(slotId);
             if((it == pa.managers.cards.end() || it->second == nullptr)
@@ -487,8 +501,26 @@ void tafPaCardListener::onCardInfoChanged(int slotId)
     taf_pa_sim_pa_event_t simEvent;
     auto slotWithCard = slotId;
     PA_INFO("Input sim Id: %d, cards size: %zu", (int)slotId, pa.managers.cards.size());
+    // In single active mode the SDK always fires onCardInfoChanged with
+    // slotId = TAF_PA_DEFAULT_SLOT_ID (logical slot 1) regardless of which
+    // physical slot is actually active.  Relying on cards[1] being nullptr to
+    // detect the remapping is unreliable: when Slot 1 holds an inactive but
+    // physically-present SIM card, onSlotStatusChanged stores a non-null card
+    // pointer in cards[1], causing the old nullptr-check to silently skip the
+    // remap and leave slotWithCard = 1 even though Slot 2 is the active slot.
+    // Fix: in single active mode use the authoritative active-slot value that
+    // is maintained by SetCurrentSlot() / GetCurrentSlot().
+    if (pa.isSingleActive && slotWithCard == TAF_PA_DEFAULT_SLOT_ID)
     {
-        // Acquire read lock to safely read managers.cards
+        int activeSlot = pa.GetCurrentSlot();
+        PA_INFO("Single active mode: remapping reported slotId %d to active slot %d",
+                slotWithCard, activeSlot);
+        slotWithCard = activeSlot;
+    }
+    else
+    {
+        // Dual active (or non-default slot): fall back to the cards-map check
+        // that was used before to handle any residual logical→physical mapping.
         std::shared_lock<std::shared_mutex> cardsLock(pa.cardsMutex_);
         auto it = pa.managers.cards.find(slotWithCard);
         if(it != pa.managers.cards.end() && it->second == nullptr
@@ -512,8 +544,11 @@ void tafPaCardListener::onCardInfoChanged(int slotId)
     }
     if (simEvent.state == TAF_PA_SIM_ABSENT)
     {
-        // Revert to original slotId for initialization
-        slotWithCard = slotId;
+        // Card is absent from the active physical slot (slotWithCard).
+        // Reset the SIM info for that slot.  Do NOT revert to the raw SDK
+        // slotId here: in single active mode the SDK always reports slotId=1
+        // regardless of which physical slot is active, so reverting would
+        // clear the wrong slot's info (e.g. slot 1 instead of slot 2).
         simEvent.simId = (taf_pa_sim_Id_t)slotWithCard;
         pa.InitializeSimInfo(nullptr, (taf_pa_sim_Id_t)slotWithCard);
     }
