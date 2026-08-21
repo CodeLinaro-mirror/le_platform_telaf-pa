@@ -296,10 +296,19 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
     // Fill the data bearer technology and update the IDataCall call status map.
     if (telux::data::DataCallStatus::NET_NO_NET != datacallStatus)
     {
-        // TODO: getCurrentBearerTech() is deprecated. Update the Telux API.
-        eventInfo.bearerTech = taf::pa::data::Utils::ConvertBearerTech(
-                                                                iDataCall->getCurrentBearerTech());
-        PA_DEBUG("Bearer tech obtained");
+        telux::data::ServiceStatus svcStatus{};
+        pa_result_t svcResult = teluxPaData.PaGetServiceStatus(eventInfo.slotId, svcStatus);
+        if (PA_OK == svcResult)
+        {
+            eventInfo.bearerTech = taf::pa::data::Utils::ConvertNetworkRat(svcStatus.networkRat);
+            PA_DEBUG("Bearer tech from ServiceStatus NetworkRat: %s",
+                     taf::pa::data::Utils::NetworkRatToString(svcStatus.networkRat));
+        }
+        else
+        {
+            PA_WARN("PaGetServiceStatus failed (%d), bearer tech set to UNKNOWN", svcResult);
+            eventInfo.bearerTech = DataBearerTechnology_e::BEARER_UNKNOWN;
+        }
 
         // For debugging
         void *rawPtr = static_cast<void *>(iDataCall.get());

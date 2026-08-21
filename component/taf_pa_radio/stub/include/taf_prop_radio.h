@@ -7,7 +7,6 @@
 #define TAF_PROP_RADIO_H
 
 #include "taf_prop_common.h"
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +27,20 @@ typedef uint64_t taf_prop_radio_RatBitMask_t;
 
 #define TAF_PROP_RADIO_BITMASK_SO_5G_NSA 0x80000000000
 typedef uint64_t taf_prop_radio_SoBitMask_t;
+
+typedef enum
+{
+    TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_NONE = 0,
+    TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_BY_STATE_TOGGLE = (1 << 0),
+    TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_BY_SRV_STATUS = (1 << 1)
+} taf_prop_radio_SysInfoIndLimitMask_t;
+
+typedef enum
+{
+    TAF_PROP_RADIO_DISABLE_IND_MODE_NONE,
+    TAF_PROP_RADIO_DISABLE_IND_MODE_ALL,
+    TAF_PROP_RADIO_DISABLE_IND_MODE_SKIP_NAS_SYS_INFO_IND
+} taf_prop_radio_DisableIndicationMode_t;
 
 typedef enum
 {
@@ -78,32 +91,6 @@ typedef enum
 
 typedef struct
 {
-    uint16_t pci;
-    uint32_t freq;
-    taf_prop_radio_LteCphyCaBandwidth_t cphyCaDlBandwidth;
-    uint32_t band;
-} taf_prop_radio_LteCphyPcellInfo_t;
-
-typedef struct
-{
-    uint16_t pci;
-    uint32_t freq;
-    taf_prop_radio_LteCphyCaBandwidth_t cphyCaDlBandwidth;
-    uint32_t band;
-    taf_prop_radio_LteCphyScellState_t scellState;
-    uint8_t scellIndex;
-    uint8_t ulConfigured;
-} taf_prop_radio_LteCphyScellInfo_t;
-
-typedef struct
-{
-    taf_prop_radio_LteCphyPcellInfo_t pcellInfo;
-    uint32_t scellInfoCount;
-    taf_prop_radio_LteCphyScellInfo_t scellInfo[TAF_PROP_RADIO_LTE_CPHY_SCELL_INFO_MAX_COUNT];
-} taf_prop_radio_LteCphyCaInfo_t;
-
-typedef struct
-{
     uint16_t mcc;
     uint16_t mnc;
     uint8_t mncIncludesPcsDigit;
@@ -134,6 +121,32 @@ typedef struct
     uint32_t availSysCount;
     taf_prop_radio_DataAvailSysStatusInfo_t availSysStatusInfo[TAF_PROP_RADIO_DATA_AVAIL_SYS_MAX_COUNT];
 } taf_prop_radio_DataAvailSysStatus_t;
+
+typedef struct
+{
+    uint16_t pci;
+    uint32_t freq;
+    taf_prop_radio_LteCphyCaBandwidth_t cphyCaDlBandwidth;
+    uint32_t band;
+} taf_prop_radio_LteCphyPcellInfo_t;
+
+typedef struct
+{
+    uint16_t pci;
+    uint32_t freq;
+    taf_prop_radio_LteCphyCaBandwidth_t cphyCaDlBandwidth;
+    uint32_t band;
+    taf_prop_radio_LteCphyScellState_t scellState;
+    uint8_t scellIndex;
+    uint8_t ulConfigured;
+} taf_prop_radio_LteCphyScellInfo_t;
+
+typedef struct
+{
+    taf_prop_radio_LteCphyPcellInfo_t pcellInfo;
+    uint32_t scellInfoCount;
+    taf_prop_radio_LteCphyScellInfo_t scellInfo[TAF_PROP_RADIO_LTE_CPHY_SCELL_INFO_MAX_COUNT];
+} taf_prop_radio_LteCphyCaInfo_t;
 
 typedef struct
 {
@@ -199,6 +212,11 @@ PROP_SHARED int32_t taf_prop_radio_Init
     void
 );
 
+PROP_SHARED int32_t taf_prop_radio_Deinit
+(
+    void
+);
+
 PROP_SHARED int32_t taf_prop_radio_InitInstance
 (
     uint32_t instance
@@ -207,7 +225,27 @@ PROP_SHARED int32_t taf_prop_radio_InitInstance
 PROP_SHARED int32_t taf_prop_radio_RegisterIndication
 (
     uint32_t instance,
-    uint8_t registration
+    uint8_t registration,
+    taf_prop_radio_DisableIndicationMode_t mode
+);
+
+PROP_SHARED int32_t taf_prop_radio_SetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_prop_radio_SysInfoIndLimitMask_t limitMask
+);
+
+PROP_SHARED int32_t taf_prop_radio_GetServiceStatus
+(
+    uint32_t instance,
+    taf_prop_radio_Rat_t *servingRat,
+    taf_prop_radio_RatServiceStatus_t* status
+);
+
+PROP_SHARED int32_t taf_prop_radio_GetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_prop_radio_SysInfoIndLimitMask_t *limitMask
 );
 
 PROP_SHARED int32_t taf_prop_radio_PerformPciNetworkScan
@@ -281,4 +319,3 @@ PROP_SHARED int32_t taf_prop_radio_GetDataCurrRoamingStatus
 #endif
 
 #endif /* TAF_PROP_RADIO_H */
-

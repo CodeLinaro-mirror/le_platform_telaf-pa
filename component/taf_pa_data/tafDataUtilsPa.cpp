@@ -512,6 +512,29 @@ const char *Utils::DataBearerToString(telux::data::DataBearerTechnology dataBear
     }
 }
 
+const char *Utils::NetworkRatToString(telux::data::NetworkRat rat)
+{
+    switch (rat)
+    {
+    case telux::data::NetworkRat::CDMA_1X:
+        return "CDMA_1X";
+    case telux::data::NetworkRat::CDMA_EVDO:
+        return "CDMA_EVDO";
+    case telux::data::NetworkRat::GSM:
+        return "GSM";
+    case telux::data::NetworkRat::WCDMA:
+        return "WCDMA";
+    case telux::data::NetworkRat::LTE:
+        return "LTE";
+    case telux::data::NetworkRat::TDSCDMA:
+        return "TDSCDMA";
+    case telux::data::NetworkRat::NR5G:
+        return "NR5G";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 const char *Utils::CallEndReasonTypeToString(telux::common::EndReasonType endReasontype)
 {
     switch (endReasontype)
@@ -591,6 +614,33 @@ DataBearerTechnology_e Utils::ConvertBearerTech
         return DataBearerTechnology_e::BEARER_5G;
     default:
         PA_WARN("Unknown bearer technology: %d", TO_INT(bearerTech));
+        return DataBearerTechnology_e::BEARER_UNKNOWN;
+    }
+};
+
+DataBearerTechnology_e Utils::ConvertNetworkRat
+(
+    telux::data::NetworkRat rat
+)
+{
+    switch (rat)
+    {
+    case telux::data::NetworkRat::CDMA_1X:
+        return DataBearerTechnology_e::BEARER_CDMA_1X;
+    case telux::data::NetworkRat::CDMA_EVDO:
+        return DataBearerTechnology_e::BEARER_EVDO_REVA;
+    case telux::data::NetworkRat::GSM:
+        return DataBearerTechnology_e::BEARER_GSM;
+    case telux::data::NetworkRat::WCDMA:
+        return DataBearerTechnology_e::BEARER_WCDMA;
+    case telux::data::NetworkRat::LTE:
+        return DataBearerTechnology_e::BEARER_LTE;
+    case telux::data::NetworkRat::TDSCDMA:
+        return DataBearerTechnology_e::BEARER_TDSCDMA;
+    case telux::data::NetworkRat::NR5G:
+        return DataBearerTechnology_e::BEARER_5G;
+    default:
+        PA_WARN("Unknown network RAT: %d", TO_INT(rat));
         return DataBearerTechnology_e::BEARER_UNKNOWN;
     }
 };

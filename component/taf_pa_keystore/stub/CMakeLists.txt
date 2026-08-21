@@ -9,7 +9,7 @@ set(OUTPUT_NAME Component_${TARGET_NAME})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../include/keyStore)
 
-add_library(${TARGET_NAME} SHARED taf_prop_keystore.c)
+add_library(${TARGET_NAME} SHARED taf_prop_keystore.c taf_prop_file.c)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     VERSION ${LIBRARY_VERSION}

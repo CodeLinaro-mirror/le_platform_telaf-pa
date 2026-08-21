@@ -3,109 +3,153 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#ifndef TAF_NS_NET_HPP
-#define TAF_NS_NET_HPP
-
-#include "tafCommonPa.h"
-
-#define TAF_NS_NET_RESULT_OK 0
-#define TAF_NS_NET_RESULT_FAULT -6
-#define TAF_NS_NET_RESULT_BAD_PARAMETER -15
-#define TAF_NS_NET_RESULT_NOT_IMPLEMENTED -20
+#include "taf_prop_net.hpp"
 
 //--------------------------------------------------------------------------------------------------
 /**
- * The device mode.
+ * Init this component
  */
 //--------------------------------------------------------------------------------------------------
-typedef enum
+
+int32_t taf_prop_net_Init
+(
+    void
+)
 {
-    TAF_PROP_NET_DEVICE_UNKNOWN = -1,
-    ///< Unknown.
-    TAF_PROP_NET_DEVICE_NONE = 0,
-    ///< None.
-    TAF_PROP_NET_DEVICE_L2L = 1,
-    ///< Device LAN-to-LAN mode.
-    TAF_PROP_NET_DEVICE_E2E = 2
-    ///< Device end-to-end mode.
+    PROP_INFO("Function is not implemented in stub PA.");
+    return TAF_PROP_NET_RESULT_NOT_IMPLEMENTED;
 }
-taf_prop_net_DeviceMode_t;
 
 //--------------------------------------------------------------------------------------------------
 /**
- * The SOCKS authentication type.
+ * Deinit this component
  */
 //--------------------------------------------------------------------------------------------------
-typedef enum
+int32_t taf_prop_net_Deinit
+(
+    void
+)
 {
-    TAF_PROP_NET_SOCKS_UNKNOWN = -1,
-        ///< Unknown.
-    TAF_PROP_NET_SOCKS_NONE = 0,
-        ///< No authentication.
-    TAF_PROP_NET_SOCKS_USER_PASSWD = 1
-        ///< Username and password.
+    PROP_INFO("Function is not implemented in stub PA.");
+    return TAF_PROP_NET_RESULT_NOT_IMPLEMENTED;
 }
-taf_prop_net_AuthMethod_t;
-
-PA_SHARED int32_t taf_ns_net_Init();
-
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Set device mode
+ *
+ * @return LE_TAF_PROP_NET_RESULT_FAULT                      Failed
+ *         TAF_PROP_NET_RESULT_BAD_PARAMETER              Invalid deviceMode
+ *         TAF_PROP_NET_RESULT_OK                         Succeeded
+ *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_SetDeviceMode(taf_prop_net_DeviceMode_t deviceMode);
+int32_t taf_prop_net_SetDeviceMode
+(
+    taf_prop_net_DeviceMode_t deviceMode  ///< [IN] Device mode
+)
+{
+    PROP_INFO("-----default stub Impl SetDeviceMode---");
+    return TAF_PROP_NET_RESULT_OK;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Get device mode
+ *
+ * @return taf_prop_net_DeviceMode_t          Device mode
+ *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED taf_prop_net_DeviceMode_t taf_prop_net_GetDeviceMode();
+taf_prop_net_DeviceMode_t taf_prop_net_GetDeviceMode
+(
+)
+{
+    PROP_INFO("-----default stub Impl GetDeviceMode---");
+    return TAF_PROP_NET_DEVICE_NONE;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Set SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_SetSocksAuthMethod(taf_prop_net_AuthMethod_t authMethod);
+int32_t taf_prop_net_SetSocksAuthMethod
+(
+    taf_prop_net_AuthMethod_t authMethod
+)
+{
+    PROP_INFO("-----default stub Impl SetSocksAuthMethod---");
+    return TAF_PROP_NET_RESULT_OK;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Get SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED taf_prop_net_AuthMethod_t taf_prop_net_GetSocksAuthMethod();
+taf_prop_net_AuthMethod_t taf_prop_net_GetSocksAuthMethod
+(
+)
+{
+    PROP_INFO("-----default stub Impl GetSocksAuthMethod---");
+    return TAF_PROP_NET_SOCKS_UNKNOWN;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Sets SOCKS LAN interface
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_SetSocksLanInterface(const char* ifName);
+int32_t taf_prop_net_SetSocksLanInterface
+(
+    const char* ifName
+)
+{
+    PROP_INFO("-----default stub Impl SetSocksLanInterface---");
+    return TAF_PROP_NET_RESULT_OK;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Gets SOCKS LAN interface
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_GetSocksLanInterface(char* ifName, size_t ifNameSize);
+int32_t taf_prop_net_GetSocksLanInterface
+(
+    char* ifName,
+    size_t ifNameSize
+)
+{
+    PROP_INFO("-----default stub Impl GetSocksLanInterface---");
+    return TAF_PROP_NET_RESULT_OK;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Adds username/profile association
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_AddSocksAssociation(const char* userName, uint32_t profileId);
+int32_t taf_prop_net_AddSocksAssociation
+(
+    const char* userName,
+    uint32_t profileId
+)
+{
+    PROP_INFO("-----default stub Impl AddSocksAssociation---");
+    return TAF_PROP_NET_RESULT_OK;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Deletes username/profile association
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED int32_t taf_prop_net_RemoveSocksAssociation(const char* userName);
-
-
-
-#endif /* TAF_NS_NET_HPP_ */
+int32_t taf_prop_net_RemoveSocksAssociation
+(
+    const char* userName
+)
+{
+    PROP_INFO("-----default stub Impl RemoveSocksAssociation---");
+    return TAF_PROP_NET_RESULT_OK;
+}

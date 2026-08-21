@@ -17,6 +17,16 @@ int32_t taf_prop_radio_Init
     return -ENOSYS;
 }
 
+int32_t taf_prop_radio_Deinit
+(
+    void
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+
+    return -ENOSYS;
+}
+
 int32_t taf_prop_radio_InitInstance
 (
     uint32_t instance
@@ -30,7 +40,42 @@ int32_t taf_prop_radio_InitInstance
 int32_t taf_prop_radio_RegisterIndication
 (
     uint32_t instance,
-    uint8_t registration
+    uint8_t registration,
+    taf_prop_radio_DisableIndicationMode_t mode
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+
+    return -ENOSYS;
+}
+
+int32_t taf_prop_radio_SetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_prop_radio_SysInfoIndLimitMask_t limitMask
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+
+    return -ENOSYS;
+}
+
+int32_t taf_prop_radio_GetServiceStatus
+(
+    uint32_t instance,
+    taf_prop_radio_Rat_t *servingRat,
+    taf_prop_radio_RatServiceStatus_t* status
+)
+{
+    PROP_INFO("Function is not implemented in stub PA.");
+
+    return -ENOSYS;
+}
+
+int32_t taf_prop_radio_GetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_prop_radio_SysInfoIndLimitMask_t *limitMask
 )
 {
     PROP_INFO("Function is not implemented in stub PA.");

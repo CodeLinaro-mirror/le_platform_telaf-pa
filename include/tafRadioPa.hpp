@@ -24,6 +24,8 @@ extern "C" {
 #define TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES 256
 #define TAF_PA_RADIO_LTE_BAND_GROUP_COUNT 4
 
+#define TAF_PA_STRENGTH_VALUE_UNKNOWN INVALID_SIGNAL_STRENGTH_VALUE
+
 #define TAF_PA_RADIO_BITMASK_RAT_GSM 0x1
 #define TAF_PA_RADIO_BITMASK_RAT_CDMA 0x2
 #define TAF_PA_RADIO_BITMASK_RAT_UMTS 0x4
@@ -163,7 +165,8 @@ typedef enum
     TAF_PA_RADIO_SIGNAL_METRIC_RSCP = 5,
     TAF_PA_RADIO_SIGNAL_METRIC_RSRP = 6,
     TAF_PA_RADIO_SIGNAL_METRIC_RSRQ = 7,
-    TAF_PA_RADIO_SIGNAL_METRIC_SNR = 8
+    TAF_PA_RADIO_SIGNAL_METRIC_SNR = 8,
+    TAF_PA_RADIO_SIGNAL_METRIC_SS = 9
 } taf_pa_radio_SignalMetric_t;
 
 typedef enum
@@ -391,6 +394,7 @@ typedef struct
 {
     int32_t rssi;
     int32_t ber;
+    int32_t ss;
 } taf_pa_radio_GsmSignalStrengthInfo_t;
 
 typedef struct
@@ -424,6 +428,7 @@ typedef struct
     int32_t rsrq;
     int32_t rsrp;
     int32_t snr;
+    int32_t ss;
 } taf_pa_radio_LteSignalStrengthInfo_t;
 
 typedef struct
@@ -431,6 +436,7 @@ typedef struct
     int32_t rsrq;
     int32_t rsrp;
     int32_t snr;
+    int32_t ss;
 } taf_pa_radio_Nr5gSignalStrengthInfo_t;
 
 typedef struct
@@ -941,6 +947,20 @@ typedef void (*taf_pa_radio_DataAvailSysStatusHdlrFunc_t)
     void* contextPtr
 );
 
+typedef enum
+{
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_NONE = 0,
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_BY_STATE_TOGGLE = (1 << 0),
+   TAF_PA_RADIO_SYS_INFO_IND_LIMIT_BY_SRV_STATUS = (1 << 1)
+} taf_pa_radio_SysInfoIndLimitMask_t;
+
+typedef enum
+{
+    TAF_PA_RADIO_DISABLE_IND_MODE_NONE,
+    TAF_PA_RADIO_DISABLE_IND_MODE_ALL,
+    TAF_PA_RADIO_DISABLE_IND_MODE_SKIP_NAS_SYS_INFO_IND
+} taf_pa_radio_DisableIndicationMode_t;
+
 PA_SHARED pa_result_t taf_pa_radio_Init
 (
     void
@@ -1005,7 +1025,7 @@ PA_SHARED pa_result_t taf_pa_radio_GetVoiceServiceInfo
     taf_pa_radio_VoiceServiceInfo_t* infoPtr
 );
 
-PA_SHARED pa_result_t taf_pa_radio_GetDataServieState
+PA_SHARED pa_result_t taf_pa_radio_GetDataServiceState
 (
     uint32_t instance,
     taf_pa_radio_DataServiceState_t* statePtr
@@ -1305,7 +1325,8 @@ PA_SHARED pa_result_t taf_pa_radio_AddNrIconChangeHandler
 PA_SHARED pa_result_t taf_pa_radio_RegisterIndication
 (
     uint32_t instance,
-    uint8_t registration
+    uint8_t registration,
+    taf_pa_radio_DisableIndicationMode_t mode
 );
 
 PA_SHARED pa_result_t taf_pa_radio_PerformPciNetworkScan
@@ -1375,6 +1396,25 @@ PA_SHARED pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
 (
     uint32_t instance,
     taf_pa_radio_DataRoamingStatus_t* statusPtr
+);
+
+PA_SHARED pa_result_t taf_pa_radio_SetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_pa_radio_SysInfoIndLimitMask_t limitMask
+);
+
+PA_SHARED pa_result_t taf_pa_radio_GetServiceStatus
+(
+    uint32_t instance,
+    taf_pa_radio_Rat_t *servingRatPtr,
+    taf_pa_radio_RatServiceStatus_t *statusPtr
+);
+
+PA_SHARED pa_result_t taf_pa_radio_GetSysInfoIndLimit
+(
+    uint32_t instance,
+    taf_pa_radio_SysInfoIndLimitMask_t *limitMaskPtr
 );
 
 #ifdef __cplusplus

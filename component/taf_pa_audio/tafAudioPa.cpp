@@ -1457,7 +1457,7 @@ pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const ch
     if(!spCall)
     {
         PA_ERROR("No progressing calls");
-        return PA_UNSUPPORTED;
+        return PA_NOT_FOUND;
     }
 
     // Create the callback in a local variable, assign it to dtmfCb under
@@ -1511,7 +1511,7 @@ pa_result_t AudioPAController::stopSignallingDtmfOnTx( uint32_t slotId, taf_pa_a
     }
     if(!spCall) {
         PA_ERROR("No call found on slot Id %d", slotId);
-        return PA_UNSUPPORTED;
+        return PA_NOT_FOUND;
     }
     // Same local-variable pattern as playSignallingDtmfOnTx() — create
     // the callback locally, assign to dtmfCb under dtmfCbMutex_, then pass the local

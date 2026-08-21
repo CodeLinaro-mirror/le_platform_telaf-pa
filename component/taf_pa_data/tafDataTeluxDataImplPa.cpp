@@ -948,3 +948,90 @@ pa_result_t taf::pa::data::TafPaTeluxData::PaGetRoamingStatus
     bGetRoamingStatusInProgress_.store(false);
     return PA_OK;
 }
+
+pa_result_t taf::pa::data::TafPaTeluxData::PaGetServiceStatus
+(
+    const taf::pa::data::SlotId_e slotId,
+    telux::data::ServiceStatus &serviceStatus
+)
+{
+    SlotId teluxSlotId = static_cast<SlotId>(slotId);
+    telux::common::Status status;
+
+    if (dataServingSystemManagersMap_.find(teluxSlotId) == dataServingSystemManagersMap_.end())
+    {
+        PA_ERROR("Serving system manager is not init for slot %d", TO_INT(slotId));
+        return PA_FAULT;
+    }
+
+    // Create shared promise to ensure it outlives this function scope
+    auto promisePtr = std::make_shared<std::promise<
+                std::pair<telux::data::ServiceStatus, telux::common::ErrorCode>>>();
+    auto fut = promisePtr->get_future();
+
+    // Request - lambda captures promisePtr by value (shared ownership)
+    status = dataServingSystemManagersMap_[teluxSlotId]->requestServiceStatus
+                    (
+                        [promisePtr]
+                        (
+                            telux::data::ServiceStatus svcStatus,
+                            telux::common::ErrorCode error
+                        )
+                        {
+                            SET_SDK_THREAD_NAME();
+                            try
+                            {
+                                promisePtr->set_value(std::make_pair(svcStatus, error));
+                            }
+                            catch (const std::future_error& e)
+                            {
+                                PA_ERROR("Future error in requestServiceStatus callback: %s",
+                                         e.what());
+                                try { promisePtr->set_value(std::make_pair(
+                                    telux::data::ServiceStatus{},
+                                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                            }
+                            catch (const std::exception& e)
+                            {
+                                PA_ERROR("Exception in requestServiceStatus callback: %s",
+                                         e.what());
+                                try { promisePtr->set_value(std::make_pair(
+                                    telux::data::ServiceStatus{},
+                                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                            }
+                            catch (...)
+                            {
+                                PA_ERROR("Unknown error in requestServiceStatus callback.");
+                                try { promisePtr->set_value(std::make_pair(
+                                    telux::data::ServiceStatus{},
+                                    telux::common::ErrorCode::INTERNAL_ERROR)); } catch(...) {}
+                            }
+                        }
+                    );
+    if (telux::common::Status::SUCCESS != status)
+    {
+        PA_ERROR("requestServiceStatus failed. Status: %d", TO_INT(status));
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("Waiting for requestServiceStatus callback...");
+
+    std::chrono::seconds span(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT); // 15 seconds
+    std::future_status waitStatus = fut.wait_for(span);
+    if (std::future_status::timeout == waitStatus)
+    {
+        PA_ERROR("requestServiceStatus promise timeout");
+        return PA_TIMEOUT;
+    }
+
+    std::pair<telux::data::ServiceStatus, telux::common::ErrorCode> futRsp;
+    FUTURE_GET_RET_VAL(fut, futRsp, PA_FAULT);
+    if (telux::common::ErrorCode::SUCCESS != futRsp.second)
+    {
+        PA_ERROR("requestServiceStatus callback failed. ErrorCode: %d", TO_INT(futRsp.second));
+        return PA_FAULT;
+    }
+
+    serviceStatus = futRsp.first;
+    return PA_OK;
+}
