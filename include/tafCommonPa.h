@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -150,6 +150,13 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_common_LogDeinit
 #define TAF_PA_FATAL_IF(condition, fmt, ...) if (condition) { TAF_PA_FATAL(fmt, ##__VA_ARGS__) }
 #define TAF_PA_ASSERT(condition) TAF_PA_FATAL_IF(!(condition), "Assert Failed: '%s'", #condition)
 #define TAF_PA_INFO_NOT_IMPLEMENTED() TAF_PA_INFO("%s: not implemented", __func__)
+
+typedef enum
+{
+    TAF_PA_ABSLOT_UNKNOWN = 0,
+    TAF_PA_ABSLOT_A       = 1,
+    TAF_PA_ABSLOT_B       = 2
+} taf_pa_ABSlot_t;
 
 #ifdef __cplusplus
 }

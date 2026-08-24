@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -143,6 +143,11 @@ typedef void (*taf_pa_mrc_ScrubStatusHdlrFunc_t)
 (
     taf_pa_mrc_ScrubStatusIndication_t indication,
     void* contextPtr
+);
+
+TAF_PA_SHARED taf_pa_result_t taf_pa_mrc_GetActiveSlot
+(
+    taf_pa_ABSlot_t* slotPtr
 );
 
 TAF_PA_SHARED taf_pa_result_t taf_pa_mrc_Init

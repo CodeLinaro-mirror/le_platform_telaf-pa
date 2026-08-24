@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+﻿cmake_minimum_required(VERSION 3.16)
 project(taf_pa_mrc LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -23,6 +23,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
 target_link_libraries(${TARGET_NAME} PRIVATE telux_platform)
 target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
 target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_mrc)
+target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_abslot_common)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib

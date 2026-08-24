@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -17,7 +17,7 @@
 
 #include "tafInternalCommonPa.h"
 #include "tafMrcPa.hpp"
-#include "tafInternalCommonPa.h"
+#include "taf_pa_abslot.h"
 
 #include "taf_prop_mrc.h"
 
@@ -305,6 +305,14 @@ PlatformAdaptor& PlatformAdaptor::GetInstance
 {
     static PlatformAdaptor instance;
     return instance;
+}
+
+taf_pa_result_t taf_pa_mrc_GetActiveSlot
+(
+    taf_pa_ABSlot_t* slotPtr
+)
+{
+    return taf_pa_abslot_GetActiveSlot(slotPtr);
 }
 
 static void ProcessStatusHandler

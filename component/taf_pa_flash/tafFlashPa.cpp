@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -11,7 +11,7 @@
 #include <atomic>
 
 #include "tafFlashPa.hpp"
-
+#include "taf_pa_abslot.h"
 #include "taf_prop_flash.h"
 #include "tafInternalCommonPa.h"
 
@@ -56,6 +56,14 @@ static taf_prop_flash_OpenModeBitMask_t ConvertOpenMode
         result |= TAF_PROP_FLASH_BITMASK_OPEN_MODE_READ_WRITE;
 
     return result;
+}
+
+taf_pa_result_t taf_pa_flash_GetActiveSlot
+(
+    taf_pa_ABSlot_t* slotPtr
+)
+{
+    return taf_pa_abslot_GetActiveSlot(slotPtr);
 }
 
 taf_pa_result_t taf_pa_flash_Init()
