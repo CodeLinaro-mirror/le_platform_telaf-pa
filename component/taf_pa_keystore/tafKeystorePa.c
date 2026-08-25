@@ -457,9 +457,27 @@ taf_pa_result_t taf_pa_ks_Init(void)
 
     // Initialize the proprietary keystore
     taf_prop_result_t result = taf_prop_ks_Init();
-    if (result == TAF_PROP_OK)
+    if (result == TAF_PROP_OK || result == TAF_PROP_NOT_IMPLEMENTED)
     {
         atomic_store(&g_keystore_initialized, true);
+    }
+    else
+    {
+        // If Init failed with an error (not OK and not NOT_IMPLEMENTED),
+        // clean up the vtable binding.
+        TAF_PA_ERROR("Keystore initialization failed with result: %d",(int)result);
+
+        taf_prop_result_t unbindResult = taf_prop_file_vtable_Bind(NULL);
+        if (unbindResult == TAF_PROP_OK || unbindResult == TAF_PROP_NOT_IMPLEMENTED)
+        {
+            atomic_store(&g_file_vtable_initialized, false);
+        }
+        else
+        {
+            TAF_PA_ERROR("Failed to unbind RFS vtable during cleanup. Error: %d",(int)unbindResult);
+            // Leave g_file_vtable_initialized unchanged because
+            // the vtable may still be bound.
+        }
     }
 
     return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
