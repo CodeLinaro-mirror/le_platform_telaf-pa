@@ -569,7 +569,7 @@ void tafPaCardListener::onServiceStatusChange
         return;
     }
 
-    PA_WARN("CardManager service status changed to unavailable. Calling taf_prop_sim_Deinit().");
+    PA_WARN("CardManager service status changed to unavailable.");
 
     if (g_propSimInitialized.load(std::memory_order_acquire))
     {
@@ -583,19 +583,8 @@ void tafPaCardListener::onServiceStatusChange
             PA_ERROR("taf_pa_sim_RemoveRefreshChangeHandler() failed with result %d.", removeRes);
         }
 
-        int32_t res = taf_prop_sim_Deinit();
-        if (res == 0)
-        {
-            PA_INFO("taf_prop_sim_Deinit() completed successfully.");
-        }
-        else if (res == -EINVAL)
-        {
-            PA_WARN("taf_prop_sim_Deinit() called before Init() was successfully called.");
-        }
-        else
-        {
-            PA_ERROR("taf_prop_sim_Deinit() failed with result %d.", res);
-        }
+        // taf_prop_sim_Deinit() is not exported by the real proprietary SIM library in
+        // this release; calling it crashes the process with a symbol lookup error.
         g_propSimInitialized.store(false, std::memory_order_release);
     }
 }
@@ -1434,20 +1423,8 @@ pa_result_t taf_pa_sim_Deinit()
     // Step 7: Deinitialize the proprietary SIM platform adaptor if it was initialized.
     if (g_propSimInitialized.load(std::memory_order_acquire))
     {
-        int32_t res = taf_prop_sim_Deinit();
-        if (res == 0)
-        {
-            PA_INFO("taf_prop_sim_Deinit() completed successfully.");
-        }
-        else if (res == -EINVAL)
-        {
-            PA_WARN("taf_prop_sim_Deinit() called before Init() was successfully called.");
-        }
-        else
-        {
-            PA_ERROR("taf_prop_sim_Deinit() failed with result %d.", res);
-            overallResult = TAF_PA_SIM_RESULT_FAULT;
-        }
+        // taf_prop_sim_Deinit() is not exported by the real proprietary SIM library in
+        // this release; calling it crashes the process with a symbol lookup error.
         g_propSimInitialized.store(false, std::memory_order_release);
     }
 
@@ -1482,7 +1459,7 @@ pa_result_t taf_pa_sim_RefreshRegister(
     return Utility::Convert::Result(result);
 }
 
-pa_result_t taf_pa_sim_RefreshUnregister(
+/*pa_result_t taf_pa_sim_RefreshUnregister(
     taf_pa_sim_SessionType_t sessionType,
     uint32_t filesLen,
     taf_pa_sim_RefreshFile_t* files
@@ -1497,7 +1474,7 @@ pa_result_t taf_pa_sim_RefreshUnregister(
     taf_prop_sim_Result_t result = taf_prop_sim_RefreshDeregister(propSessionType,
                                    filesLen, (taf_prop_sim_RefreshFile_t*)files);
     return Utility::Convert::Result(result);
-}
+}*/
 
 pa_result_t taf_pa_sim_RefreshComplete
 (

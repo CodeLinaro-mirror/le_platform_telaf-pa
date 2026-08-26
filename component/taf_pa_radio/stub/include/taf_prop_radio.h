@@ -225,8 +225,7 @@ PROP_SHARED int32_t taf_prop_radio_InitInstance
 PROP_SHARED int32_t taf_prop_radio_RegisterIndication
 (
     uint32_t instance,
-    uint8_t registration,
-    taf_prop_radio_DisableIndicationMode_t mode
+    uint8_t registration
 );
 
 PROP_SHARED int32_t taf_prop_radio_SetSysInfoIndLimit

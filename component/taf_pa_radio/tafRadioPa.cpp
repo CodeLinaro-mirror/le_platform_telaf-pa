@@ -3896,12 +3896,11 @@ void Listener::TelephonyServingSystemListener::onServiceStatusChange
         return;
     }
 
-    PA_WARN("TelephonyServingSystem service status changed to unavailable for instance %d. "
-        "Calling deinit", instance);
+    PA_WARN("TelephonyServingSystem service status changed to unavailable for instance %d.",
+        instance);
 
     if (!pa.propRadioInitialized.load(std::memory_order_acquire))
     {
-        PA_INFO("Skipping taf_prop_radio_Deinit() because prop radio was not initialized.");
         return;
     }
 
@@ -3913,21 +3912,9 @@ void Listener::TelephonyServingSystemListener::onServiceStatusChange
         PA_INFO("Removed prop indication handlers before service deinit.");
     }
 
-    int32_t res = taf_prop_radio_Deinit();
-    if (res == 0)
-    {
-        PA_INFO("taf_prop_radio_Deinit() completed successfully for instance %d.", instance);
-        pa.propRadioInitialized.store(false, std::memory_order_release);
-    }
-    else if (res == -ENOSYS)
-    {
-        PA_INFO("taf_prop_radio_Deinit() not implemented (stub).");
-    }
-    else
-    {
-        PA_ERROR("taf_prop_radio_Deinit() failed with result %d for instance %d.",
-            res, instance);
-    }
+    // taf_prop_radio_Deinit() is not exported by the real proprietary radio library in
+    // this release; calling it crashes the process with a symbol lookup error.
+    pa.propRadioInitialized.store(false, std::memory_order_release);
 }
 
 void Listener::PhoneListener::onVoiceServiceStateChanged
@@ -4151,12 +4138,11 @@ void Listener::DataServingSystemListener::onServiceStatusChange
         return;
     }
 
-    PA_WARN("DataServingSystem service status changed to unavailable for instance %d. "
-        "Calling deinit", instance);
+    PA_WARN("DataServingSystem service status changed to unavailable for instance %d.",
+        instance);
 
     if (!pa.propRadioInitialized.load(std::memory_order_acquire))
     {
-        PA_INFO("Skipping taf_prop_radio_Deinit() because prop radio was not initialized.");
         return;
     }
 
@@ -4168,21 +4154,9 @@ void Listener::DataServingSystemListener::onServiceStatusChange
         PA_INFO("Removed prop indication handlers before service deinit.");
     }
 
-    int32_t res = taf_prop_radio_Deinit();
-    if (res == 0)
-    {
-        PA_INFO("taf_prop_radio_Deinit() completed successfully for instance %d.", instance);
-        pa.propRadioInitialized.store(false, std::memory_order_release);
-    }
-    else if (res == -ENOSYS)
-    {
-        PA_INFO("taf_prop_radio_Deinit() not implemented (stub).");
-    }
-    else
-    {
-        PA_ERROR("taf_prop_radio_Deinit() failed with result %d for instance %d.",
-            res, instance);
-    }
+    // taf_prop_radio_Deinit() is not exported by the real proprietary radio library in
+    // this release; calling it crashes the process with a symbol lookup error.
+    pa.propRadioInitialized.store(false, std::memory_order_release);
 }
 
 void Listener::ImsServingSystemListener::onImsRegStatusChange
@@ -4689,15 +4663,9 @@ pa_result_t taf_pa_radio_Deinit()
     // completed successfully.
     if (pa.propRadioInitialized.load(std::memory_order_acquire))
     {
-        int32_t result = taf_prop_radio_Deinit();
+        // taf_prop_radio_Deinit() is not exported by the real proprietary radio library in
+        // this release; calling it crashes the process with a symbol lookup error.
         pa.propRadioInitialized.store(false, std::memory_order_release);
-
-        if (result == -ENOSYS)
-            PA_INFO("Radio private platform adaptor is not implemented.");
-        else if (result != 0)
-            PA_ERROR("Failed to deinitialize radio private platform adaptor, result = %d.", result);
-        else
-            PA_INFO("Radio private platform adaptor deinitialization is done.");
     }
 
     // Step 6: NOW clear the initialization flag after all cleanup is complete.
@@ -7167,9 +7135,7 @@ pa_result_t taf_pa_radio_RegisterIndication
         return -EINVAL;
     }
 
-    taf_prop_radio_DisableIndicationMode_t propMode = convertDisableIndicationModetoProp(mode);
-
-    int32_t result = taf_prop_radio_RegisterIndication(instance, registration, propMode);
+    int32_t result = taf_prop_radio_RegisterIndication(instance, registration);
     if (result != 0)
         PA_ERROR("Failed to control radio proprietary indications for instance %d.", instance);
 
@@ -7541,72 +7507,4 @@ pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
     *statusPtr = Utility::Convert::RoamingStatus(status);
 
     return result;
-}
-
-taf_prop_radio_SysInfoIndLimitMask_t convertSysInfoIndLimitMasktoProp
-(
-    taf_pa_radio_SysInfoIndLimitMask_t limitMask
-)
-{
-    return static_cast<taf_prop_radio_SysInfoIndLimitMask_t>(limitMask);
-}
-
-pa_result_t taf_pa_radio_SetSysInfoIndLimit
-(
-    uint32_t instance,
-    taf_pa_radio_SysInfoIndLimitMask_t limitMask
-)
-{
-    taf_prop_radio_SysInfoIndLimitMask_t propLimitMask = convertSysInfoIndLimitMasktoProp(limitMask);
-    int32_t result = taf_prop_radio_SetSysInfoIndLimit(instance, propLimitMask);
-    if(result != 0)
-    {
-        return PA_FAULT;
-    }
-    return PA_OK;
-
-}
-
-pa_result_t  taf_pa_radio_GetServiceStatus
-(
-    uint32_t instance,
-    taf_pa_radio_Rat_t *servingRat,
-    taf_pa_radio_RatServiceStatus_t* statusPtr
-)
-{
-    taf_prop_radio_Rat_t propServingRat = TAF_PROP_RADIO_RAT_UNKNOWN;
-    taf_prop_radio_RatServiceStatus_t propStatus = TAF_PROP_RADIO_RAT_SERVICE_STATUS_UNKNOWN;
-
-    int32_t result = taf_prop_radio_GetServiceStatus(instance, &propServingRat, &propStatus);
-    if(result != 0)
-    {
-        return PA_FAULT;
-    }
-
-    if (servingRat != nullptr)
-        *servingRat = Utility::Convert::Rat(propServingRat);
-    if (statusPtr != nullptr)
-        *statusPtr = Utility::Convert::RatServiceStatus(propStatus);
-
-    return PA_OK;
-}
-
-pa_result_t taf_pa_radio_GetSysInfoIndLimit
-(
-    uint32_t instance,
-    taf_pa_radio_SysInfoIndLimitMask_t *limitMaskPtr
-)
-{
-    taf_prop_radio_SysInfoIndLimitMask_t propLimitMask = TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_NONE;
-
-    int32_t result = taf_prop_radio_GetSysInfoIndLimit(instance, &propLimitMask);
-    if(result != 0)
-    {
-        return PA_FAULT;
-    }
-
-    if (limitMaskPtr != nullptr)
-        *limitMaskPtr = static_cast<taf_pa_radio_SysInfoIndLimitMask_t>(propLimitMask);
-
-    return PA_OK;
 }

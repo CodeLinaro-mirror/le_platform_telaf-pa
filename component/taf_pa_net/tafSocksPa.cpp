@@ -11,7 +11,7 @@
 
 
 #include "tafSocksPa.hpp"
-#include "taf_prop_net.hpp"
+#include "taf_ns_net.hpp"
 #include "tafInternalCommonPa.h"
 
 #include <telux/data/DataFactory.hpp>
@@ -218,18 +218,18 @@ void taf_SocksListener::onServiceStatusChange
     {
         PA_INFO("SocksManager service status changed to available. Re-initializing.");
 
-        int32_t nsRes = taf_prop_net_Init();
-        if (nsRes == TAF_PROP_NET_RESULT_OK)
+        int32_t nsRes = taf_ns_net_Init();
+        if (nsRes == TAF_NS_NET_RESULT_OK)
         {
-            PA_INFO("taf_prop_net_Init() completed successfully after service recovery.");
+            PA_INFO("taf_ns_net_Init() completed successfully after service recovery.");
         }
-        else if (nsRes == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
+        else if (nsRes == TAF_NS_NET_RESULT_NOT_IMPLEMENTED)
         {
-            PA_INFO("taf_prop_net_Init() not implemented (stub).");
+            PA_INFO("taf_ns_net_Init() not implemented (stub).");
         }
         else
         {
-            PA_ERROR("taf_prop_net_Init() failed with result %d after service recovery.", nsRes);
+            PA_ERROR("taf_ns_net_Init() failed with result %d after service recovery.", nsRes);
         }
 
         pSocksAdaptor.isInitialized = true;
@@ -247,20 +247,6 @@ void taf_SocksListener::onServiceStatusChange
     pSocksAdaptor.callCbEnableAsync = nullptr;
     pSocksAdaptor.callCbDisableAsync = nullptr;
     pSocksAdaptor.isInitialized = false;
-
-    int32_t nsRes = taf_prop_net_Deinit();
-    if (nsRes == TAF_PROP_NET_RESULT_OK)
-    {
-        PA_INFO("taf_prop_net_Deinit() completed successfully.");
-    }
-    else if (nsRes == TAF_PROP_NET_RESULT_NOT_IMPLEMENTED)
-    {
-        PA_INFO("taf_prop_net_Deinit() not implemented (stub).");
-    }
-    else
-    {
-        PA_ERROR("taf_prop_net_Deinit() failed with result %d.", nsRes);
-    }
 }
 
 pa_result_t taf_pa_socks_Init()
@@ -711,4 +697,3 @@ pa_result_t taf_pa_socks_Deinit()
     PA_INFO("SOCKS platform adaptor deinitialization complete.");
     return PA_OK;
 }
-
