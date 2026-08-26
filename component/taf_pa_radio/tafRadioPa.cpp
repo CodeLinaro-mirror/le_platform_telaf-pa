@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include <time.h>
-#include <errno.h>
-#include <semaphore.h>
+#include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstring>
+#include <future>
 #include <mutex>
 
 #include <telux/common/DeviceConfig.hpp>
@@ -18,8 +20,8 @@
 #include <telux/data/ServingSystemManager.hpp>
 
 #include "tafRadioPa.hpp"
-#include "taf_prop_radio.h"
 #include "tafInternalCommonPa.h"
+#include "taf_prop_radio.h"
 
 using namespace std;
 using namespace telux;
@@ -379,56 +381,101 @@ class Utility
 
         };
 
-        class WaitCallback
-        {
-            public:
-                static void Request
-                (
-                    void
-                );
-
-                static void Scan
-                (
-                    uint32_t instance,
-                    uint32_t timeout
-                );
-        };
 };
 
-class BaseCallback
+template <typename Result>
+class AsyncRequest
 {
     public:
-        sem_t semaphore;
-        taf_pa_result_t result;
+        Result result;
 
-        BaseCallback
+        explicit AsyncRequest
         (
-            void
-        ) : result(TAF_PA_OK)
+            Result initialResult
+        ) : result(initialResult), completionFuture(completion.get_future())
         {
-            sem_init(&semaphore, 0, 0);
         }
 
-        ~BaseCallback
+        void Complete
         (
-            void
+            Result completionResult
         )
         {
-            sem_destroy(&semaphore);
+            bool expected = false;
+            if (!completed.compare_exchange_strong(expected, true,
+                std::memory_order_acq_rel))
+            {
+                return;
+            }
+            result = completionResult;
+            try
+            {
+                completion.set_value(completionResult);
+            }
+            catch (const future_error& error)
+            {
+                TAF_PA_ERROR("Failed to complete async request: %s.", error.what());
+            }
         }
+
+        Result Wait
+        (
+            uint32_t timeout = REQUEST_TIMEOUT
+        )
+        {
+            if (completionFuture.wait_for(chrono::seconds(timeout)) == future_status::timeout)
+            {
+                bool expected = false;
+                if (!completed.compare_exchange_strong(expected, true,
+                    std::memory_order_acq_rel))
+                {
+                    return completionFuture.get();
+                }
+
+                TAF_PA_ERROR("Timeout waiting for async request.");
+                result = static_cast<Result>(TAF_PA_TIMEOUT);
+                return result;
+            }
+
+            try
+            {
+                result = completionFuture.get();
+            }
+            catch (const future_error& error)
+            {
+                TAF_PA_ERROR("Failed to get async request result: %s.", error.what());
+                result = static_cast<Result>(TAF_PA_FAULT);
+            }
+
+            return result;
+        }
+
+    private:
+        std::atomic<bool> completed{false};
+        promise<Result> completion;
+        future<Result> completionFuture;
 };
 
 class RequestCallback :
-    public BaseCallback,
+    public AsyncRequest<taf_pa_result_t>,
     public tel::IOperatingModeCallback,
     public tel::IVoiceServiceStateCallback,
     public tel::ISignalStrengthCallback,
     public tel::ICellularCapabilityCallback
 {
     public:
+        RequestCallback
+        (
+            void
+        ) : AsyncRequest<taf_pa_result_t>(TAF_PA_OK)
+        {
+        }
+
         tel::OperatingMode operatingMode;
         tel::NetworkModeInfo networkModeInfo;
         vector<tel::PreferredNetworkInfo> preferredNetworksInfo;
+        // Keep the SDK manager alive until the asynchronous callback releases this request.
+        shared_ptr<tel::INetworkSelectionManager> networkSelectionManager;
         tel::RatPreference ratPreference;
         tel::ServiceDomainPreference serviceDomainPreference;
         tel::VoiceServiceState voiceServiceState;
@@ -695,32 +742,45 @@ class Listener
             public tel::INetworkSelectionListener
         {
             public:
-                sem_t semaphore;
-                taf_pa_result_t result;
-                vector<tel::OperatorInfo> operatorInfoList;
-
                 NetworkSelectionListener
                 (
                     uint32_t instance
                 ) : BaseListener(instance)
                 {
-                    result = TAF_PA_OK;
-                    sem_init(&semaphore, 0, 0);
                 }
 
-                ~NetworkSelectionListener
+                void Reset
                 (
-                   void
-                )
-                {
-                    sem_destroy(&semaphore);
-                }
+                    void
+                );
 
                 void onNetworkScanResults
                 (
                     tel::NetworkScanStatus status,
                     vector<tel::OperatorInfo> infoList
                 ) override;
+
+                taf_pa_result_t Wait
+                (
+                    uint32_t timeout
+                );
+
+                void Cancel
+                (
+                    taf_pa_result_t cancelResult
+                );
+
+                vector<tel::OperatorInfo> TakeOperatorInfo
+                (
+                    void
+                );
+
+            private:
+                std::mutex mutex;
+                condition_variable condition;
+                bool completed = false;
+                taf_pa_result_t result = TAF_PA_OK;
+                vector<tel::OperatorInfo> operatorInfoList;
         };
 
         class DataServingSystemListener :
@@ -782,38 +842,149 @@ typedef struct
 {
     shared_ptr<Listener::PhoneListener> phone;
     shared_ptr<Listener::TelephonyServingSystemListener> telephonyServingSystems[MAX_INSTANCE];
-    shared_ptr<Listener::NetworkSelectionListener> networkSelections[MAX_INSTANCE];
     shared_ptr<Listener::DataServingSystemListener> dataServingSystems[MAX_INSTANCE];
     shared_ptr<Listener::ImsServingSystemListener> imsServingSystems[MAX_INSTANCE];
 } Listener_t;
-
-typedef struct
-{
-    shared_ptr<RequestCallback> request;
-} Callback_t;
 
 class PlatformAdaptor
 {
     public:
         Indicator_t indicators;
-        Callback_t callbacks;
         Manager_t managers;
         Listener_t listeners;
         std::mutex indicatorMutex;
-        std::mutex apiMutex;
 
         // Thread-safe initialization state management. This flag is set to true only after
         // taf_pa_radio_Init() has completed successfully and reset to false after cleanup.
         std::atomic<bool> gRadioPaInitialized{false};
         std::atomic<bool> propRadioInitialized{false};
         std::atomic<bool> isShuttingDown{false};
+        // Reject responses that belong to an earlier service lifecycle.
+        std::atomic<uint64_t> lifecycleGeneration{0};
         std::mutex initMutex;
+        std::mutex workerRequestMutex;
+        std::mutex networkSelectionMutex;
+        std::mutex networkScanMutex[MAX_INSTANCE];
+        shared_ptr<Listener::NetworkSelectionListener> networkScanListeners[MAX_INSTANCE];
+        // Weak references allow Deinit to cancel active requests without extending their lifetime.
+        vector<weak_ptr<RequestCallback>> shutdownRequests;
 
         static PlatformAdaptor& GetInstance
         (
             void
         );
 };
+
+// Register and submit an asynchronous SDK request under workerRequestMutex. Deinit uses the same
+// mutex to mark shutdown and complete every registered request with TAF_PA_TERMINATED. This closes the
+// race where Deinit could release managers between the shutdown check and SDK request submission.
+// The request stores a shared manager reference, so the manager remains valid for a late callback.
+// The mutex is released immediately after submission; waiting for the response never blocks
+// Deinit. Weak references let completed requests expire normally and are removed on the next call.
+template <typename StartRequest>
+static taf_pa_result_t StartShutdownAwareRequest
+(
+    const shared_ptr<tel::INetworkSelectionManager>& networkSelectionManager,
+    const shared_ptr<RequestCallback>& request,
+    uint64_t generation,
+    StartRequest startRequest
+)
+{
+    auto& pa = PlatformAdaptor::GetInstance();
+    std::lock_guard<std::mutex> lock(pa.workerRequestMutex);
+    if (pa.isShuttingDown.load(std::memory_order_acquire) ||
+        generation != pa.lifecycleGeneration.load(std::memory_order_acquire))
+    {
+        return TAF_PA_TERMINATED;
+    }
+    request->networkSelectionManager = networkSelectionManager;
+    if (request->networkSelectionManager == nullptr)
+    {
+        return TAF_PA_FAULT;
+    }
+
+    pa.shutdownRequests.erase(std::remove_if(pa.shutdownRequests.begin(),
+        pa.shutdownRequests.end(), [](const weak_ptr<RequestCallback>& item)
+        {
+            return item.expired();
+        }), pa.shutdownRequests.end());
+    pa.shutdownRequests.emplace_back(request);
+
+    return startRequest() == common::Status::SUCCESS ? TAF_PA_OK : TAF_PA_FAULT;
+}
+
+static shared_ptr<tel::INetworkSelectionManager> GetNetworkSelectionManager
+(
+    uint32_t instance
+)
+{
+    if (instance >= MAX_INSTANCE)
+    {
+        TAF_PA_ERROR("Invalid instance %d.", instance);
+        return nullptr;
+    }
+
+    auto& pa = PlatformAdaptor::GetInstance();
+    std::lock_guard<std::mutex> lock(pa.networkSelectionMutex);
+
+    if (pa.isShuttingDown.load(std::memory_order_acquire) ||
+        !pa.gRadioPaInitialized.load(std::memory_order_acquire))
+    {
+        return nullptr;
+    }
+
+    auto registerScanListener = [&](const shared_ptr<tel::INetworkSelectionManager>& manager)
+    {
+        if (pa.networkScanListeners[instance] != nullptr)
+        {
+            return;
+        }
+
+        auto listener = make_shared<Listener::NetworkSelectionListener>(instance);
+        auto status = manager->registerListener(listener);
+        if (status == common::Status::ALREADY)
+        {
+            manager->deregisterListener(listener);
+            status = manager->registerListener(listener);
+        }
+        if (status == common::Status::SUCCESS)
+        {
+            pa.networkScanListeners[instance] = listener;
+            TAF_PA_INFO("Persistent network scan listener %d is registered.", instance);
+        }
+        else
+        {
+            TAF_PA_WARN("Failed to register persistent network scan listener %d, status %d.",
+                instance, static_cast<int>(status));
+        }
+    };
+
+    if (pa.managers.networkSelections[instance] != nullptr)
+    {
+        return pa.managers.networkSelections[instance];
+    }
+
+    auto& phoneFactory = tel::PhoneFactory::getInstance();
+    int slot = Utility::Convert::InstanceToSlot(instance);
+
+    TAF_PA_INFO("Lazily creating NetworkSelectionManager for instance %d.", instance);
+
+    SERVICE_PROMISE_AND_CALLBACK(networkSelection)
+    auto networkSelectionManager = phoneFactory.getNetworkSelectionManager(slot,
+        networkSelectionCallback);
+    SERVICE_READY(networkSelection, networkSelectionManager)
+
+    if (networkSelectionManager == nullptr ||
+        pa.isShuttingDown.load(std::memory_order_acquire))
+    {
+        TAF_PA_ERROR("Failed to create NetworkSelectionManager for instance %d.", instance);
+        return nullptr;
+    }
+
+    pa.managers.networkSelections[instance] = networkSelectionManager;
+    registerScanListener(networkSelectionManager);
+    return networkSelectionManager;
+}
 
 taf_pa_result_t Utility::Convert::StringToU16
 (
@@ -952,7 +1123,7 @@ uint32_t Utility::Convert::PhoneToInstance
     switch (phone)
     {
         case 1:
-            return TAF_PA_OK;
+            return 0;
         case 2:
             return 1;
         default:
@@ -1124,7 +1295,7 @@ taf_pa_radio_RatBitMask_t Utility::Convert::Rat
     tel::RatMask bitmask
 )
 {
-    taf_pa_radio_RatBitMask_t result = TAF_PA_OK;
+    taf_pa_radio_RatBitMask_t result = 0;
 
     if (bitmask[tel::RatType::GSM])
         result |= TAF_PA_RADIO_BITMASK_RAT_GSM;
@@ -1319,7 +1490,7 @@ taf_pa_radio_ServiceDomainBitMask_t Utility::Convert::ServiceDomainPreference
             TAF_PA_ERROR("Unknown service domain preference.");
     }
 
-    return TAF_PA_OK;
+    return 0;
 }
 
 tel::ServiceDomainPreference Utility::Convert::ServiceDomainPreference
@@ -2225,7 +2396,7 @@ uint32_t Utility::Convert::LteActiveBand
             TAF_PA_DEBUG("Unknown LTE active band.");
     }
 
-    return TAF_PA_OK;
+    return 0;
 }
 
 uint32_t Utility::Convert::Nr5gActiveBand
@@ -2343,7 +2514,7 @@ uint32_t Utility::Convert::Nr5gActiveBand
             TAF_PA_DEBUG("Unknown NR5G active band.");
     }
 
-    return TAF_PA_OK;
+    return 0;
 }
 
 taf_pa_radio_Bandwidth_t Utility::Convert::BandWidth
@@ -2680,7 +2851,7 @@ void Utility::Convert::CellInfoList
                             taf_pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].gsmInfo.plmnId.mcc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
@@ -2689,7 +2860,7 @@ void Utility::Convert::CellInfoList
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].gsmInfo.plmnId.mnc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
@@ -2769,7 +2940,7 @@ void Utility::Convert::CellInfoList
                             taf_pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].umtsInfo.plmnId.mcc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
@@ -2778,7 +2949,7 @@ void Utility::Convert::CellInfoList
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].umtsInfo.plmnId.mnc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
@@ -2822,7 +2993,7 @@ void Utility::Convert::CellInfoList
                             taf_pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.plmnId.mcc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
@@ -2831,7 +3002,7 @@ void Utility::Convert::CellInfoList
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].tdscdmaInfo.plmnId.mnc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
@@ -2879,7 +3050,7 @@ void Utility::Convert::CellInfoList
                             taf_pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].lteInfo.plmnId.mcc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
@@ -2888,7 +3059,7 @@ void Utility::Convert::CellInfoList
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].lteInfo.plmnId.mnc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
@@ -2932,7 +3103,7 @@ void Utility::Convert::CellInfoList
                             taf_pa_result_t result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileCountryCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].nr5gInfo.plmnId.mcc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MCC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
@@ -2941,7 +3112,7 @@ void Utility::Convert::CellInfoList
                             result = Utility::Convert::StringToU16(
                                 cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
                                 &listInfoPtr->cellLocInfo[infoCount].nr5gInfo.plmnId.mnc);
-                            if (result != 0)
+                            if (result != TAF_PA_OK)
                             {
                                 TAF_PA_ERROR("Failed to convert MNC %s.",
                                     cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
@@ -2990,88 +3161,23 @@ taf_pa_radio_NrIcon_t Utility::Convert::NrIcon
     return TAF_PA_RADIO_NR_ICON_NONE;
 }
 
-void Utility::WaitCallback::Request
-(
-    void
-)
-{
-    auto& pa = PlatformAdaptor::GetInstance();
-    if (pa.callbacks.request == nullptr || pa.isShuttingDown.load(std::memory_order_acquire))
-    {
-        TAF_PA_WARN("Skipping wait for request callback during radio PA shutdown.");
-        return;
-    }
-
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += REQUEST_TIMEOUT;
-
-    int result = sem_timedwait(&pa.callbacks.request->semaphore, &ts);
-    if (result != 0)
-    {
-        if (errno == ETIMEDOUT)
-        {
-            TAF_PA_ERROR("Timeout to request.");
-            pa.callbacks.request->result = TAF_PA_TIMEOUT;
-        }
-        else
-        {
-            TAF_PA_ERROR("Wait on semaphore with error code: %d.", result);
-            pa.callbacks.request->result = TAF_PA_FAULT;
-        }
-    }
-}
-
-void Utility::WaitCallback::Scan
-(
-    uint32_t instance,
-    uint32_t timeout
-)
-{
-    auto& pa = PlatformAdaptor::GetInstance();
-    if (instance >= MAX_INSTANCE || pa.listeners.networkSelections[instance] == nullptr ||
-        pa.isShuttingDown.load(std::memory_order_acquire))
-    {
-        TAF_PA_WARN("Skipping wait for scan callback during radio PA shutdown.");
-        return;
-    }
-
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += timeout;
-
-    int result = sem_timedwait(&pa.listeners.networkSelections[instance]->semaphore, &ts);
-    if (result != 0)
-    {
-        if (errno == ETIMEDOUT)
-        {
-            TAF_PA_ERROR("Timeout to request.");
-            pa.listeners.networkSelections[instance]->result = TAF_PA_TIMEOUT;
-        }
-        else
-        {
-            TAF_PA_ERROR("Wait on semaphore with error code: %d.", result);
-            pa.listeners.networkSelections[instance]->result = TAF_PA_FAULT;
-        }
-    }
-}
-
 void RequestCallback::CommonResponse
 (
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::operatingModeResponse
@@ -3080,18 +3186,19 @@ void RequestCallback::operatingModeResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         operatingMode = mode;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::NetworkModeInfoResponse
@@ -3100,18 +3207,19 @@ void RequestCallback::NetworkModeInfoResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         networkModeInfo = info;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::PreferredNetworksResponse
@@ -3121,19 +3229,20 @@ void RequestCallback::PreferredNetworksResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         preferredNetworksInfo.clear();
         preferredNetworksInfo.assign(nonStaticInfo.begin(), nonStaticInfo.end());
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::RatPreferenceResponse
@@ -3142,18 +3251,19 @@ void RequestCallback::RatPreferenceResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         ratPreference = preference;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::ServiceDomainPreferenceResponse
@@ -3162,18 +3272,19 @@ void RequestCallback::ServiceDomainPreferenceResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         serviceDomainPreference = preference;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::voiceServiceStateResponse
@@ -3182,23 +3293,24 @@ void RequestCallback::voiceServiceStateResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (infoPtr == nullptr)
     {
         TAF_PA_ERROR("infoPtr is nullptr.");
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         voiceServiceState = infoPtr->getVoiceServiceState();
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::signalStrengthResponse
@@ -3207,23 +3319,24 @@ void RequestCallback::signalStrengthResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (strengthPtr == nullptr)
     {
         TAF_PA_ERROR("strengthPtr is nullptr.");
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         signalStrengthPtr = strengthPtr;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::DataServiceStatusResponse
@@ -3232,18 +3345,19 @@ void RequestCallback::DataServiceStatusResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         dataServiceState = status.serviceState;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::CellInfoListResponse
@@ -3252,20 +3366,21 @@ void RequestCallback::CellInfoListResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         cellInfoPtrList.clear();
         cellInfoPtrList.assign(infoPtrList.begin(), infoPtrList.end());
 
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::OperatorInfoResponse
@@ -3274,17 +3389,18 @@ void RequestCallback::OperatorInfoResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         operatorInfo = info;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::RfBandCapabilityResponse
@@ -3293,23 +3409,24 @@ void RequestCallback::RfBandCapabilityResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (listPtr == nullptr)
     {
         TAF_PA_ERROR("listPtr is nullptr.");
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         rfBandCapabilityPtr = listPtr;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::RfBandPreferenceResponse
@@ -3318,23 +3435,24 @@ void RequestCallback::RfBandPreferenceResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (listPtr == nullptr)
     {
         TAF_PA_ERROR("listPtr is nullptr.");
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         rfBandPreferencePtr = listPtr;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::ImsRegistrationInfoResponse
@@ -3343,18 +3461,19 @@ void RequestCallback::ImsRegistrationInfoResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         imsRegistrationInfo = info;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::ImsServiceInfoResponse
@@ -3363,18 +3482,19 @@ void RequestCallback::ImsServiceInfoResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         imsServiceInfo = info;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::ImsPdpStatusResponse
@@ -3383,18 +3503,19 @@ void RequestCallback::ImsPdpStatusResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         imsPdpStatusInfo = info;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::ImsVonrStatusResponse
@@ -3404,18 +3525,19 @@ void RequestCallback::ImsVonrStatusResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         isVoNREnabled = enable;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::ImsServiceConfigResponse
@@ -3425,19 +3547,20 @@ void RequestCallback::ImsServiceConfigResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     imsServiceConfigError = error;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         imsServiceConfig = config;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::ImsSigUserAgentResponse
@@ -3447,18 +3570,19 @@ void RequestCallback::ImsSigUserAgentResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         imsSipUserAgent = str;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::cellularCapabilityResponse
@@ -3467,18 +3591,19 @@ void RequestCallback::cellularCapabilityResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         cellularCapabilityInfo = info;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::RFBandInfoResponse
@@ -3487,18 +3612,19 @@ void RequestCallback::RFBandInfoResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         rfBandInfo = info;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 void RequestCallback::NrIconTypeResponse
@@ -3507,18 +3633,19 @@ void RequestCallback::NrIconTypeResponse
     common::ErrorCode error
 )
 {
+    taf_pa_result_t completionResult = TAF_PA_OK;
     if (error != common::ErrorCode::SUCCESS)
     {
         TAF_PA_ERROR("Error: %s.", common::Utils::getErrorCodeAsString(error).c_str());
-        result = TAF_PA_FAULT;
+        completionResult = TAF_PA_FAULT;
     }
     else
     {
         nrIconType = type;
-        result = TAF_PA_OK;
+        completionResult = TAF_PA_OK;
     }
 
-    sem_post(&semaphore);
+    Complete(completionResult);
 }
 
 static void RatSvcStatusHandler
@@ -3542,6 +3669,87 @@ static void DataAvailSysStatusHandler
     void* contextPtr
 );
 
+void Listener::NetworkSelectionListener::Reset
+(
+    void
+)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    completed = false;
+    result = TAF_PA_OK;
+    operatorInfoList.clear();
+}
+
+void Listener::NetworkSelectionListener::onNetworkScanResults
+(
+    tel::NetworkScanStatus status,
+    vector<tel::OperatorInfo> infoList
+)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    if (completed)
+    {
+        return;
+    }
+
+    if (status == tel::NetworkScanStatus::FAILED)
+    {
+        completed = true;
+        result = TAF_PA_FAULT;
+        condition.notify_all();
+        return;
+    }
+
+    operatorInfoList.insert(operatorInfoList.end(), infoList.begin(), infoList.end());
+    if (status == tel::NetworkScanStatus::COMPLETE)
+    {
+        completed = true;
+        result = TAF_PA_OK;
+        condition.notify_all();
+    }
+}
+
+taf_pa_result_t Listener::NetworkSelectionListener::Wait
+(
+    uint32_t timeout
+)
+{
+    std::unique_lock<std::mutex> lock(mutex);
+    if (!condition.wait_for(lock, chrono::seconds(timeout), [this]
+        {
+            return completed;
+        }))
+    {
+        completed = true;
+        result = TAF_PA_TIMEOUT;
+    }
+    return result;
+}
+
+void Listener::NetworkSelectionListener::Cancel
+(
+    taf_pa_result_t cancelResult
+)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    if (completed)
+    {
+        return;
+    }
+    completed = true;
+    result = cancelResult;
+    condition.notify_all();
+}
+
+vector<tel::OperatorInfo> Listener::NetworkSelectionListener::TakeOperatorInfo
+(
+    void
+)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return std::move(operatorInfoList);
+}
+
 void Listener::TelephonyServingSystemListener::onNetworkRejection
 (
     tel:: NetworkRejectInfo info
@@ -3564,13 +3772,13 @@ void Listener::TelephonyServingSystemListener::onNetworkRejection
         TAF_PA_DEBUG("Network reject cause %d.", info.rejectCause);
         indication.plmnIdValid = 1;
         taf_pa_result_t result = Utility::Convert::StringToU16(info.mcc, &indication.plmnId.mcc);
-        if (result != 0)
+        if (result != TAF_PA_OK)
         {
             TAF_PA_ERROR("Failed to convert MCC %s.",info.mcc.c_str());
             indication.plmnIdValid = 0;
         }
         result = Utility::Convert::StringToU16(info.mnc, &indication.plmnId.mnc);
-        if (result != 0)
+        if (result != TAF_PA_OK)
         {
             TAF_PA_ERROR("Failed to convert MNC %s.",info.mnc.c_str());
             indication.plmnIdValid = 0;
@@ -3720,32 +3928,6 @@ void Listener::TelephonyServingSystemListener::onServiceStatusChange
     {
         TAF_PA_ERROR("taf_prop_radio_Deinit() failed with result %d for instance %d.",
             (int)res, instance);
-    }
-}
-
-void Listener::NetworkSelectionListener::onNetworkScanResults
-(
-    tel::NetworkScanStatus status,
-    vector<tel::OperatorInfo> infoList
-)
-{
-    if (status == tel::NetworkScanStatus::FAILED)
-    {
-        TAF_PA_ERROR("Network scan failed.");
-        result = TAF_PA_FAULT;
-        sem_post(&semaphore);
-    }
-    else
-    {
-        for (auto info : infoList)
-            operatorInfoList.emplace_back(info);
-
-        if (status == tel::NetworkScanStatus::COMPLETE)
-        {
-            TAF_PA_INFO("Network scan completed.");
-            result = TAF_PA_OK;
-            sem_post(&semaphore);
-        }
     }
 }
 
@@ -4231,7 +4413,6 @@ static void DataAvailSysStatusHandler
 
 taf_pa_result_t taf_pa_radio_Init()
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     auto& pa = PlatformAdaptor::GetInstance();
 
     std::lock_guard<std::mutex> lock(pa.initMutex);
@@ -4257,8 +4438,6 @@ taf_pa_result_t taf_pa_radio_Init()
         TAF_PA_INFO("MultiSim not supported.");
     }
 
-    pa.callbacks.request = make_shared<RequestCallback>();
-
     SERVICE_PROMISE_AND_CALLBACK(phone)
     pa.managers.phone = phoneFactory.getPhoneManager(phoneCallback);
     SERVICE_READY(phone,pa.managers.phone)
@@ -4272,12 +4451,6 @@ taf_pa_result_t taf_pa_radio_Init()
     {
         int slot = Utility::Convert::InstanceToSlot(i);
         SlotId slotId = Utility::Convert::SlotToSlotId(slot);
-
-        SERVICE_PROMISE_AND_CALLBACK(networkSelection)
-        pa.managers.networkSelections[i] = phoneFactory.getNetworkSelectionManager(slot,
-            networkSelectionCallback);
-        SERVICE_READY(networkSelection,pa.managers.networkSelections[i])
-        pa.listeners.networkSelections[i] = make_shared<Listener::NetworkSelectionListener>(i);
 
         SERVICE_PROMISE_AND_CALLBACK(telephonyServingSystem)
         pa.managers.telephonyServingSystems[i] = phoneFactory.getServingSystemManager(slot,
@@ -4308,7 +4481,8 @@ taf_pa_result_t taf_pa_radio_Init()
         {
             result = taf_prop_radio_InitInstance(i);
             if (result != TAF_PROP_OK)
-                TAF_PA_ERROR("Failed to initializate private instance %d, result = %d.", i, (int)result);
+                TAF_PA_ERROR("Failed to initializate private instance %d, result = %d.", i,
+                    (int)result);
             else
                 TAF_PA_INFO("Radio private instance %d initialization is done.", i);
         }
@@ -4328,7 +4502,6 @@ taf_pa_result_t taf_pa_radio_Init()
 
 taf_pa_result_t taf_pa_radio_Deinit()
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     TAF_PA_INFO("Starting radio platform adaptor deinitialization...");
     auto& pa = PlatformAdaptor::GetInstance();
 
@@ -4344,7 +4517,31 @@ taf_pa_result_t taf_pa_radio_Deinit()
     // NOTE: gRadioPaInitialized is NOT cleared here. It remains true during cleanup to ensure
     // that any in-flight callbacks or API calls can safely access resources. It will be cleared
     // after all cleanup is complete (Step 6 below).
-    pa.isShuttingDown.store(true, std::memory_order_release);
+    // Mark shutdown and wake future-based workers before releasing their managers. Complete()
+    // accepts only the first result, so an SDK callback arriving later is safely ignored.
+    {
+        std::lock_guard<std::mutex> lock(pa.workerRequestMutex);
+        pa.isShuttingDown.store(true, std::memory_order_release);
+        pa.lifecycleGeneration.fetch_add(1, std::memory_order_acq_rel);
+        for (auto& request : pa.shutdownRequests)
+        {
+            if (auto requestPtr = request.lock())
+            {
+                requestPtr->Complete(TAF_PA_TERMINATED);
+            }
+        }
+        pa.shutdownRequests.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(pa.networkSelectionMutex);
+        for (auto& listener : pa.networkScanListeners)
+        {
+            if (listener != nullptr)
+            {
+                listener->Cancel(TAF_PA_TERMINATED);
+            }
+        }
+    }
 
     // Step 1: Clear all indicator handler function pointers and context pointers
     // so no further indication callbacks are dispatched after this point.
@@ -4433,18 +4630,6 @@ taf_pa_result_t taf_pa_radio_Deinit()
             TAF_PA_WARN("Skipping dataServingSystem[%d] deregister - manager not available", i);
         }
 
-        if (pa.managers.networkSelections[i] != nullptr &&
-            pa.listeners.networkSelections[i] != nullptr &&
-            pa.managers.networkSelections[i]->getServiceStatus() ==
-            common::ServiceStatus::SERVICE_AVAILABLE)
-        {
-            pa.managers.networkSelections[i]->deregisterListener(
-                pa.listeners.networkSelections[i]);
-        }
-        else
-        {
-            TAF_PA_WARN("Skipping networkSelection[%d] deregister - manager not available", i);
-        }
     }
 
     // Deregister the phone listener (shared across all instances).
@@ -4467,7 +4652,6 @@ taf_pa_result_t taf_pa_radio_Deinit()
     for (uint32_t i = 0; i < MAX_INSTANCE; i++)
     {
         pa.listeners.telephonyServingSystems[i].reset();
-        pa.listeners.networkSelections[i].reset();
         pa.listeners.imsServingSystems[i].reset();
         pa.listeners.dataServingSystems[i].reset();
     }
@@ -4477,9 +4661,27 @@ taf_pa_result_t taf_pa_radio_Deinit()
     TAF_PA_INFO("Resetting manager shared pointers");
     pa.managers.phone.reset();
     pa.managers.imsSetting.reset();
+    {
+        std::lock_guard<std::mutex> lock(pa.networkSelectionMutex);
+        for (uint32_t i = 0; i < MAX_INSTANCE; i++)
+        {
+            if (pa.managers.networkSelections[i] != nullptr &&
+                pa.networkScanListeners[i] != nullptr)
+            {
+                auto status = pa.managers.networkSelections[i]->deregisterListener(
+                    pa.networkScanListeners[i]);
+                if (status != common::Status::SUCCESS && status != common::Status::NOSUCH)
+                {
+                    TAF_PA_WARN("Failed to deregister persistent network scan listener %d, status %d.",
+                        i, static_cast<int>(status));
+                }
+            }
+            pa.networkScanListeners[i].reset();
+            pa.managers.networkSelections[i].reset();
+        }
+    }
     for (uint32_t i = 0; i < MAX_INSTANCE; i++)
     {
-        pa.managers.networkSelections[i].reset();
         pa.managers.telephonyServingSystems[i].reset();
         pa.managers.imsServingSystems[i].reset();
         pa.managers.dataServingSystems[i].reset();
@@ -4495,7 +4697,8 @@ taf_pa_result_t taf_pa_radio_Deinit()
         if (result == TAF_PROP_NOT_IMPLEMENTED)
             TAF_PA_INFO("Radio private platform adaptor is not implemented.");
         else if (result != TAF_PROP_OK)
-            TAF_PA_ERROR("Failed to deinitialize radio private platform adaptor, result = %d.", (int)result);
+            TAF_PA_ERROR("Failed to deinitialize radio private platform adaptor, result = %d.",
+                (int)result);
         else
             TAF_PA_INFO("Radio private platform adaptor deinitialization is done.");
     }
@@ -4508,10 +4711,6 @@ taf_pa_result_t taf_pa_radio_Deinit()
     TAF_PA_INFO("Clearing initialization flag after cleanup complete");
     pa.gRadioPaInitialized.store(false, std::memory_order_release);
 
-    // Step 7: Keep the request callback object alive until process termination.  TelSDK may still
-    // deliver a late async response after manager/listener cleanup; destroying the callback here can
-    // leave those late deliveries with a dangling callback target.
-    TAF_PA_INFO("Keeping request callback object until process termination to avoid late callback race");
     TAF_PA_INFO("Radio platform adaptor deinitialization complete.");
     return TAF_PA_OK;
 }
@@ -4522,9 +4721,8 @@ taf_pa_result_t taf_pa_radio_GetOperatingMode
     taf_pa_radio_OperatingMode_t* modePtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     auto& pa = PlatformAdaptor::GetInstance();
-    auto& request = pa.callbacks.request;
+    auto request = make_shared<RequestCallback>();
 
     if (modePtr == nullptr)
     {
@@ -4545,11 +4743,11 @@ taf_pa_result_t taf_pa_radio_GetOperatingMode
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
-    *modePtr = Utility::Convert::OperatingMode(pa.callbacks.request->operatingMode);
+    *modePtr = Utility::Convert::OperatingMode(request->operatingMode);
 
     return TAF_PA_OK;
 }
@@ -4560,13 +4758,12 @@ taf_pa_result_t taf_pa_radio_SetOperatingMode
     taf_pa_radio_OperatingMode_t mode
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     auto& pa = PlatformAdaptor::GetInstance();
-    auto& request = pa.callbacks.request;
+    auto request = make_shared<RequestCallback>();
 
     tel::OperatingMode operatingMode = tel::OperatingMode::ONLINE;
     taf_pa_result_t paResult = Utility::Convert::OperatingMode(mode, &operatingMode);
-    if (paResult != 0)
+    if (paResult != TAF_PA_OK)
     {
         TAF_PA_ERROR("Failed to convert operating mode.");
         return paResult;
@@ -4578,7 +4775,10 @@ taf_pa_result_t taf_pa_radio_SetOperatingMode
         return TAF_PA_FAULT;
     }
 
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
     auto result = pa.managers.phone->setOperatingMode(operatingMode, callback);
     if (result != common::Status::SUCCESS)
     {
@@ -4586,7 +4786,7 @@ taf_pa_result_t taf_pa_radio_SetOperatingMode
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
     return request->result;
 }
@@ -4597,7 +4797,6 @@ taf_pa_result_t taf_pa_radio_SetNetworkSelectionPreference
     taf_pa_radio_NetworkSelectionPreference_t* preferencePtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (preferencePtr == nullptr)
     {
         TAF_PA_ERROR("preferencePtr is nullptr.");
@@ -4611,7 +4810,17 @@ taf_pa_result_t taf_pa_radio_SetNetworkSelectionPreference
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
-    if (pa.managers.networkSelections[instance] == nullptr)
+    // Capture the lifecycle before submission so a rapid stop/start cannot reuse this request.
+    uint64_t generation = pa.lifecycleGeneration.load(std::memory_order_acquire);
+    if (pa.isShuttingDown.load(std::memory_order_acquire) ||
+        !pa.gRadioPaInitialized.load(std::memory_order_acquire))
+    {
+        TAF_PA_ERROR("Radio platform adaptor is not available.");
+        return TAF_PA_FAULT;
+    }
+
+    auto networkSelectionManager = GetNetworkSelectionManager(instance);
+    if (networkSelectionManager == nullptr)
     {
         TAF_PA_ERROR("Network selection manager %d is nullptr.", instance);
         return TAF_PA_FAULT;
@@ -4636,20 +4845,31 @@ taf_pa_result_t taf_pa_radio_SetNetworkSelectionPreference
             return TAF_PA_BAD_PARAMETER;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
-    auto result = pa.managers.networkSelections[instance]->setNetworkSelectionMode(mode, mcc, mnc,
-        callback);
-    if (result != common::Status::SUCCESS)
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
+    // Submission and shutdown registration happen atomically with respect to Deinit.
+    taf_pa_result_t result = StartShutdownAwareRequest(networkSelectionManager, request, generation, [&]
+    {
+        return request->networkSelectionManager->setNetworkSelectionMode(
+            mode, mcc, mnc, callback);
+    });
+    if (result != TAF_PA_OK)
     {
         TAF_PA_ERROR("Failed to set network selection preference with network selection manager %d.",
             instance);
-        return TAF_PA_FAULT;
+        return result;
     }
 
-    Utility::WaitCallback::Request();
-
-    return request->result;
+    result = request->Wait();
+    if (generation != pa.lifecycleGeneration.load(std::memory_order_acquire))
+    {
+        TAF_PA_WARN("Discarding network selection response after radio PA shutdown.");
+        return TAF_PA_TERMINATED;
+    }
+    return result;
 }
 
 taf_pa_result_t taf_pa_radio_GetNetworkSelectionPreference
@@ -4658,7 +4878,6 @@ taf_pa_result_t taf_pa_radio_GetNetworkSelectionPreference
     taf_pa_radio_NetworkSelectionPreference_t* preferencePtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (preferencePtr == nullptr)
     {
         TAF_PA_ERROR("preferencePtr is nullptr.");
@@ -4671,17 +4890,19 @@ taf_pa_result_t taf_pa_radio_GetNetworkSelectionPreference
         return TAF_PA_BAD_PARAMETER;
     }
 
-    auto& pa = PlatformAdaptor::GetInstance();
-    if (pa.managers.networkSelections[instance] == nullptr)
+    auto networkSelectionManager = GetNetworkSelectionManager(instance);
+    if (networkSelectionManager == nullptr)
     {
         TAF_PA_ERROR("Network selection manager %d is nullptr.", instance);
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::NetworkModeInfoResponse, request, placeholders::_1,
-        placeholders::_2);
-    auto result = pa.managers.networkSelections[instance]->requestNetworkSelectionMode(callback);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](tel::NetworkModeInfo info, common::ErrorCode error)
+    {
+        request->NetworkModeInfoResponse(info, error);
+    };
+    auto result = networkSelectionManager->requestNetworkSelectionMode(callback);
     if (result != common::Status::SUCCESS)
     {
         TAF_PA_ERROR("Failed to get network selection preference with network selection manager %d.",
@@ -4689,7 +4910,11 @@ taf_pa_result_t taf_pa_radio_GetNetworkSelectionPreference
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    taf_pa_result_t waitResult = request->Wait();
+    if (waitResult != TAF_PA_OK)
+    {
+        return waitResult;
+    }
 
     taf_pa_result_t paResult = TAF_PA_OK;
     switch (request->networkModeInfo.mode)
@@ -4698,14 +4923,14 @@ taf_pa_result_t taf_pa_radio_GetNetworkSelectionPreference
             preferencePtr->mode = TAF_PA_RADIO_NETWORK_SELECTION_MODE_MANUAL;
             paResult = Utility::Convert::StringToU16(request->networkModeInfo.mcc,
                 &preferencePtr->mcc);
-            if (paResult != 0)
+            if (paResult != TAF_PA_OK)
             {
                 TAF_PA_ERROR("Failed to convert MCC %s.", request->networkModeInfo.mcc.c_str());
                 return paResult;
             }
             paResult = Utility::Convert::StringToU16(request->networkModeInfo.mnc,
                 &preferencePtr->mnc);
-            if (paResult != 0)
+            if (paResult != TAF_PA_OK)
             {
                 TAF_PA_ERROR("Failed to convert MNC %s.", request->networkModeInfo.mnc.c_str());
                 return paResult;
@@ -4730,7 +4955,6 @@ taf_pa_result_t taf_pa_radio_SetPreferredNetwork
     taf_pa_radio_PreferredNetworkConfig_t* configPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (configPtr == nullptr)
     {
         TAF_PA_ERROR("configPtr is nullptr.");
@@ -4743,8 +4967,8 @@ taf_pa_result_t taf_pa_radio_SetPreferredNetwork
         return TAF_PA_BAD_PARAMETER;
     }
 
-    auto& pa = PlatformAdaptor::GetInstance();
-    if (pa.managers.networkSelections[instance] == nullptr)
+    auto networkSelectionManager = GetNetworkSelectionManager(instance);
+    if (networkSelectionManager == nullptr)
     {
         TAF_PA_ERROR("Network selection manager %d is nullptr.", instance);
         return TAF_PA_FAULT;
@@ -4762,38 +4986,48 @@ taf_pa_result_t taf_pa_radio_SetPreferredNetwork
         networks.push_back(info);
     }
 
-    auto& request = pa.callbacks.request;
+    auto request = make_shared<RequestCallback>();
     common::Status result = common::Status::SUCCESS;
     if (configPtr->clearPrevious == 0)
     {
-        auto callback1 = bind(&RequestCallback::PreferredNetworksResponse, request,
-            placeholders::_1, placeholders::_2, placeholders::_3);
-        result = pa.managers.networkSelections[instance]->requestPreferredNetworks(callback1);
+        auto callback1 = [request]
+        (
+            vector<tel::PreferredNetworkInfo> nonStaticInfo,
+            vector<tel::PreferredNetworkInfo> staticInfo,
+            common::ErrorCode error
+        )
+        {
+            request->PreferredNetworksResponse(nonStaticInfo, staticInfo, error);
+        };
+        result = networkSelectionManager->requestPreferredNetworks(callback1);
         if (result != common::Status::SUCCESS)
         {
             TAF_PA_ERROR("Failed to get preferred networks with network selection manager %d.", instance);
             return TAF_PA_FAULT;
         }
 
-        Utility::WaitCallback::Request();
+        request->Wait();
 
-        if (request->result != 0)
+        if (request->result != TAF_PA_OK)
             return request->result;
 
         for (auto info : request->preferredNetworksInfo)
             networks.push_back(info);
     }
 
-    auto callback2 = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
-    result = pa.managers.networkSelections[instance]->setPreferredNetworks(networks, true,
-        callback2);
+    request = make_shared<RequestCallback>();
+    auto callback2 = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
+    result = networkSelectionManager->setPreferredNetworks(networks, true, callback2);
     if (result != common::Status::SUCCESS)
     {
         TAF_PA_ERROR("Failed to set preferred networks with network selection manager %d.", instance);
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
     return request->result;
 }
@@ -4804,7 +5038,6 @@ taf_pa_result_t taf_pa_radio_GetPreferredNetwork
     taf_pa_radio_PreferredNetworks_t* networksPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (networksPtr == nullptr)
     {
         TAF_PA_ERROR("networksPtr is nullptr.");
@@ -4817,24 +5050,35 @@ taf_pa_result_t taf_pa_radio_GetPreferredNetwork
         return TAF_PA_BAD_PARAMETER;
     }
 
-    auto& pa = PlatformAdaptor::GetInstance();
-    if (pa.managers.networkSelections[instance] == nullptr)
+    auto networkSelectionManager = GetNetworkSelectionManager(instance);
+    if (networkSelectionManager == nullptr)
     {
         TAF_PA_ERROR("Network selection manager %d is nullptr.", instance);
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::PreferredNetworksResponse, request, placeholders::_1,
-        placeholders::_2, placeholders::_3);
-    auto result = pa.managers.networkSelections[instance]->requestPreferredNetworks(callback);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request]
+    (
+        vector<tel::PreferredNetworkInfo> nonStaticInfo,
+        vector<tel::PreferredNetworkInfo> staticInfo,
+        common::ErrorCode error
+    )
+    {
+        request->PreferredNetworksResponse(nonStaticInfo, staticInfo, error);
+    };
+    auto result = networkSelectionManager->requestPreferredNetworks(callback);
     if (result != common::Status::SUCCESS)
     {
         TAF_PA_ERROR("Failed to get preferred networks with network selection manager %d.", instance);
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    taf_pa_result_t waitResult = request->Wait();
+    if (waitResult != TAF_PA_OK)
+    {
+        return waitResult;
+    }
 
     uint32_t i;
     for (i = 0; i < request->preferredNetworksInfo.size() &&
@@ -4858,7 +5102,6 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetPreferredRat
     taf_pa_radio_RatBitMask_t bitmask
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (instance >= MAX_INSTANCE)
     {
         TAF_PA_ERROR("Invalid instance %d.", instance);
@@ -4873,8 +5116,11 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetPreferredRat
     }
 
     tel::RatPreference rat = Utility::Convert::RatToTelRatPreference(bitmask);
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->setRatPreference(rat, callback);
     if (result != common::Status::SUCCESS)
     {
@@ -4883,7 +5129,7 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_radio_SetPreferredRat
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
     return request->result;
 }
@@ -4894,7 +5140,6 @@ taf_pa_result_t taf_pa_radio_GetPreferredRat
     taf_pa_radio_RatBitMask_t* bitmaskPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         TAF_PA_ERROR("bitmaskPtr is nullptr.");
@@ -4914,9 +5159,11 @@ taf_pa_result_t taf_pa_radio_GetPreferredRat
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::RatPreferenceResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](tel::RatPreference preference, common::ErrorCode error)
+    {
+        request->RatPreferenceResponse(preference, error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->requestRatPreference(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -4925,9 +5172,9 @@ taf_pa_result_t taf_pa_radio_GetPreferredRat
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
-    if (request->result != 0)
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *bitmaskPtr = Utility::Convert::TelRatPreferenceToRat(request->ratPreference);
@@ -4941,7 +5188,6 @@ taf_pa_result_t taf_pa_radio_GetVoiceServiceInfo
     taf_pa_radio_VoiceServiceInfo_t* infoPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         TAF_PA_ERROR("infoPtr is nullptr.");
@@ -4968,7 +5214,7 @@ taf_pa_result_t taf_pa_radio_GetVoiceServiceInfo
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
+    auto request = make_shared<RequestCallback>();
     auto result = pa.managers.phone->getPhone(phone)->requestVoiceServiceState(request);
     if (result != common::Status::SUCCESS)
     {
@@ -4976,8 +5222,8 @@ taf_pa_result_t taf_pa_radio_GetVoiceServiceInfo
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     Utility::Convert::VoiceServiceInfo(request->voiceServiceState, infoPtr);
@@ -4991,7 +5237,6 @@ taf_pa_result_t taf_pa_radio_GetDataServiceState
     taf_pa_radio_DataServiceState_t* statePtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statePtr == nullptr)
     {
         TAF_PA_ERROR("statePtr is nullptr.");
@@ -5011,9 +5256,11 @@ taf_pa_result_t taf_pa_radio_GetDataServiceState
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::DataServiceStatusResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](data::ServiceStatus status, common::ErrorCode error)
+    {
+        request->DataServiceStatusResponse(status, error);
+    };
     auto result = pa.managers.dataServingSystems[instance]->requestServiceStatus(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -5022,8 +5269,8 @@ taf_pa_result_t taf_pa_radio_GetDataServiceState
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *statePtr = Utility::Convert::ServiceState(request->dataServiceState);
@@ -5038,7 +5285,6 @@ taf_pa_result_t taf_pa_radio_GetServiceDomain
     taf_pa_radio_ServiceDomain_t* domainPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (domainPtr == nullptr)
     {
         TAF_PA_ERROR("domainPtr is nullptr.");
@@ -5078,7 +5324,6 @@ taf_pa_result_t taf_pa_radio_GetServiceDomainPreferences
     taf_pa_radio_ServiceDomainBitMask_t* bitmaskPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         TAF_PA_ERROR("bitmaskPtr is nullptr.");
@@ -5098,9 +5343,11 @@ taf_pa_result_t taf_pa_radio_GetServiceDomainPreferences
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::ServiceDomainPreferenceResponse, request,
-        placeholders::_1, placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](tel::ServiceDomainPreference preference, common::ErrorCode error)
+    {
+        request->ServiceDomainPreferenceResponse(preference, error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->requestServiceDomainPreference(
         callback);
     if (result != common::Status::SUCCESS)
@@ -5110,9 +5357,9 @@ taf_pa_result_t taf_pa_radio_GetServiceDomainPreferences
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
-    if (request->result != 0)
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *bitmaskPtr = Utility::Convert::ServiceDomainPreference(request->serviceDomainPreference);
@@ -5126,7 +5373,6 @@ taf_pa_result_t taf_pa_radio_SetServiceDomainPreferences
     taf_pa_radio_ServiceDomainBitMask_t bitmask
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (instance >= MAX_INSTANCE)
     {
         TAF_PA_ERROR("Invalid instance %d.", instance);
@@ -5141,8 +5387,11 @@ taf_pa_result_t taf_pa_radio_SetServiceDomainPreferences
     }
 
     tel::ServiceDomainPreference preference = Utility::Convert::ServiceDomainPreference(bitmask);
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->setServiceDomainPreference(
         preference, callback);
     if (result != common::Status::SUCCESS)
@@ -5152,7 +5401,7 @@ taf_pa_result_t taf_pa_radio_SetServiceDomainPreferences
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
     return request->result;
 }
@@ -5164,7 +5413,6 @@ taf_pa_result_t taf_pa_radio_GetSignalStrengthLevel
     taf_pa_radio_SignalStrengthLevel_t* levelPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (levelPtr == nullptr)
     {
         TAF_PA_ERROR("levelPtr is nullptr.");
@@ -5191,7 +5439,7 @@ taf_pa_result_t taf_pa_radio_GetSignalStrengthLevel
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
+    auto request = make_shared<RequestCallback>();
     auto result = pa.managers.phone->getPhone(phone)->requestSignalStrength(request);
     if (result != common::Status::SUCCESS)
     {
@@ -5199,8 +5447,8 @@ taf_pa_result_t taf_pa_radio_GetSignalStrengthLevel
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *levelPtr = Utility::Convert::SignalStrengthLevel(rat, request->signalStrengthPtr);
@@ -5214,7 +5462,6 @@ taf_pa_result_t taf_pa_radio_GetSignalStrengthInfo
     taf_pa_radio_SignalStrengthInfo_t* infoPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         TAF_PA_ERROR("infoPtr is nullptr.");
@@ -5241,7 +5488,7 @@ taf_pa_result_t taf_pa_radio_GetSignalStrengthInfo
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
+    auto request = make_shared<RequestCallback>();
     auto result = pa.managers.phone->getPhone(phone)->requestSignalStrength(request);
     if (result != common::Status::SUCCESS)
     {
@@ -5249,8 +5496,8 @@ taf_pa_result_t taf_pa_radio_GetSignalStrengthInfo
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     Utility::Convert::SignalStrengthInfo(request->signalStrengthPtr, infoPtr);
@@ -5264,7 +5511,6 @@ taf_pa_result_t taf_pa_radio_SetSignalStrengthInd
     taf_pa_radio_SignalStrengthIndConfig_t* configPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (configPtr == nullptr)
     {
         TAF_PA_ERROR("configPtr is nullptr.");
@@ -5298,8 +5544,11 @@ taf_pa_result_t taf_pa_radio_SetSignalStrengthInd
     if (configPtr->hysteresisTimeValid)
         time = configPtr->hysteresisTime;
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
     auto result = pa.managers.phone->getPhone(phone)->configureSignalStrength(config, time,
         callback);
     if (result != common::Status::SUCCESS)
@@ -5308,7 +5557,7 @@ taf_pa_result_t taf_pa_radio_SetSignalStrengthInd
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
     return request->result;
 }
@@ -5319,7 +5568,6 @@ taf_pa_result_t taf_pa_radio_GetCellLocationListInfo
     taf_pa_radio_CellLocationListInfo_t* infoPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         TAF_PA_ERROR("infoPtr is nullptr.");
@@ -5346,9 +5594,14 @@ taf_pa_result_t taf_pa_radio_GetCellLocationListInfo
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CellInfoListResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request]
+    (
+        vector<shared_ptr<tel::CellInfo>> infoPtrList, common::ErrorCode error
+    )
+    {
+        request->CellInfoListResponse(infoPtrList, error);
+    };
     auto result = pa.managers.phone->getPhone(phone)->requestCellInfo(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -5356,8 +5609,8 @@ taf_pa_result_t taf_pa_radio_GetCellLocationListInfo
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     Utility::Convert::CellInfoList(request->cellInfoPtrList, infoPtr);
@@ -5371,7 +5624,6 @@ taf_pa_result_t taf_pa_radio_GetCurrNetworkName
     taf_pa_radio_CurrNetworkName_t* namePtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (namePtr == nullptr)
     {
         TAF_PA_ERROR("namePtr is nullptr.");
@@ -5398,9 +5650,11 @@ taf_pa_result_t taf_pa_radio_GetCurrNetworkName
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::OperatorInfoResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](tel::PlmnInfo info, common::ErrorCode error)
+    {
+        request->OperatorInfoResponse(info, error);
+    };
     auto result = pa.managers.phone->getPhone(phone)->requestOperatorInfo(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -5408,8 +5662,8 @@ taf_pa_result_t taf_pa_radio_GetCurrNetworkName
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     Utility::Convert::String(request->operatorInfo.longName, &namePtr->fullNameValid,
@@ -5427,7 +5681,6 @@ taf_pa_result_t taf_pa_radio_PerformPlmnNetworkScan
     taf_pa_radio_PlmnScanInformation_t* informationPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (configPtr == nullptr)
     {
         TAF_PA_ERROR("configPtr is nullptr.");
@@ -5447,82 +5700,81 @@ taf_pa_result_t taf_pa_radio_PerformPlmnNetworkScan
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
-    if (pa.managers.networkSelections[instance] == nullptr)
+    // Capture the lifecycle before submission so a rapid stop/start cannot reuse this scan.
+    uint64_t generation = pa.lifecycleGeneration.load(std::memory_order_acquire);
+    if (pa.isShuttingDown.load(std::memory_order_acquire) ||
+        !pa.gRadioPaInitialized.load(std::memory_order_acquire))
+    {
+        TAF_PA_ERROR("Radio platform adaptor is not available.");
+        return TAF_PA_FAULT;
+    }
+
+    auto networkSelectionManager = GetNetworkSelectionManager(instance);
+    if (networkSelectionManager == nullptr)
     {
         TAF_PA_ERROR("Network selection manager %d is nullptr.", instance);
         return TAF_PA_FAULT;
     }
-    if (pa.listeners.networkSelections[instance] == nullptr)
-    {
-        TAF_PA_ERROR("Network selection listener %d is nullptr.", instance);
-        return TAF_PA_FAULT;
-    }
+
+    std::lock_guard<std::mutex> scanLock(pa.networkScanMutex[instance]);
 
     tel::NetworkScanInfo info;
     info.scanType = tel::NetworkScanType::USER_SPECIFIED_RAT;
     info.ratMask = Utility::Convert::RatToTelRat(configPtr->bitmask);
 
-    // Reset listener state before starting a new scan to ensure clean state
-    pa.listeners.networkSelections[instance]->operatorInfoList.clear();
-    pa.listeners.networkSelections[instance]->result = TAF_PA_OK;
-
-    // Deregister any existing listener first to ensure clean state
-    auto status = pa.managers.networkSelections[instance]->deregisterListener(
-        pa.listeners.networkSelections[instance]);
-    if (status != common::Status::SUCCESS)
+    shared_ptr<Listener::NetworkSelectionListener> listener;
     {
-        TAF_PA_DEBUG("Listener was not registered, proceeding with registration.");
+        std::lock_guard<std::mutex> lock(pa.networkSelectionMutex);
+        listener = pa.networkScanListeners[instance];
     }
-
-    status = pa.managers.networkSelections[instance]->registerListener(
-        pa.listeners.networkSelections[instance]);
-    if (status != common::Status::SUCCESS)
+    if (listener == nullptr)
     {
-        TAF_PA_ERROR("Failed to register network selection listner %d.", instance);
+        TAF_PA_ERROR("Persistent network scan listener %d is unavailable.", instance);
         return TAF_PA_FAULT;
     }
+    listener->Reset();
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
-    auto result = pa.managers.networkSelections[instance]->performNetworkScan(info, callback);
-    if (result != common::Status::SUCCESS)
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
     {
-        TAF_PA_ERROR("Failed to perform network scan with network selection manager %d.", instance);
-        // Cleanup: deregister listener before returning error
-        pa.managers.networkSelections[instance]->deregisterListener(
-            pa.listeners.networkSelections[instance]);
-        return TAF_PA_FAULT;
+        request->CommonResponse(error);
+    };
+
+    // Submission and shutdown registration happen atomically with respect to Deinit.
+    taf_pa_result_t result = StartShutdownAwareRequest(networkSelectionManager, request, generation, [&]
+        {
+            return request->networkSelectionManager->performNetworkScan(info, callback);
+        });
+    if (result != TAF_PA_OK)
+    {
+        TAF_PA_ERROR("Failed to perform network scan with manager %d, result %d.",
+            instance, result);
+        return result;
     }
 
-    Utility::WaitCallback::Request();
-
-    if (request->result != 0)
+    result = request->Wait();
+    if (result != TAF_PA_OK)
     {
-        TAF_PA_ERROR("Error occured when getting response with network selection manager %d.",
-            instance);
-        // Cleanup: deregister listener before returning error
-        pa.managers.networkSelections[instance]->deregisterListener(
-            pa.listeners.networkSelections[instance]);
-        return TAF_PA_FAULT;
+        return result;
+    }
+    result = listener->Wait(configPtr->timeout);
+    // Prefer shutdown over a response that completed during a rapid service restart.
+    if (generation != pa.lifecycleGeneration.load(std::memory_order_acquire))
+    {
+        TAF_PA_WARN("Discarding PLMN scan response after radio PA shutdown.");
+        return TAF_PA_TERMINATED;
+    }
+    if (result != TAF_PA_OK)
+    {
+        return result;
     }
 
-    Utility::WaitCallback::Scan(instance, configPtr->timeout);
-
-    // Always deregister listener after scan completes (success or failure)
-    status = pa.managers.networkSelections[instance]->deregisterListener(
-        pa.listeners.networkSelections[instance]);
-    if (status != common::Status::SUCCESS)
-    {
-        TAF_PA_ERROR("Failed to deregister network selection listner %d.", instance);
-        return TAF_PA_FAULT;
-    }
-
-    if (pa.listeners.networkSelections[instance]->result != 0)
-        return pa.listeners.networkSelections[instance]->result;
-
+    auto operatorInfoList = listener->TakeOperatorInfo();
     uint32_t i = 0;
-    for (auto info : pa.listeners.networkSelections[instance]->operatorInfoList)
+    for (auto info : operatorInfoList)
     {
+        taf_pa_radio_Rat_t rat = Utility::Convert::Rat(info.getRat());
+
         size_t bytes = info.getName().size();
         if (bytes < TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES)
         {
@@ -5539,7 +5791,7 @@ taf_pa_result_t taf_pa_radio_PerformPlmnNetworkScan
         informationPtr->plmnInfo[i].plmnIdValid = 1;
         taf_pa_result_t result = Utility::Convert::StringToU16(info.getMcc(),
             &informationPtr->plmnInfo[i].plmnId.mcc);
-        if (result != 0)
+        if (result != TAF_PA_OK)
         {
             TAF_PA_ERROR("Failed to convert MCC %s.", info.getMcc().c_str());
             informationPtr->plmnInfo[i].plmnIdValid = 0;
@@ -5547,13 +5799,13 @@ taf_pa_result_t taf_pa_radio_PerformPlmnNetworkScan
 
         result = Utility::Convert::StringToU16(info.getMnc(),
             &informationPtr->plmnInfo[i].plmnId.mnc);
-        if (result != 0)
+        if (result != TAF_PA_OK)
         {
             TAF_PA_ERROR("Failed to convert MNC %s.", info.getMnc().c_str());
             informationPtr->plmnInfo[i].plmnIdValid = 0;
         }
 
-        informationPtr->plmnInfo[i].rat = Utility::Convert::Rat(info.getRat());
+        informationPtr->plmnInfo[i].rat = rat;
 
         switch (info.getStatus().inUse)
         {
@@ -5625,6 +5877,7 @@ taf_pa_result_t taf_pa_radio_PerformPlmnNetworkScan
     }
 
     informationPtr->plmnCount = i;
+    TAF_PA_INFO("PLMN scan returned %zu operators, %u retained.", operatorInfoList.size(), i);
 
     return TAF_PA_OK;
 }
@@ -5635,7 +5888,6 @@ taf_pa_result_t taf_pa_radio_GetBandCapabilities
     taf_pa_radio_BandBitMask_t* bitmaskPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         TAF_PA_ERROR("bitmaskPtr is nullptr.");
@@ -5655,9 +5907,11 @@ taf_pa_result_t taf_pa_radio_GetBandCapabilities
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::RfBandCapabilityResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](shared_ptr<tel::IRFBandList> listPtr, common::ErrorCode error)
+    {
+        request->RfBandCapabilityResponse(listPtr, error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->requestRFBandCapability(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -5666,9 +5920,9 @@ taf_pa_result_t taf_pa_radio_GetBandCapabilities
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
-    if (request->result != 0)
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *bitmaskPtr = Utility::Convert::Band(request->rfBandCapabilityPtr);
@@ -5682,7 +5936,6 @@ taf_pa_result_t taf_pa_radio_GetLteBandCapabilities
     taf_pa_radio_LteBand_t* bandPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bandPtr == nullptr)
     {
         TAF_PA_ERROR("bandPtr is nullptr.");
@@ -5702,9 +5955,11 @@ taf_pa_result_t taf_pa_radio_GetLteBandCapabilities
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::RfBandCapabilityResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](shared_ptr<tel::IRFBandList> listPtr, common::ErrorCode error)
+    {
+        request->RfBandCapabilityResponse(listPtr, error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->requestRFBandCapability(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -5713,9 +5968,9 @@ taf_pa_result_t taf_pa_radio_GetLteBandCapabilities
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
-    if (request->result != 0)
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     Utility::Convert::Band(request->rfBandCapabilityPtr, bandPtr);
@@ -5729,7 +5984,6 @@ taf_pa_result_t taf_pa_radio_SetBandPreferences
     taf_pa_radio_BandBitMask_t bitmask
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (instance >= MAX_INSTANCE)
     {
         TAF_PA_ERROR("Invalid instance %d.", instance);
@@ -5797,8 +6051,11 @@ taf_pa_result_t taf_pa_radio_SetBandPreferences
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->setRFBandPreferences(peferences,
         callback);
     if (result != common::Status::SUCCESS)
@@ -5808,7 +6065,7 @@ taf_pa_result_t taf_pa_radio_SetBandPreferences
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
     return request->result;
 }
@@ -5819,7 +6076,6 @@ taf_pa_result_t taf_pa_radio_GetBandPreferences
     taf_pa_radio_BandBitMask_t* bitmaskPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         TAF_PA_ERROR("bitmaskPtr is nullptr.");
@@ -5839,9 +6095,11 @@ taf_pa_result_t taf_pa_radio_GetBandPreferences
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::RfBandPreferenceResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](shared_ptr<tel::IRFBandList> listPtr, common::ErrorCode error)
+    {
+        request->RfBandPreferenceResponse(listPtr, error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->requestRFBandPreferences(
         callback);
     if (result != common::Status::SUCCESS)
@@ -5851,9 +6109,9 @@ taf_pa_result_t taf_pa_radio_GetBandPreferences
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
-    if (request->result != 0)
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *bitmaskPtr = Utility::Convert::Band(request->rfBandPreferencePtr);
@@ -5867,7 +6125,6 @@ taf_pa_result_t taf_pa_radio_SetLteBandPreferences
     taf_pa_radio_LteBand_t* bandPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bandPtr == nullptr)
     {
         TAF_PA_ERROR("bandPtr is nullptr.");
@@ -5907,8 +6164,11 @@ taf_pa_result_t taf_pa_radio_SetLteBandPreferences
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->setRFBandPreferences(peferences,
         callback);
     if (result != common::Status::SUCCESS)
@@ -5918,7 +6178,7 @@ taf_pa_result_t taf_pa_radio_SetLteBandPreferences
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
     return request->result;
 }
@@ -5929,7 +6189,6 @@ taf_pa_result_t taf_pa_radio_GetLteBandPreferences
     taf_pa_radio_LteBand_t* bandPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bandPtr == nullptr)
     {
         TAF_PA_ERROR("bandPtr is nullptr.");
@@ -5949,9 +6208,11 @@ taf_pa_result_t taf_pa_radio_GetLteBandPreferences
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::RfBandPreferenceResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](shared_ptr<tel::IRFBandList> listPtr, common::ErrorCode error)
+    {
+        request->RfBandPreferenceResponse(listPtr, error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->requestRFBandPreferences(
         callback);
     if (result != common::Status::SUCCESS)
@@ -5961,9 +6222,9 @@ taf_pa_result_t taf_pa_radio_GetLteBandPreferences
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
-    if (request->result != 0)
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     Utility::Convert::Band(request->rfBandPreferencePtr, bandPtr);
@@ -5977,7 +6238,6 @@ taf_pa_result_t taf_pa_radio_GetImsRegistrationStatus
     taf_pa_radio_ImsRegistrationStatus_t* statusPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         TAF_PA_ERROR("statusPtr is nullptr.");
@@ -5997,9 +6257,11 @@ taf_pa_result_t taf_pa_radio_GetImsRegistrationStatus
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::ImsRegistrationInfoResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](tel::ImsRegistrationInfo info, common::ErrorCode error)
+    {
+        request->ImsRegistrationInfoResponse(info, error);
+    };
     auto result = pa.managers.imsServingSystems[instance]->requestRegistrationInfo(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -6008,8 +6270,8 @@ taf_pa_result_t taf_pa_radio_GetImsRegistrationStatus
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *statusPtr = Utility::Convert::ImsRegistrationStatus(request->imsRegistrationInfo.imsRegStatus);
@@ -6023,7 +6285,6 @@ taf_pa_result_t taf_pa_radio_GetLteCsCapability
     taf_pa_radio_LteCsCapability_t* capabilityPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (capabilityPtr == nullptr)
     {
         TAF_PA_ERROR("capabilityPtr is nullptr.");
@@ -6065,7 +6326,6 @@ taf_pa_result_t taf_pa_radio_GetImsServiceStatus
     taf_pa_radio_ImsServiceStatus_t* statusPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         TAF_PA_ERROR("statusPtr is nullptr.");
@@ -6085,9 +6345,11 @@ taf_pa_result_t taf_pa_radio_GetImsServiceStatus
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::ImsServiceInfoResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](tel::ImsServiceInfo info, common::ErrorCode error)
+    {
+        request->ImsServiceInfoResponse(info, error);
+    };
     auto result = pa.managers.imsServingSystems[instance]->requestServiceInfo(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -6095,8 +6357,8 @@ taf_pa_result_t taf_pa_radio_GetImsServiceStatus
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     return Utility::Convert::ImsServiceStatus(service, request->imsServiceInfo, statusPtr);
@@ -6108,7 +6370,6 @@ taf_pa_result_t taf_pa_radio_GetImsPdpFailureErrorCode
     taf_pa_radio_ImsPdpFailureErrorCode_t* codePtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (codePtr == nullptr)
     {
         TAF_PA_ERROR("codePtr is nullptr.");
@@ -6128,9 +6389,11 @@ taf_pa_result_t taf_pa_radio_GetImsPdpFailureErrorCode
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::ImsPdpStatusResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](tel::ImsPdpStatusInfo info, common::ErrorCode error)
+    {
+        request->ImsPdpStatusResponse(info, error);
+    };
     auto result = pa.managers.imsServingSystems[instance]->requestPdpStatus(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -6138,8 +6401,8 @@ taf_pa_result_t taf_pa_radio_GetImsPdpFailureErrorCode
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *codePtr = Utility::Convert::ImsPdpFailureErrorCode(request->imsPdpStatusInfo.failureCode);
@@ -6154,7 +6417,6 @@ taf_pa_result_t taf_pa_radio_ToggleImsService
     bool enable
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     auto& pa = PlatformAdaptor::GetInstance();
     if (pa.managers.imsSetting == nullptr)
     {
@@ -6165,8 +6427,11 @@ taf_pa_result_t taf_pa_radio_ToggleImsService
     int slot = Utility::Convert::InstanceToSlot(instance);
     SlotId slotId = Utility::Convert::SlotToSlotId(slot);
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
     if (bitmask & TAF_PA_RADIO_BITMASK_IMS_SERVICE_SETTING_VONR)
     {
         auto result1 = pa.managers.imsSetting->toggleVonr(slotId, enable, callback);
@@ -6176,9 +6441,9 @@ taf_pa_result_t taf_pa_radio_ToggleImsService
             return TAF_PA_FAULT;
         }
 
-        Utility::WaitCallback::Request();
+        request->Wait();
 
-        if (request->result != 0)
+        if (request->result != TAF_PA_OK)
             return request->result;
     }
 
@@ -6189,14 +6454,20 @@ taf_pa_result_t taf_pa_radio_ToggleImsService
 
     tel::ImsServiceConfig config;
     Utility::Convert::ImsServiceConfig(nonVonrBitmask, enable, &config);
-    auto result2 = pa.managers.imsSetting->setServiceConfig(slotId, config, callback);
+    request = make_shared<RequestCallback>();
+    auto serviceConfigCallback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
+    auto result2 = pa.managers.imsSetting->setServiceConfig(slotId, config,
+        serviceConfigCallback);
     if (result2 != common::Status::SUCCESS)
     {
         TAF_PA_ERROR("Failed to toggle IMS service with IMS setting manager.");
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
     return request->result;
 }
@@ -6207,7 +6478,6 @@ taf_pa_result_t taf_pa_radio_GetEnabledImsService
     taf_pa_radio_ImsServiceSettingBitMask_t* bitmaskPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (bitmaskPtr == nullptr)
     {
         TAF_PA_ERROR("bitmaskPtr is nullptr.");
@@ -6224,9 +6494,11 @@ taf_pa_result_t taf_pa_radio_GetEnabledImsService
     int slot = Utility::Convert::InstanceToSlot(instance);
     SlotId slotId = Utility::Convert::SlotToSlotId(slot);
 
-    auto& request = pa.callbacks.request;
-    auto callback1 = bind(&RequestCallback::ImsVonrStatusResponse, request, placeholders::_1,
-        placeholders::_2, placeholders::_3);
+    auto request = make_shared<RequestCallback>();
+    auto callback1 = [request](SlotId id, bool enable, common::ErrorCode error)
+    {
+        request->ImsVonrStatusResponse(id, enable, error);
+    };
     auto result = pa.managers.imsSetting->requestVonrStatus(slotId, callback1);
     if (result != common::Status::SUCCESS)
     {
@@ -6234,16 +6506,19 @@ taf_pa_result_t taf_pa_radio_GetEnabledImsService
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     taf_pa_radio_ImsServiceSettingBitMask_t bitmask = 0x0;
     if (request->isVoNREnabled)
         bitmask |= TAF_PA_RADIO_BITMASK_IMS_SERVICE_SETTING_VONR;
 
-    auto callback2 = bind(&RequestCallback::ImsServiceConfigResponse, request, placeholders::_1,
-        placeholders::_2, placeholders::_3);
+    request = make_shared<RequestCallback>();
+    auto callback2 = [request](SlotId id, tel::ImsServiceConfig config, common::ErrorCode error)
+    {
+        request->ImsServiceConfigResponse(id, config, error);
+    };
     result = pa.managers.imsSetting->requestServiceConfig(slotId, callback2);
     if (result != common::Status::SUCCESS)
     {
@@ -6251,8 +6526,8 @@ taf_pa_result_t taf_pa_radio_GetEnabledImsService
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
     {
         if (request->imsServiceConfigError == common::ErrorCode::NOT_SUPPORTED)
         {
@@ -6277,7 +6552,6 @@ taf_pa_result_t taf_pa_radio_SetImsUserAgent
     const char* namePtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (namePtr == nullptr)
     {
         TAF_PA_ERROR("namePtr is nullptr.");
@@ -6294,8 +6568,11 @@ taf_pa_result_t taf_pa_radio_SetImsUserAgent
     int slot = Utility::Convert::InstanceToSlot(instance);
     SlotId slotId = Utility::Convert::SlotToSlotId(slot);
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::CommonResponse, request, placeholders::_1);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
     auto result = pa.managers.imsSetting->setSipUserAgent(slotId, namePtr, callback);
     if (result != common::Status::SUCCESS)
     {
@@ -6303,9 +6580,9 @@ taf_pa_result_t taf_pa_radio_SetImsUserAgent
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
+    request->Wait();
 
-    if (request->result != 0)
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     return request->result;
@@ -6318,7 +6595,6 @@ taf_pa_result_t taf_pa_radio_GetImsUserAgent
     size_t namePtrSize
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (namePtr == nullptr)
     {
         TAF_PA_ERROR("namePtr is nullptr.");
@@ -6341,9 +6617,11 @@ taf_pa_result_t taf_pa_radio_GetImsUserAgent
     int slot = Utility::Convert::InstanceToSlot(instance);
     SlotId slotId = Utility::Convert::SlotToSlotId(slot);
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::ImsSigUserAgentResponse, request, placeholders::_1,
-        placeholders::_2, placeholders::_3);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](SlotId id, string str, common::ErrorCode error)
+    {
+        request->ImsSigUserAgentResponse(id, str, error);
+    };
     auto result = pa.managers.imsSetting->requestSipUserAgent(slotId, callback);
     if (result != common::Status::SUCCESS)
     {
@@ -6351,8 +6629,8 @@ taf_pa_result_t taf_pa_radio_GetImsUserAgent
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     size_t bytes = request->imsSipUserAgent.size();
@@ -6376,7 +6654,6 @@ taf_pa_result_t taf_pa_radio_GetEndcAvailability
     taf_pa_radio_EndcAvailability_t* availabilityPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (availabilityPtr == nullptr)
     {
         TAF_PA_ERROR("availabilityPtr is nullptr.");
@@ -6409,7 +6686,6 @@ taf_pa_result_t taf_pa_radio_GetDcnrRestriction
     taf_pa_radio_DcnrRestriction_t* restrictionPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (restrictionPtr == nullptr)
     {
         TAF_PA_ERROR("restrictionPtr is nullptr.");
@@ -6441,7 +6717,6 @@ taf_pa_result_t taf_pa_radio_GetSimCapacityInfo
     taf_pa_radio_SimCapabilityInfo_t* infoPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         TAF_PA_ERROR("infoPtr is nullptr.");
@@ -6455,7 +6730,7 @@ taf_pa_result_t taf_pa_radio_GetSimCapacityInfo
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
+    auto request = make_shared<RequestCallback>();
     auto result = pa.managers.phone->requestCellularCapabilityInfo(request);
     if (result != common::Status::SUCCESS)
     {
@@ -6463,8 +6738,8 @@ taf_pa_result_t taf_pa_radio_GetSimCapacityInfo
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     infoPtr->totalCount = request->cellularCapabilityInfo.simCount;
@@ -6479,7 +6754,6 @@ taf_pa_result_t taf_pa_radio_GetDeviceAndSimCardRatCapability
     taf_pa_radio_DeviceAndSimCardRatCapability_t* capabilityPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (capabilityPtr == nullptr)
     {
         TAF_PA_ERROR("capabilityPtr is nullptr.");
@@ -6493,7 +6767,7 @@ taf_pa_result_t taf_pa_radio_GetDeviceAndSimCardRatCapability
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
+    auto request = make_shared<RequestCallback>();
     auto result = pa.managers.phone->requestCellularCapabilityInfo(request);
     if (result != common::Status::SUCCESS)
     {
@@ -6501,15 +6775,15 @@ taf_pa_result_t taf_pa_radio_GetDeviceAndSimCardRatCapability
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     int slot = Utility::Convert::InstanceToSlot(instance);
 
     taf_pa_result_t paResult = Utility::Convert::Rat(slot,
         request->cellularCapabilityInfo.deviceRatCapability, &capabilityPtr->devBitmask);
-    if (paResult != 0)
+    if (paResult != TAF_PA_OK)
         return paResult;
 
     paResult = Utility::Convert::Rat(slot, request->cellularCapabilityInfo.simRatCapabilities,
@@ -6524,7 +6798,6 @@ taf_pa_result_t taf_pa_radio_GetServingCellBandInfo
     taf_pa_radio_ServingCellBandInfo_t* infoPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         TAF_PA_ERROR("infoPtr is nullptr.");
@@ -6544,9 +6817,11 @@ taf_pa_result_t taf_pa_radio_GetServingCellBandInfo
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::RFBandInfoResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](tel::RFBandInfo info, common::ErrorCode error)
+    {
+        request->RFBandInfoResponse(info, error);
+    };
     auto result = pa.managers.telephonyServingSystems[instance]->requestRFBandInfo(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -6555,8 +6830,8 @@ taf_pa_result_t taf_pa_radio_GetServingCellBandInfo
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     return Utility::Convert::RFBandInfo(request->rfBandInfo, infoPtr);
@@ -6568,7 +6843,6 @@ taf_pa_result_t taf_pa_radio_GetNrIcon
     taf_pa_radio_NrIcon_t* iconPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (iconPtr == nullptr)
     {
         TAF_PA_ERROR("iconPtr is nullptr.");
@@ -6588,9 +6862,11 @@ taf_pa_result_t taf_pa_radio_GetNrIcon
         return TAF_PA_FAULT;
     }
 
-    auto& request = pa.callbacks.request;
-    auto callback = bind(&RequestCallback::NrIconTypeResponse, request, placeholders::_1,
-        placeholders::_2);
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](data::NrIconType type, common::ErrorCode error)
+    {
+        request->NrIconTypeResponse(type, error);
+    };
     auto result = pa.managers.dataServingSystems[instance]->requestNrIconType(callback);
     if (result != common::Status::SUCCESS)
     {
@@ -6598,8 +6874,8 @@ taf_pa_result_t taf_pa_radio_GetNrIcon
         return TAF_PA_FAULT;
     }
 
-    Utility::WaitCallback::Request();
-    if (request->result != 0)
+    request->Wait();
+    if (request->result != TAF_PA_OK)
         return request->result;
 
     *iconPtr = Utility::Convert::NrIcon(request->nrIconType);
@@ -6885,7 +7161,6 @@ taf_pa_result_t taf_pa_radio_RegisterIndication
     taf_pa_radio_DisableIndicationMode_t mode
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (!common::DeviceConfig::isMultiSimSupported() && instance > 0)
         return TAF_PA_UNSUPPORTED;
 
@@ -6959,16 +7234,36 @@ taf_pa_result_t taf_pa_radio_PerformPciNetworkScan
     taf_pa_radio_PciScanInformation_t* informationPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (informationPtr == nullptr)
     {
         TAF_PA_ERROR("informationPtr is nullptr.");
         return TAF_PA_BAD_PARAMETER;
     }
 
+    auto& pa = PlatformAdaptor::GetInstance();
+    // The proprietary scan is synchronous, so only its response can be rejected after shutdown.
+    uint64_t generation = pa.lifecycleGeneration.load(std::memory_order_acquire);
+    if (pa.isShuttingDown.load(std::memory_order_acquire) ||
+        !pa.gRadioPaInitialized.load(std::memory_order_acquire))
+    {
+        TAF_PA_ERROR("Radio platform adaptor is not available.");
+        return TAF_PA_FAULT;
+    }
+
     taf_prop_radio_PciScanInformation_t information;
     taf_prop_radio_RatBitMask_t rat = Utility::Convert::Rat(bitmask);
     taf_prop_result_t result = taf_prop_radio_PerformPciNetworkScan(instance, rat, &information);
+    // Do not copy data produced by an earlier service lifecycle into northbound output.
+    if (generation != pa.lifecycleGeneration.load(std::memory_order_acquire))
+    {
+        TAF_PA_WARN("Discarding PCI scan response after radio PA shutdown.");
+        return TAF_PA_TERMINATED;
+    }
+
+    if (result != TAF_PROP_OK)
+    {
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
+    }
 
     uint32_t i, j;
     for (i = 0; i < information.pciCellCount && i < TAF_PA_RADIO_PCI_SCAN_CELL_MAX_COUNT; i++)
@@ -7001,7 +7296,6 @@ taf_pa_result_t taf_pa_radio_GetServingRat
     taf_pa_radio_Rat_t* ratPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (ratPtr == nullptr)
     {
         TAF_PA_ERROR("ratPtr is nullptr.");
@@ -7045,7 +7339,6 @@ taf_pa_result_t taf_pa_radio_GetRatSvcStatus
     taf_pa_radio_RatServiceStatus_t* statusPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         TAF_PA_ERROR("statusPtr is nullptr.");
@@ -7098,7 +7391,6 @@ taf_pa_result_t taf_pa_radio_GetServingCellRac
     uint8_t* racPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (racPtr == nullptr)
     {
         TAF_PA_ERROR("racPtr is nullptr.");
@@ -7117,7 +7409,6 @@ taf_pa_result_t taf_pa_radio_GetDataAvailSysStatus
     taf_pa_radio_DataAvailSysStatus_t* statusPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         TAF_PA_ERROR("statusPtr is nullptr.");
@@ -7147,7 +7438,6 @@ taf_pa_result_t taf_pa_radio_GetLteCphyCaInfo
     taf_pa_radio_LteCphyCaInfo_t* infoPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (infoPtr == nullptr)
     {
         TAF_PA_ERROR("infoPtr is nullptr.");
@@ -7242,7 +7532,6 @@ taf_pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
     taf_pa_radio_DataRoamingStatus_t* statusPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     if (statusPtr == nullptr)
     {
         TAF_PA_ERROR("statusPtr is nullptr.");
@@ -7271,7 +7560,6 @@ taf_pa_result_t taf_pa_radio_SetSysInfoIndLimit
     taf_pa_radio_SysInfoIndLimitMask_t limitMask
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     taf_prop_radio_SysInfoIndLimitMask_t propLimitMask = convertSysInfoIndLimitMasktoProp(limitMask);
     taf_prop_result_t result = taf_prop_radio_SetSysInfoIndLimit(instance, propLimitMask);
     if (result != TAF_PROP_OK)
@@ -7289,11 +7577,11 @@ taf_pa_result_t  taf_pa_radio_GetServiceStatus
     taf_pa_radio_RatServiceStatus_t* statusPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     taf_prop_radio_Rat_t propServingRat = TAF_PROP_RADIO_RAT_UNKNOWN;
     taf_prop_radio_RatServiceStatus_t propStatus = TAF_PROP_RADIO_RAT_SERVICE_STATUS_UNKNOWN;
 
-    taf_prop_result_t result = taf_prop_radio_GetServiceStatus(instance, &propServingRat, &propStatus);
+    taf_prop_result_t result = taf_prop_radio_GetServiceStatus(instance, &propServingRat,
+        &propStatus);
     if (result != TAF_PROP_OK)
     {
         return TAF_PA_FAULT;
@@ -7313,7 +7601,6 @@ taf_pa_result_t taf_pa_radio_GetSysInfoIndLimit
     taf_pa_radio_SysInfoIndLimitMask_t *limitMaskPtr
 )
 {
-    std::lock_guard<std::mutex> apiLock(PlatformAdaptor::GetInstance().apiMutex);
     taf_prop_radio_SysInfoIndLimitMask_t propLimitMask = TAF_PROP_RADIO_SYS_INFO_IND_LIMIT_NONE;
 
     taf_prop_result_t result = taf_prop_radio_GetSysInfoIndLimit(instance, &propLimitMask);
