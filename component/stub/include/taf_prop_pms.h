@@ -11,8 +11,8 @@
  * stability across independently compiled shared libraries.
  */
 
-#ifndef TAF_PROP_PA_PMS_H
-#define TAF_PROP_PA_PMS_H
+#ifndef TAF_PROP_PMS_H
+#define TAF_PROP_PMS_H
 
 #include "taf_prop_common.h"
 
@@ -25,7 +25,7 @@ extern "C" {
  * The reference type for no-ship pms Mpss active-object
  */
 //--------------------------------------------------------------------------------------------------
-typedef struct taf_prop_pa_pms_Mpss * taf_prop_pa_pms_MpssRef_t;
+typedef struct taf_prop_pms_Mpss * taf_prop_pms_MpssRef_t;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -39,14 +39,14 @@ typedef enum
     MODEM_WS_SIM_PROFILE_SWAP = 0x0004,
     MODEM_WS_NAS_SYS_INFO     = 0x0008,
 
-} taf_prop_pa_pms_ModemWakeupSource_t;
+} taf_prop_pms_ModemWakeupSource_t;
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Parse the command-line arguments for options.
  */
 //--------------------------------------------------------------------------------------------------
-typedef void ( * taf_prop_pa_pms_ErrCallback )
+typedef void ( * taf_prop_pms_ErrCallback )
 (
     taf_prop_result_t errCode,
     void * errCbCtx
@@ -58,10 +58,10 @@ typedef void ( * taf_prop_pa_pms_ErrCallback )
  *
  */
 //-------------------------------------------------------------------------------------------------
-TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_Init
+TAF_PROP_SHARED taf_prop_result_t taf_prop_pms_Init
 (
-    taf_prop_pa_pms_MpssRef_t * mpssRefPtr,  ///< [IN/OUT] Reference handle for active-object.
-    taf_prop_pa_pms_ErrCallback errCbFn,     ///< [IN] Error notification callback function.
+    taf_prop_pms_MpssRef_t * mpssRefPtr,  ///< [IN/OUT] Reference handle for active-object.
+    taf_prop_pms_ErrCallback errCbFn,     ///< [IN] Error notification callback function.
     void * errCbCtx                         ///< [IN] Callback function context.
 );
 
@@ -71,9 +71,9 @@ TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_Init
  *
  */
 //-------------------------------------------------------------------------------------------------
-TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_Deinit
+TAF_PROP_SHARED taf_prop_result_t taf_prop_pms_Deinit
 (
-    taf_prop_pa_pms_MpssRef_t * mpssRefPtr  ///< [IN] Pointer for the recorded reference handle
+    taf_prop_pms_MpssRef_t * mpssRefPtr  ///< [IN] Pointer for the recorded reference handle
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -82,10 +82,10 @@ TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_Deinit
  *
  */
 //-------------------------------------------------------------------------------------------------
-TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_SetWsFilter
+TAF_PROP_SHARED taf_prop_result_t taf_prop_pms_SetWsFilter
 (
-    taf_prop_pa_pms_MpssRef_t mpssRef,          ///< [IN] Recorded reference from _Init API.
-    taf_prop_pa_pms_ModemWakeupSource_t bitset  ///< [IN] Filter bitset for special indications.
+    taf_prop_pms_MpssRef_t mpssRef,          ///< [IN] Recorded reference from _Init API.
+    taf_prop_pms_ModemWakeupSource_t bitset  ///< [IN] Filter bitset for special indications.
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -94,10 +94,10 @@ TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_SetWsFilter
  *
  */
 //-------------------------------------------------------------------------------------------------
-TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_GetWsFilter
+TAF_PROP_SHARED taf_prop_result_t taf_prop_pms_GetWsFilter
 (
-    taf_prop_pa_pms_MpssRef_t mpssRef,           ///< [IN]  Recorded reference from _Init API.
-    taf_prop_pa_pms_ModemWakeupSource_t *bitset  ///< [OUT] Configured filter bitset in remote service
+    taf_prop_pms_MpssRef_t mpssRef,           ///< [IN]  Recorded reference from _Init API.
+    taf_prop_pms_ModemWakeupSource_t *bitset  ///< [OUT] Configured filter bitset in remote service
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -106,13 +106,13 @@ TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_GetWsFilter
  *
  */
 //-------------------------------------------------------------------------------------------------
-TAF_PROP_SHARED taf_prop_result_t taf_prop_pa_pms_EnableAllWs
+TAF_PROP_SHARED taf_prop_result_t taf_prop_pms_EnableAllWs
 (
-    taf_prop_pa_pms_MpssRef_t mpssRef
+    taf_prop_pms_MpssRef_t mpssRef
 );
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TAF_PROP_PA_PMS_H */
+#endif /* TAF_PROP_PMS_H */
