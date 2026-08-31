@@ -23,6 +23,7 @@ extern "C" {
 #define TAF_PA_RADIO_PLMN_SCAN_NETWORK_MAX_COUNT 40
 #define TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES 256
 #define TAF_PA_RADIO_LTE_BAND_GROUP_COUNT 4
+#define TAF_PA_RADIO_NR5G_BAND_GROUP_COUNT 8
 
 #define TAF_PA_STRENGTH_VALUE_UNKNOWN INVALID_SIGNAL_STRENGTH_VALUE
 
@@ -32,6 +33,8 @@ extern "C" {
 #define TAF_PA_RADIO_BITMASK_RAT_TDSCDMA 0x8
 #define TAF_PA_RADIO_BITMASK_RAT_LTE 0x10
 #define TAF_PA_RADIO_BITMASK_RAT_NR5G 0x20
+#define TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA 0x40
+#define TAF_PA_RADIO_BITMASK_RAT_NR5G_SA 0x80
 typedef uint64_t taf_pa_radio_RatBitMask_t;
 
 #define TAF_PA_RADIO_BITMASK_SERVICE_DOMAIN_CS_ONLY 0x1
@@ -601,6 +604,11 @@ typedef struct
 {
     uint64_t bitmask[TAF_PA_RADIO_LTE_BAND_GROUP_COUNT];
 } taf_pa_radio_LteBand_t;
+
+typedef struct
+{
+    uint64_t bitmask[TAF_PA_RADIO_NR5G_BAND_GROUP_COUNT];
+} taf_pa_radio_Nr5gBand_t;
 
 typedef struct
 {
@@ -1415,6 +1423,87 @@ PA_SHARED pa_result_t taf_pa_radio_GetSysInfoIndLimit
 (
     uint32_t instance,
     taf_pa_radio_SysInfoIndLimitMask_t *limitMaskPtr
+);
+
+/**
+ * Set NR5G band preferences for specific RAT modes.
+ *
+ * The taf_pa_radio_RatBitMask_t parameter (ratMask) is used to specify which RAT modes
+ * the band preferences should be applied to. The bitmask can contain one or more of the
+ * following RAT values:
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G (0x20): Generic NR5G mode
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA (0x40): NR5G Non-Standalone mode
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G_SA (0x80): NR5G Standalone mode
+ *
+ * Multiple RAT modes can be combined using bitwise OR operations. The bandPtr parameter
+ * contains the band preferences (as a taf_pa_radio_Nr5gBand_t structure) that will be
+ * set for the specified RAT modes.
+ *
+ * @return PA_OK
+ *         The NR5G band preferences were set successfully.
+ * @return PA_FAULT
+ *         The ratMask is invalid, contains unsupported or conflicting RAT bits,
+ *         bandPtr is NULL or band preferences could not be applied because of
+ *         an internal or lower-layer failure.
+ */
+PA_SHARED pa_result_t taf_pa_radio_SetNr5gBandPreferences
+(
+    uint32_t instance,
+    taf_pa_radio_RatBitMask_t ratMask,
+    const taf_pa_radio_Nr5gBand_t* bandPtr
+);
+
+/**
+ * Get NR5G band preferences for specific RAT mode
+ *
+ * The taf_pa_radio_RatBitMask_t parameter (ratMask) is used to specify which RAT mode's
+ * band preferences should be retrieved. The bitmask should contain one of the following
+ * RAT values:
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G (0x20): Generic NR5G mode
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA (0x40): NR5G Non-Standalone mode
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G_SA (0x80): NR5G Standalone mode
+ *
+ * The function retrieves the band preferences for the specified RAT mode and populates
+ * the bandPtr structure with the current band preference settings.
+ * @return PA_OK
+ *         The NR5G band preferences were set successfully.
+ * @return PA_FAULT
+ *         The ratMask is invalid, contains unsupported or conflicting RAT bits,
+ *         bandPtr is NULL or band preferences could not be applied because of
+ *         an internal or lower-layer failure.
+ */
+PA_SHARED pa_result_t taf_pa_radio_GetNr5gBandPreferences
+(
+    uint32_t instance,
+    taf_pa_radio_RatBitMask_t ratMask,
+    taf_pa_radio_Nr5gBand_t* bandPtr
+);
+
+/**
+ * Get NR5G band capabilities for a specific NR RAT mode.
+ *
+ * The taf_pa_radio_RatBitMask_t parameter (ratMask) is used to specify which NR RAT mode's
+ * band capabilities should be retrieved. The bitmask should contain one of the following
+ * NR RAT values:
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G (0x20): Generic NR5G mode capabilities
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA (0x40): NR5G Non-Standalone mode capabilities
+ *   - TAF_PA_RADIO_BITMASK_RAT_NR5G_SA (0x80): NR5G Standalone mode capabilities
+ *
+ * The function queries the device's NR RAT capabilities and returns the supported bands
+ * for the specified NR RAT mode in the bandPtr structure. This represents the supported RF
+ * band capabilities for the device.
+ * @return PA_OK
+ *         The NR5G band preferences were set successfully.
+ * @return PA_FAULT
+ *         The ratMask is invalid, contains unsupported or conflicting RAT bits,
+ *         bandPtr is NULL or band preferences could not be applied because of
+ *         an internal or lower-layer failure.
+ */
+PA_SHARED pa_result_t taf_pa_radio_GetNr5gBandCapabilities
+(
+    uint32_t instance,
+    taf_pa_radio_RatBitMask_t ratMask,
+    taf_pa_radio_Nr5gBand_t* bandPtr
 );
 
 #ifdef __cplusplus

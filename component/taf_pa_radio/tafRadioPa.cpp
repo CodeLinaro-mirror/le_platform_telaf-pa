@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cinttypes>
 #include <condition_variable>
 #include <future>
 #include <mutex>
@@ -1182,8 +1183,17 @@ taf_pa_radio_RatBitMask_t Utility::Convert::TelRatPreferenceToRat
     if (bitmask[tel::PREF_LTE])
         result |= TAF_PROP_RADIO_BITMASK_RAT_LTE;
 
+    // Preference is NR5G in SA or NSA mode
     if (bitmask[tel::PREF_NR5G])
         result |= TAF_PROP_RADIO_BITMASK_RAT_NR5G;
+
+    // Preference is NSA mode of NR5G only. SA is not allowed
+    else if (bitmask[tel::PREF_NR5G_NSA])
+        result |= TAF_PROP_RADIO_BITMASK_RAT_NR5G_NSA;
+
+    // Preference is SA mode of NR5G only. NSA is not allowed
+    else if (bitmask[tel::PREF_NR5G_SA])
+        result |= TAF_PROP_RADIO_BITMASK_RAT_NR5G_SA;
 
     return result;
 }
@@ -1223,9 +1233,19 @@ pa_result_t Utility::Convert::Rat
             if (capability.capabilities[(uint16_t)tel::RATCapability::LTE])
                 bitmask |= TAF_PA_RADIO_BITMASK_RAT_LTE;
 
-            if (capability.capabilities[(uint16_t)tel::RATCapability::NR5G] ||
+            if (capability.capabilities[(uint16_t)tel::RATCapability::NR5G] &&
                 capability.capabilities[(uint16_t)tel::RATCapability::NR5GSA])
                 bitmask |= TAF_PA_RADIO_BITMASK_RAT_NR5G;
+
+            else
+            {
+                if (capability.capabilities[(uint16_t)tel::RATCapability::NR5G])
+                    bitmask |= TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA;
+
+                if (capability.capabilities[(uint16_t)tel::RATCapability::NR5GSA])
+                    bitmask |= TAF_PA_RADIO_BITMASK_RAT_NR5G_SA;
+
+            }
 
             *bitmaskPtr = bitmask;
 
@@ -1285,6 +1305,12 @@ tel::RatPreference Utility::Convert::RatToTelRatPreference
 
     if (bitmask & TAF_PA_RADIO_BITMASK_RAT_NR5G)
         result.set(tel::PREF_NR5G);
+
+    else if (bitmask & TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA)
+        result.set(tel::PREF_NR5G_NSA);
+
+    else if (bitmask & TAF_PA_RADIO_BITMASK_RAT_NR5G_SA)
+        result.set(tel::PREF_NR5G_SA);
 
     return result;
 }
@@ -4680,6 +4706,7 @@ pa_result_t taf_pa_radio_Deinit()
     return PA_OK;
 }
 
+
 pa_result_t taf_pa_radio_GetOperatingMode
 (
     uint32_t instance,
@@ -6025,7 +6052,7 @@ pa_result_t taf_pa_radio_SetBandPreferences
         callback);
     if (result != common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to set RF band preferences with telephony serving system manager %d.",
+        PA_ERROR("Failed to set RF band preferences with telephony serving system manager  %" PRIu32 ".",
             instance);
         return -EFAULT;
     }
@@ -6138,7 +6165,7 @@ pa_result_t taf_pa_radio_SetLteBandPreferences
         callback);
     if (result != common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to set RF band preferences with telephony serving system manager %d.",
+        PA_ERROR("Failed to set RF band preferences with telephony serving system manager %" PRIu32 ".",
             instance);
         return -EFAULT;
     }
@@ -7507,4 +7534,301 @@ pa_result_t taf_pa_radio_GetDataCurrRoamingStatus
     *statusPtr = Utility::Convert::RoamingStatus(status);
 
     return result;
+}
+
+pa_result_t taf_pa_radio_SetNr5gBandPreferences
+(
+    uint32_t instance,
+    taf_pa_radio_RatBitMask_t ratMask,
+    const taf_pa_radio_Nr5gBand_t* bandPtr
+)
+{
+    if (bandPtr == nullptr)
+    {
+        PA_ERROR("bandPtr is nullptr.");
+        return PA_FAULT;
+    }
+
+    if (instance >= MAX_INSTANCE)
+    {
+        PA_ERROR("Invalid instance %d.", instance);
+        return PA_FAULT;
+    }
+
+    auto& pa = PlatformAdaptor::GetInstance();
+    if (pa.managers.telephonyServingSystems[instance] == nullptr)
+    {
+        PA_ERROR("Telephony serving system manager %d is nullptr.", instance);
+        return PA_FAULT;
+    }
+
+    // Determine NrType based on ratMask
+    tel::NrType nrType;
+    if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G)
+        nrType = tel::NrType::COMBINED;
+    else if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G_SA)
+        nrType = tel::NrType::SA;
+    else if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA)
+        nrType = tel::NrType::NSA;
+    else
+    {
+        PA_ERROR("Invalid RatMask for nrType conversion");
+        return PA_FAULT;
+    }
+
+    vector<tel::NrRFBand> nr5gBands;
+
+    // Process each 64-bit group in the Nr5gBand bitmask
+    for (uint32_t groupIdx = 0; groupIdx < TAF_PA_RADIO_NR5G_BAND_GROUP_COUNT; groupIdx++)
+    {
+        uint64_t bandMask = bandPtr->bitmask[groupIdx];
+
+        // Map bitmask to Nr5g bands based on group index
+        // Each group represents 64 bands
+        for (uint32_t bitIdx = 0; bitIdx < 64 && bandMask > 0; bitIdx++)
+        {
+            if (bandMask & (1ULL << bitIdx))
+            {
+                uint32_t bandNumber = groupIdx * 64 + bitIdx + 1;
+                nr5gBands.emplace_back(static_cast<tel::NrRFBand>(bandNumber));
+                bandMask &= ~(1ULL << bitIdx);
+            }
+        }
+    }
+
+    auto builder = make_shared<tel::RFBandListBuilder>();
+    common::ErrorCode error = common::ErrorCode::UNKNOWN;
+    if (nr5gBands.empty())
+    {
+        PA_ERROR("No NR5G bands specified.");
+        return PA_FAULT;
+    }
+    shared_ptr<tel::IRFBandList> rfBandList = builder->addNrRFBands(nrType, nr5gBands).build(error);
+    if (error != common::ErrorCode::SUCCESS)
+    {
+        PA_ERROR("Failed to build RF band list.");
+        return PA_FAULT;
+    }
+
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](common::ErrorCode error)
+    {
+        request->CommonResponse(error);
+    };
+    auto result = pa.managers.telephonyServingSystems[instance]->setRFBandPreferences(rfBandList,
+        callback);
+    if (result != common::Status::SUCCESS)
+    {
+        PA_ERROR("Failed to set RF band preferences with telephony serving system manager  %" PRIu32 ".",
+            instance);
+        return PA_FAULT;
+    }
+
+    request->Wait();
+
+    return request->result;
+}
+
+pa_result_t taf_pa_radio_GetNr5gBandPreferences
+(
+    uint32_t instance,
+    taf_pa_radio_RatBitMask_t ratMask,
+    taf_pa_radio_Nr5gBand_t* bandPtr
+)
+{
+    if (bandPtr == nullptr)
+    {
+        PA_ERROR("bandPtr is nullptr.");
+        return PA_FAULT;
+    }
+
+    if (instance >= MAX_INSTANCE)
+    {
+        PA_ERROR("Invalid instance %d.", instance);
+        return PA_FAULT;
+    }
+
+    auto& pa = PlatformAdaptor::GetInstance();
+    if (pa.managers.telephonyServingSystems[instance] == nullptr)
+    {
+        PA_ERROR("Telephony serving system manager %d is nullptr.", instance);
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("Getting NR5G band preferences for instance %" PRIu32" with ratMask 0x%" PRIx64 ".",
+         instance, static_cast<uint64_t>(ratMask));
+
+    // Determine NrType based on ratMask
+    tel::NrType nrType;
+    if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G)
+        nrType = tel::NrType::COMBINED;
+    else if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G_SA)
+        nrType = tel::NrType::SA;
+    else if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA)
+        nrType = tel::NrType::NSA;
+    else
+    {
+        PA_ERROR("Invalid RatMask for nrType conversion");
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("NrType determined: %d.", static_cast<int>(nrType));
+
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](shared_ptr<tel::IRFBandList> listPtr, common::ErrorCode error)
+    {
+        request->RfBandPreferenceResponse(listPtr, error);
+    };
+    auto result = pa.managers.telephonyServingSystems[instance]->requestRFBandPreferences(
+        callback);
+    if (result != common::Status::SUCCESS)
+    {
+        PA_ERROR("Failed to get RF band preferences with telephony serving system manager %d.",
+            instance);
+        return PA_FAULT;
+    }
+
+    request->Wait();
+
+    if (request->result != PA_OK)
+        return request->result;
+
+    // Convert RF band list to Nr5g band bitmask
+    memset(bandPtr->bitmask, 0, sizeof(bandPtr->bitmask));
+
+    if (request->rfBandPreferencePtr == nullptr)
+    {
+        PA_ERROR("rfBandPreferencePtr is nullptr.");
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("Converting RF band list to NR5G band bitmask.");
+    uint32_t bandCount = 0;
+    const auto& nrBands = request->rfBandPreferencePtr->getNrBands(nrType);
+    for (auto band : nrBands)
+    {
+        if (band < tel::NrRFBand::NR5G_BAND_1 || band > tel::NrRFBand::NR5G_BAND_261)
+            PA_ERROR("Invalid NR5G RF band %u.", band);
+        else
+        {
+            uint32_t bandIndex = static_cast<uint32_t>(band) - 1;
+            uint32_t groupIndex = bandIndex / 64;
+            uint32_t bitIndex = bandIndex % 64;
+
+            if (groupIndex < TAF_PA_RADIO_NR5G_BAND_GROUP_COUNT)
+            {
+                bandPtr->bitmask[groupIndex] |= (uint64_t)0x1 << bitIndex;
+                bandCount++;
+                PA_DEBUG("Added NR5G band %" PRIu32 " to group %" PRIu32 ", bit %" PRIu32 ".",
+                    static_cast<uint32_t>(band), groupIndex, bitIndex);
+            }
+            else
+                PA_ERROR("Invalid group %d.", groupIndex);
+        }
+    }
+
+    PA_DEBUG("Total NR5G bands added: %d.", bandCount);
+    return PA_OK;
+}
+
+pa_result_t taf_pa_radio_GetNr5gBandCapabilities
+(
+    uint32_t instance,
+    taf_pa_radio_RatBitMask_t ratMask,
+    taf_pa_radio_Nr5gBand_t* bandPtr
+)
+{
+    if (bandPtr == nullptr)
+    {
+        PA_ERROR("bandPtr is nullptr.");
+        return PA_FAULT;
+    }
+
+    if (instance >= MAX_INSTANCE)
+    {
+        PA_ERROR("Invalid instance %d.", instance);
+        return PA_FAULT;
+    }
+
+    auto& pa = PlatformAdaptor::GetInstance();
+    if (pa.managers.telephonyServingSystems[instance] == nullptr)
+    {
+        PA_ERROR("Telephony serving system manager %d is nullptr.", instance);
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("Getting NR5G band capabilities for instance %d with ratMask 0x%x.", instance, ratMask);
+
+    // Determine NrType based on ratMask
+    // Determine NrType based on ratMask
+    tel::NrType nrType;
+    if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G)
+        nrType = tel::NrType::COMBINED;
+    else if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G_SA)
+        nrType = tel::NrType::SA;
+    else if (ratMask & TAF_PA_RADIO_BITMASK_RAT_NR5G_NSA)
+        nrType = tel::NrType::NSA;
+    else
+    {
+        PA_ERROR("Invalid RatMask for nrType conversion");
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("NrType determined: %d.", static_cast<int>(nrType));
+
+    auto request = make_shared<RequestCallback>();
+    auto callback = [request](shared_ptr<tel::IRFBandList> listPtr, common::ErrorCode error)
+    {
+        request->RfBandCapabilityResponse(listPtr, error);
+    };
+    auto result = pa.managers.telephonyServingSystems[instance]->requestRFBandCapability(callback);
+    if (result != common::Status::SUCCESS)
+    {
+        PA_ERROR("Failed to get RF band capability with telephony serving system manager %d.",
+            instance);
+        return PA_FAULT;
+    }
+
+    request->Wait();
+
+    if (request->result != PA_OK)
+        return request->result;
+
+    // Convert RF band list to Nr5g band bitmask
+    memset(bandPtr->bitmask, 0, sizeof(bandPtr->bitmask));
+
+    if (request->rfBandCapabilityPtr == nullptr)
+    {
+        PA_ERROR("rfBandCapabilityPtr is nullptr.");
+        return PA_FAULT;
+    }
+
+    PA_DEBUG("Converting RF band capability list to NR5G band bitmask.");
+    uint32_t bandCount = 0;
+    const auto& nrBands = request->rfBandCapabilityPtr->getNrBands(nrType);
+    for (auto band : nrBands)
+    {
+        if (band < tel::NrRFBand::NR5G_BAND_1 || band > tel::NrRFBand::NR5G_BAND_261)
+            PA_ERROR("Invalid NR5G RF band %u.", band);
+        else
+        {
+            auto bandVal = static_cast<uint32_t>(band);
+            uint32_t bandIndex = bandVal - 1;
+            uint32_t groupIndex = bandIndex / 64;
+            uint32_t bitIndex = bandIndex % 64;
+
+            if (groupIndex < TAF_PA_RADIO_NR5G_BAND_GROUP_COUNT)
+            {
+                bandPtr->bitmask[groupIndex] |= (1ULL << bitIndex);
+                bandCount++;
+                PA_DEBUG("Added NR5G band %" PRIu32 " to group %" PRIu32 ", bit %" PRIu32 ".",
+                    bandVal, groupIndex, bitIndex);
+            }
+            else
+                PA_ERROR("Invalid group %d.", groupIndex);
+        }
+    }
+
+    PA_DEBUG("Total NR5G bands in capabilities: %d.", bandCount);
+    return PA_OK;
 }
