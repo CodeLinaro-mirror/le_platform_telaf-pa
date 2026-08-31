@@ -1705,99 +1705,97 @@ pa_result_t taf_pa_sim_RegisterListeners
 
     std::lock_guard<std::mutex> lock(pa.listenerRegistrationMutex_);
 
+    // Capture local shared_ptr copies while holding the mutex so that a
+    // concurrent Deinit() cannot reset pa.subMgr / pa.cardManager /
+    // pa.multiSimMgr between the null-check and the actual use (TOCTOU fix).
+    auto subMgr      = pa.subMgr;
+    auto cardManager = pa.cardManager;
+    auto multiSimMgr = pa.multiSimMgr;
+
     //Register subscription listener
-    if (!pa.subMgr)
+    if (!subMgr)
     {
         PA_ERROR("Subscription manager is not initialized.");
         return TAF_PA_SIM_RESULT_FAULT;
     }
 
-    // Register sub listener for each slot it
+    // Register sub listener for each slot
     if (subListenerRegistered)
     {
         PA_INFO("Sub listener already registered.");
     }
     else
     {
-        if (pa.subMgr)
+        pa.tafSubListener = std::make_shared<tafPaSubscriptionListener>();
+        pa.subscriptionListener = pa.tafSubListener;
+        if (subMgr->registerListener(pa.subscriptionListener) ==
+                                         telux::common::Status::SUCCESS)
         {
-            pa.tafSubListener = std::make_shared<tafPaSubscriptionListener>();
-            pa.subscriptionListener = pa.tafSubListener;
-            if (pa.subMgr-> registerListener(pa.subscriptionListener) ==
-                                             telux::common::Status::SUCCESS)
-            {
-                PA_INFO("Sub listener registered successfully.");
-                subListenerRegistered = true;
-            }
-            else
-            {
-                PA_ERROR("Fail to register subscription listener.");
-                return TAF_PA_SIM_RESULT_FAULT;
-            }
+            PA_INFO("Sub listener registered successfully.");
+            subListenerRegistered = true;
+        }
+        else
+        {
+            PA_ERROR("Fail to register subscription listener.");
+            return TAF_PA_SIM_RESULT_FAULT;
         }
     }
 
     //Register card listener
-    if (!pa.cardManager)
+    if (!cardManager)
     {
         PA_ERROR("cardManager manager is not initialized.");
         return TAF_PA_SIM_RESULT_FAULT;
     }
 
-    // Register sub listener for each slot it
+    // Register card listener
     if (cardListenerRegistered)
     {
         PA_INFO("card listener already registered.");
     }
     else
     {
-        if (pa.cardManager)
+        pa.tafCardListener = std::make_shared<tafPaCardListener>();
+        pa.cardListener = pa.tafCardListener;
+        if (cardManager->registerListener(pa.cardListener) ==
+                                    telux::common::Status::SUCCESS)
         {
-            pa.tafCardListener = std::make_shared<tafPaCardListener>();
-            pa.cardListener = pa.tafCardListener;
-            if (pa.cardManager-> registerListener(pa.cardListener) ==
-                                        telux::common::Status::SUCCESS)
-            {
-                PA_INFO("card listener registered successfully.");
-                cardListenerRegistered = true;
-            }
-            else
-            {
-                PA_ERROR("Fail to register card listener.");
-                return TAF_PA_SIM_RESULT_FAULT;
-            }
+            PA_INFO("card listener registered successfully.");
+            cardListenerRegistered = true;
+        }
+        else
+        {
+            PA_ERROR("Fail to register card listener.");
+            return TAF_PA_SIM_RESULT_FAULT;
         }
     }
 
     //Register multi listener
-    if (!pa.multiSimMgr)
+    if (!multiSimMgr)
     {
         PA_ERROR("multi sim manager is not initialized.");
         return TAF_PA_SIM_RESULT_FAULT;
     }
 
-    // Register sub listener for each slot it
+    // Register multi sim listener
     if (multiSimListenerRegistered)
     {
         PA_INFO("multi sim listener already registered.");
     }
     else
     {
-        if (pa.multiSimMgr)
+        pa.tafMultiSimListener = std::make_shared<tafPaMultiSimListener>();
+        pa.multiSimListener = pa.tafMultiSimListener;
+        if (multiSimMgr->registerListener(pa.multiSimListener) ==
+                                       telux::common::Status::SUCCESS)
         {
-            pa.tafMultiSimListener = std::make_shared<tafPaMultiSimListener>();
-            pa.multiSimListener = pa.tafMultiSimListener;
-            if (pa.multiSimMgr-> registerListener(pa.multiSimListener) ==
-                                           telux::common::Status::SUCCESS)
-            {
-                PA_INFO("multi sim listener registered successfully.");
-                multiSimListenerRegistered = true;
-            }
-            else
-            {
-                PA_ERROR("Fail to register multi sim listener.");
-                return TAF_PA_SIM_RESULT_FAULT;
-            }
+            PA_INFO("multi sim listener registered successfully.");
+            multiSimListenerRegistered = true;
+        }
+        else
+        {
+            PA_ERROR("Fail to register multi sim listener.");
+            return TAF_PA_SIM_RESULT_FAULT;
         }
     }
 
@@ -1814,66 +1812,67 @@ pa_result_t taf_pa_sim_DeregisterListeners
     PA_INFO("taf_pa_sim_DeregisterListeners");
     std::lock_guard<std::mutex> lock(pa.listenerRegistrationMutex_);
 
+    // Capture local shared_ptr copies while holding the mutex so that a
+    // concurrent Deinit() cannot reset pa.subMgr / pa.cardManager /
+    // pa.multiSimMgr between the null-check and the actual use (TOCTOU fix).
+    auto subMgr      = pa.subMgr;
+    auto cardManager = pa.cardManager;
+    auto multiSimMgr = pa.multiSimMgr;
+
     //deregister subscription listener
-    if (!pa.subMgr)
+    if (!subMgr)
     {
         PA_ERROR("Subscription manager is not initialized.");
         return TAF_PA_SIM_RESULT_FAULT;
     }
 
-    // Deregister subscription listener for each slot it
+    // Deregister subscription listener
     if (!subListenerRegistered)
     {
         PA_INFO("Sub listeners already deregistered.");
     }
     else
     {
-        if (pa.subMgr)
+        if (subMgr->removeListener(pa.subscriptionListener) ==
+                                      telux::common::Status::SUCCESS)
         {
-            if (pa.subMgr->removeListener(pa.subscriptionListener) ==
-                                          telux::common::Status::SUCCESS)
-            {
-                PA_INFO("Subscription listener deregistered successfully.");
-                subListenerRegistered = false;
-            }
-            else
-            {
-                PA_ERROR("Fail to deregister serving system listener.");
-                return TAF_PA_SIM_RESULT_FAULT;
-            }
-       }
+            PA_INFO("Subscription listener deregistered successfully.");
+            subListenerRegistered = false;
+        }
+        else
+        {
+            PA_ERROR("Fail to deregister serving system listener.");
+            return TAF_PA_SIM_RESULT_FAULT;
+        }
     }
 
     //deregister card listener
-    if (!pa.cardManager)
+    if (!cardManager)
     {
         PA_ERROR("card manager is not initialized.");
         return TAF_PA_SIM_RESULT_FAULT;
     }
     if (!cardListenerRegistered)
     {
-        PA_INFO("card listener already registered.");
+        PA_INFO("card listener already deregistered.");
     }
     else
     {
-        if (pa.cardManager)
+        if (cardManager->removeListener(pa.cardListener) ==
+                                        telux::common::Status::SUCCESS)
         {
-            if (pa.cardManager->removeListener(pa.cardListener) ==
-                                            telux::common::Status::SUCCESS)
-            {
-                PA_INFO("card listener deregistered successfully.");
-                cardListenerRegistered = false;
-            }
-            else
-            {
-                PA_ERROR("Fail to deregister serving system listener.");
-                return TAF_PA_SIM_RESULT_FAULT;
-            }
+            PA_INFO("card listener deregistered successfully.");
+            cardListenerRegistered = false;
+        }
+        else
+        {
+            PA_ERROR("Fail to deregister serving system listener.");
+            return TAF_PA_SIM_RESULT_FAULT;
         }
     }
 
     // Deregister multi sim listener
-    if (!pa.multiSimMgr)
+    if (!multiSimMgr)
     {
         PA_ERROR("multi manager is not initialized.");
         return TAF_PA_SIM_RESULT_FAULT;
@@ -1884,19 +1883,16 @@ pa_result_t taf_pa_sim_DeregisterListeners
     }
     else
     {
-        if (pa.multiSimMgr)
+        if (multiSimMgr->deregisterListener(pa.multiSimListener) ==
+                                        telux::common::Status::SUCCESS)
         {
-            if (pa.multiSimMgr->deregisterListener(pa.multiSimListener) ==
-                                            telux::common::Status::SUCCESS)
-            {
-                PA_INFO("multi listener deregistered successfully.");
-                multiSimListenerRegistered = false;
-            }
-            else
-            {
-                PA_ERROR("Fail to deregister serving system listener.");
-                return TAF_PA_SIM_RESULT_FAULT;
-            }
+            PA_INFO("multi listener deregistered successfully.");
+            multiSimListenerRegistered = false;
+        }
+        else
+        {
+            PA_ERROR("Fail to deregister serving system listener.");
+            return TAF_PA_SIM_RESULT_FAULT;
         }
     }
     return TAF_PA_SIM_RESULT_OK;
