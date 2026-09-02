@@ -107,7 +107,7 @@ class Utils
         (
             const taf::pa::data::BandIntPriority_e bandPriority
         );
-
+#if 0 // ThroughputInfo not supported TODO SA510 bringup
         static void ConvertThroughputInfo
         (
             const telux::data::ThroughputInfo &sdkInfo,
@@ -125,7 +125,7 @@ class Utils
             const telux::data::DownlinkThroughputInfo &sdkInfo,
             DownlinkThroughputInfo_t &paInfo
         );
-
+#endif // ThroughputInfo not supported TODO SA510 bringup
         // MTU helper function
         static pa_result_t GetMtuFromInterface
         (

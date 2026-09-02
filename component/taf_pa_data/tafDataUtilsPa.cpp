@@ -784,6 +784,8 @@ telux::data::BandPriority Utils::ConvertBandIntPriority
     };
 }
 
+#if 0 // ThroughputInfo not supported TODO SA510 bringup
+
 void Utils::ConvertUplinkThroughputInfo
 (
     const telux::data::UplinkThroughputInfo &sdkInfo,
@@ -822,6 +824,8 @@ void Utils::ConvertThroughputInfo
     // Convert downlink info
     ConvertDownlinkThroughputInfo(sdkInfo.dlThroughput, paInfo.dlThroughput);
 }
+
+#endif // ThroughputInfo not supported TODO SA510 bringup
 
 pa_result_t Utils::GetMtuFromInterface
 (

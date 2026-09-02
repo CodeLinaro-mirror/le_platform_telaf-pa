@@ -700,6 +700,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks
                 auto listenerIt = dataConnectionListenersMap_.find((SlotId)slotId);
                 if (listenerIt != dataConnectionListenersMap_.end())
                 {
+#if 0 // ThroughputInfo not supported TODO SA510 bringup
                     // Register for DEFAULT indications only.
                     // The THROUGHPUT indication is registered separately in
                     // PaAddThroughputEventsCallback() when the first throughput callback is
@@ -707,11 +708,15 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRegisterDataConnCallbacks
                     // last throughput callback is removed.
                     if (managerIt->second->registerListener(listenerIt->second,
                         telux::data::DEFAULT_INDICATIONS) == telux::common::Status::SUCCESS)
+#else
+                if (managerIt->second->registerListener(listenerIt->second) ==
+                        telux::common::Status::SUCCESS)
+#endif  // ThroughputInfo not supported TODO SA510 bringup
                     {
                         PA_INFO("Data connection listener for slot ID %d registered.", slotId);
                         bDataConnectionListenersRegistered_[slotId - 1] = true;
                     }
-                    else
+                else
                     {
                         PA_ERROR("Failed to register data connection listener for slot ID %d.",
                                                                                            slotId);
@@ -757,13 +762,17 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaDeregisterDataConnCallbac
         {
             if (dataConnectionManagersMap_.find((SlotId)slotId) != dataConnectionManagersMap_.end())
             {
+#if 0 // ThroughputInfo not supported TODO SA510 bringup
                 // Deregister from DEFAULT indications only.
                 // The THROUGHPUT indication is managed independently by
                 // PaAddThroughputEventsCallback() and PaRemoveThroughputEventsCallback().
                 telux::common::Status status = dataConnectionManagersMap_[(SlotId)slotId]->
                     deregisterListener(dataConnectionListenersMap_[(SlotId)slotId],
                                       telux::data::DEFAULT_INDICATIONS);
-
+#else
+                telux::common::Status status = dataConnectionManagersMap_[(SlotId)slotId]->
+                    deregisterListener(dataConnectionListenersMap_[(SlotId)slotId]);
+#endif
                 if (telux::common::Status::SUCCESS == status)
                 {
                     PA_INFO("Data connection listener for slot ID %d deregistered.", slotId);
@@ -1781,7 +1790,7 @@ void taf::pa::data::TafPaTeluxDataConnection::PaSendThroughputEventInfoToClients
         }
     }
 }
-
+#if 0 // ThroughputInfo not supported TODO SA510 bringup
 pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaAddThroughputEventsCallback
 (
     taf_pa_data_ThroughputEventsCb callBack,
@@ -1922,6 +1931,7 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRemoveThroughputEventsCal
     return PA_OK;
 }
 
+
 pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaSetThroughputReportInterval
 (
     PhoneId_e phoneId,
@@ -2015,3 +2025,4 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetLastThroughputInfo
 
     return PA_OK;
 }
+#endif // ThroughputInfo not supported TODO SA510 bringup

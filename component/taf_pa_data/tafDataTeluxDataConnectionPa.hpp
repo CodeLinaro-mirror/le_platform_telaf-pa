@@ -92,8 +92,10 @@ namespace data
             const std::vector<std::shared_ptr<telux::data::TftChangeInfo>> &tft) override;
         void onHwAccelerationChanged(const telux::data::ServiceState state) override;
         void onServiceStatusChange(telux::common::ServiceStatus status) override;
+#if 0 // ThroughputInfo not supported TODO SA510 bringup
         void onThroughputInfoAvailable(
             const std::vector<telux::data::ThroughputInfo> &info) override;
+#endif // ThroughputInfo not supported TODO SA510 bringup
         void ParseIDataCall(
             const std::shared_ptr<telux::data::IDataCall> &iCall,
             DataCallEventInfo_t &dataCallInfo);

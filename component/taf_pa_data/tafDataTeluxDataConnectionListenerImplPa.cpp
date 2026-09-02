@@ -491,7 +491,7 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onServiceStatusChange
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.SetSubsysState(slotIdPa, sState, true);
 }
-
+#if 0 // ThroughputInfo not supported TODO SA510 bringup
 void taf::pa::data::TafPaTeluxDataConnectionListener::onThroughputInfoAvailable
 (
     const std::vector<telux::data::ThroughputInfo> &info
@@ -547,3 +547,4 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onThroughputInfoAvailable
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.PaSendThroughputEventInfoToClients(paThroughputInfoList);
 }
+#endif // ThroughputInfo not supported TODO SA510 bringup
