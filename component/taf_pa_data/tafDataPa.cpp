@@ -64,6 +64,20 @@ taf_pa_result_t taf::pa::data::Init
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.Init(slotCount);
 
+    auto &teluxPaKeepAlive = taf::pa::data::TafPaTeluxKeepAlive::GetInstance();
+    taf_pa_result_t keepAliveResult = teluxPaKeepAlive.Init();
+    if (keepAliveResult != TAF_PA_OK)
+    {
+        TAF_PA_WARN("KeepAlive PA manager unavailable: %d", keepAliveResult);
+    }
+
+    auto &teluxPaDataFilter = taf::pa::data::TafPaTeluxDataFilter::GetInstance();
+    taf_pa_result_t dataFilterResult = teluxPaDataFilter.Init();
+    if (dataFilterResult != TAF_PA_OK)
+    {
+        TAF_PA_WARN("DataFilter PA manager unavailable: %d", dataFilterResult);
+    }
+
     // Check the subsystem states
     teluxPhoneManagerState = teluxPaData.PaGetPhoneManagerInitState();
     if (SubsystemState_e::AVAILABLE != teluxPhoneManagerState)
@@ -164,6 +178,12 @@ taf_pa_result_t taf::pa::data::Deinit()
         TAF_PA_WARN("Deinit() called before Init() - ignoring deinit request.");
         return TAF_PA_FAULT;
     }
+
+    auto &teluxPaDataFilter = taf::pa::data::TafPaTeluxDataFilter::GetInstance();
+    teluxPaDataFilter.Deinit();
+
+    auto &teluxPaKeepAlive = taf::pa::data::TafPaTeluxKeepAlive::GetInstance();
+    teluxPaKeepAlive.Deinit();
 
     // Init data profile sub system
     auto &teluxPaDataProfile = taf::pa::data::TafPaTeluxDataProfile::GetInstance();
@@ -916,4 +936,94 @@ taf_pa_result_t taf::pa::data::GetMtu
 
     // Get MTU from the interface using utility function
     return Utils::GetMtuFromInterface(interfaceName, mtu);
+}
+
+taf_pa_result_t taf::pa::data::EnableTCPMonitor
+(
+    SlotId_e slotID,
+    const TcpKeepAliveParams_t &tcpKaParams,
+    TcpMonitorHandle_t &monHandle
+)
+{
+    TAF_PA_DEBUG("PA implementation.");
+    auto &keepAlive = TafPaTeluxKeepAlive::GetInstance();
+    return keepAlive.PaEnableTCPMonitor(slotID, tcpKaParams, monHandle);
+}
+
+taf_pa_result_t taf::pa::data::DisableTCPMonitor
+(
+    SlotId_e slotID,
+    TcpMonitorHandle_t monHandle
+)
+{
+    TAF_PA_DEBUG("PA implementation.");
+    auto &keepAlive = TafPaTeluxKeepAlive::GetInstance();
+    return keepAlive.PaDisableTCPMonitor(slotID, monHandle);
+}
+
+taf_pa_result_t taf::pa::data::StartTCPKeepAliveOffload
+(
+    SlotId_e slotID,
+    TcpMonitorHandle_t monHandle,
+    uint32_t interval,
+    TcpKeepAliveOffloadHandle_t &handle
+)
+{
+    TAF_PA_DEBUG("PA implementation.");
+    auto &keepAlive = TafPaTeluxKeepAlive::GetInstance();
+    return keepAlive.PaStartTCPKeepAliveOffload(slotID, monHandle, interval, handle);
+}
+
+taf_pa_result_t taf::pa::data::StopTCPKeepAliveOffload
+(
+    SlotId_e slotID,
+    TcpKeepAliveOffloadHandle_t handle
+)
+{
+    TAF_PA_DEBUG("PA implementation.");
+    auto &keepAlive = TafPaTeluxKeepAlive::GetInstance();
+    return keepAlive.PaStopTCPKeepAliveOffload(slotID, handle);
+}
+
+taf_pa_result_t taf::pa::data::SetDataRestrictMode
+(
+    SlotId_e slotID,
+    FilterModeInfo_t mode
+)
+{
+    TAF_PA_DEBUG("PA implementation.");
+    auto &dataFilter = TafPaTeluxDataFilter::GetInstance();
+    return dataFilter.PaSetDataRestrictMode(slotID, mode);
+}
+
+taf_pa_result_t taf::pa::data::RequestDataRestrictMode
+(
+    SlotId_e slotID,
+    FilterModeInfo_t &mode
+)
+{
+    TAF_PA_DEBUG("PA implementation.");
+    auto &dataFilter = TafPaTeluxDataFilter::GetInstance();
+    return dataFilter.PaRequestDataRestrictMode(slotID, mode);
+}
+
+taf_pa_result_t taf::pa::data::AddDataRestrictFilter
+(
+    SlotId_e slotID,
+    const IpFilter_t &filter
+)
+{
+    TAF_PA_DEBUG("PA implementation.");
+    auto &dataFilter = TafPaTeluxDataFilter::GetInstance();
+    return dataFilter.PaAddDataRestrictFilter(slotID, filter);
+}
+
+taf_pa_result_t taf::pa::data::RemoveAllDataRestrictFilters
+(
+    SlotId_e slotID
+)
+{
+    TAF_PA_DEBUG("PA implementation.");
+    auto &dataFilter = TafPaTeluxDataFilter::GetInstance();
+    return dataFilter.PaRemoveAllDataRestrictFilters(slotID);
 }
