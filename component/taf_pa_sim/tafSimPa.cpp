@@ -2240,8 +2240,29 @@ void PlatformAdaptor::requestsSlotsStatusResponse(
     auto& pa = PlatformAdaptor::GetInstance();
     auto& phoneFactory = tel::PhoneFactory::getInstance();
     pa.cardManager = phoneFactory.getCardManager();
-    slotCount = slotStatus.size();
-    TAF_PA_INFO("requestsSlotsStatusResponse: slotCount: %d", slotCount);
+    // Derive physical slot count from slot state and card state:
+    // On SS MBN firmware the non-existent second slot reports BOTH
+    // SlotState::UNKNOWN AND CardState::UNKNOWN.  On DSDS/DSDA/DSSS firmware
+    // every physical slot has SlotState::ACTIVE regardless of whether a
+    // SIM is inserted (CardState may be PRESENT or ABSENT).
+    // A slot is counted as a real physical slot if EITHER its SlotState
+    // OR its CardState is not UNKNOWN.
+    //
+    //   SS MBN  : Slot1(ACTIVE/PRESENT), Slot2(UNKNOWN/UNKNOWN) -> physicalSlotCount = 1
+    //   DSDS/DSDA: Slot1(ACTIVE/PRESENT), Slot2(ACTIVE/ABSENT)  -> physicalSlotCount = 2
+    int physicalSlotCount = 0;
+    for (auto it = slotStatus.begin(); it != slotStatus.end(); ++it)
+    {
+        const auto& slotSt = it->second;
+        if (slotSt.slotState != telux::tel::SlotState::UNKNOWN ||
+            slotSt.cardState != telux::tel::CardState::CARDSTATE_UNKNOWN)
+        {
+            physicalSlotCount++;
+        }
+    }
+    slotCount = physicalSlotCount;
+    TAF_PA_INFO("requestsSlotsStatusResponse: physicalSlotCount: %d (total slots reported: %zu)",
+            slotCount, slotStatus.size());
     telux::common::Status status;
     int activeSlots = 0;
     for(auto it = slotStatus.begin(); it != slotStatus.end(); ++it)
@@ -2466,6 +2487,45 @@ taf_pa_result_t taf_pa_sim_getSlotCount(int* count)
         *count = 0;
         return TAF_PA_FAULT;
     }
+}
+
+taf_pa_result_t taf_pa_sim_GetPhysicalSlotCount(int* count)
+{
+    TAF_PA_INFO("taf_pa_sim_GetPhysicalSlotCount");
+
+    if (count == nullptr)
+    {
+        TAF_PA_ERROR("Invalid parameter: count pointer is null");
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    auto& pa = PlatformAdaptor::GetInstance();
+
+    if (!pa.multiSimMgr)
+    {
+        TAF_PA_ERROR("Multi sim manager is not initialized.");
+        return TAF_PA_FAULT;
+    }
+
+    // pa.slotCount is derived in requestsSlotsStatusResponse() by counting slots
+    // where SlotState != UNKNOWN OR CardState != UNKNOWN.  The modem always reports
+    // 2 entries in the slot-status map, but on SS MBN firmware the non-existent
+    // second slot reports BOTH SlotState::UNKNOWN AND CardState::UNKNOWN.
+    // On DSDS/DSDA every physical slot has SlotState::ACTIVE (CardState may be
+    // PRESENT or ABSENT).  The mapping is:
+    //
+    //   SS MBN  : Slot1(ACTIVE/PRESENT), Slot2(UNKNOWN/UNKNOWN) -> slotCount = 1
+    //   DSDS/DSDA: Slot1(ACTIVE/PRESENT), Slot2(ACTIVE/ABSENT)  -> slotCount = 2
+    if (pa.slotCount > 0)
+    {
+        *count = pa.slotCount;
+        TAF_PA_INFO("GetPhysicalSlotCount: %d (from slot status map)", *count);
+        return TAF_PA_OK;
+    }
+
+    TAF_PA_ERROR("GetPhysicalSlotCount: slot status not yet available from modem");
+    *count = 0;
+    return TAF_PA_FAULT;
 }
 
 std::shared_ptr<telux::tel::ICard> PlatformAdaptor::GetCard
