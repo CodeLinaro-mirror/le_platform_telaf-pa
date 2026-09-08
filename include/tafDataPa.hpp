@@ -14,6 +14,7 @@
 #include <vector>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <bitset>
 
@@ -1267,6 +1268,150 @@ struct UplinkThroughputInfo_t
     uint32_t queueSize = 0;         ///< Number of bytes pending in the uplink queue.
 };
 
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Data restrict filter mode.
+ */
+//--------------------------------------------------------------------------------------------------
+enum class FilterMode_e : uint8_t
+{
+    UNKNOWN = 0, ///< Unknown or invalid mode.
+    DISABLE = 1, ///< Disable data restrict filtering.
+    ENABLE = 2   ///< Enable data restrict filtering.
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * PA-owned IP protocol values used by data restrict filters.
+ */
+//--------------------------------------------------------------------------------------------------
+enum class IpProtocol_e : uint8_t
+{
+    UNKNOWN = 0xFF,
+    ICMP = 1,
+    TCP = 6,
+    UDP = 17,
+    ESP = 50
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Data restrict mode and auto-exit setting.
+ */
+//--------------------------------------------------------------------------------------------------
+struct FilterModeInfo_t
+{
+    FilterMode_e filterMode = FilterMode_e::UNKNOWN;
+    FilterMode_e filterAutoExit = FilterMode_e::DISABLE;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Port and range match. Range is the number of ports following port.
+ */
+//--------------------------------------------------------------------------------------------------
+struct PortInfo_t
+{
+    uint16_t port = 0;
+    uint16_t range = 0;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * IPv4 address and subnet mask match.
+ */
+//--------------------------------------------------------------------------------------------------
+struct Ipv4Address_t
+{
+    std::string address;
+    std::string subnetMask;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * IPv6 address and prefix length match.
+ */
+//--------------------------------------------------------------------------------------------------
+struct Ipv6Address_t
+{
+    std::string address;
+    uint8_t prefixLength = 128;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * IPv4 filter fields.
+ */
+//--------------------------------------------------------------------------------------------------
+struct Ipv4Filter_t
+{
+    std::optional<Ipv4Address_t> source;
+    std::optional<Ipv4Address_t> destination;
+    std::optional<uint8_t> typeOfServiceValue;
+    std::optional<uint8_t> typeOfServiceMask;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * IPv6 filter fields.
+ */
+//--------------------------------------------------------------------------------------------------
+struct Ipv6Filter_t
+{
+    std::optional<Ipv6Address_t> source;
+    std::optional<Ipv6Address_t> destination;
+    std::optional<uint8_t> trafficClassValue;
+    std::optional<uint8_t> trafficClassMask;
+    std::optional<uint32_t> flowLabel;
+    std::optional<uint8_t> natEnabled;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * ICMP filter fields.
+ */
+//--------------------------------------------------------------------------------------------------
+struct IcmpInfo_t
+{
+    uint8_t type = 0;
+    uint8_t code = 0;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * ESP filter fields.
+ */
+//--------------------------------------------------------------------------------------------------
+struct EspInfo_t
+{
+    uint32_t spi = 0;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * PA-owned IP filter description.
+ *
+ * The current TelSDK NAO filter API is global. Filters without profileId or ipFamilyType apply to
+ * all active data calls. A request containing either optional scoping field returns
+ * PA_UNSUPPORTED until the target platform provides a non-deprecated scoped API. Filters can be
+ * added before data restrict mode is enabled. Duplicate filters are rejected by the PA with
+ * PA_DUPLICATE.
+ */
+//--------------------------------------------------------------------------------------------------
+struct IpFilter_t
+{
+    std::optional<ProfileId_e> profileId;
+    std::optional<IpType_e> ipFamilyType;
+    IpProtocol_e protocol = IpProtocol_e::UNKNOWN;
+    std::optional<Ipv4Filter_t> ipv4;
+    std::optional<Ipv6Filter_t> ipv6;
+    std::optional<PortInfo_t> sourcePort;
+    std::optional<PortInfo_t> destinationPort;
+    std::optional<IcmpInfo_t> icmp;
+    std::optional<EspInfo_t> esp;
+};
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Downlink throughput information for a data profile.
@@ -1295,6 +1440,24 @@ struct ThroughputInfo_t
     DownlinkThroughputInfo_t  dlThroughput;                   ///< Downlink throughput details.
 };
 
+using TcpMonitorHandle_t = uint32_t;
+using TcpKeepAliveOffloadHandle_t = uint32_t;
+
+static constexpr TcpMonitorHandle_t INVALID_TCP_MONITOR_HANDLE = 0;
+static constexpr TcpKeepAliveOffloadHandle_t INVALID_TCP_KEEP_ALIVE_OFFLOAD_HANDLE = 0;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * TCP connection tuple used for TCP keep-alive monitor/offload APIs.
+ */
+//--------------------------------------------------------------------------------------------------
+struct TcpKeepAliveParams_t
+{
+    std::string sourceAddress;      ///< Source IPv4 or IPv6 address.
+    std::string destinationAddress; ///< Destination IPv4 or IPv6 address.
+    uint16_t sourcePort = 0;        ///< Source TCP port.
+    uint16_t destinationPort = 0;   ///< Destination TCP port.
+};
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -1326,6 +1489,133 @@ PA_SHARED pa_result_t Init
 PA_SHARED pa_result_t Deinit
 (
 
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Enable a TCP monitor for the supplied TCP connection tuple.
+ *
+ * @return
+ *  - PA_OK             Monitor enabled and handle populated.
+ *  - PA_BAD_PARAMETER  Invalid address, port, or output handle parameter.
+ *  - PA_UNAVAILABLE    Keep-alive manager is unavailable.
+ *  - PA_UNSUPPORTED    Operation is not supported by the target.
+ *  - PA_FAULT          Platform failure.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t EnableTCPMonitor
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    const TcpKeepAliveParams_t &tcpKaParams,
+    ///< [IN] TCP keep-alive parameters.
+    TcpMonitorHandle_t &monHandle
+    ///< [OUT] TCP monitor handle.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Disable and release a TCP monitor. If keep-alive offload is active for this monitor, the PA
+ * stops the offload before disabling the monitor.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t DisableTCPMonitor
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    TcpMonitorHandle_t monHandle
+    ///< [IN] TCP monitor handle.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Start TCP keep-alive offload for an enabled TCP monitor.
+ *
+ * A monitor can have only one active offload through this PA at a time. Repeated starts for the
+ * same monitor return PA_DUPLICATE until the offload is stopped.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t StartTCPKeepAliveOffload
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    TcpMonitorHandle_t monHandle,
+    ///< [IN] TCP monitor handle.
+    uint32_t interval,
+    ///< [IN] Keep-alive interval in milliseconds.
+    TcpKeepAliveOffloadHandle_t &handle
+    ///< [OUT] TCP keep-alive offload handle.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Stop a TCP keep-alive offload.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t StopTCPKeepAliveOffload
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    TcpKeepAliveOffloadHandle_t handle
+    ///< [IN] TCP keep-alive offload handle.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set data restrict mode for active data calls.
+ *
+ * Null callbacks are accepted. If validation fails before a platform request is issued and a
+ * callback was supplied, the PA invokes the callback immediately with the same error returned by
+ * this function. PA-owned callbacks are not invoked after Deinit() completes.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t SetDataRestrictMode
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    FilterModeInfo_t mode
+    ///< [IN] Data restrict mode.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Request current data restrict mode.
+ *
+ * The callback must be non-null because the mode is returned asynchronously.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t RequestDataRestrictMode
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    FilterModeInfo_t &mode
+    ///< [OUT] Data restrict mode.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Add a data restrict filter rule.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t AddDataRestrictFilter
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    const IpFilter_t &filter
+    ///< [IN] Data restrict filter.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Remove all configured data restrict filter rules.
+ *
+ * Removing filters when no filters are configured is accepted and forwarded to the platform.
+ */
+//--------------------------------------------------------------------------------------------------
+PA_SHARED pa_result_t RemoveAllDataRestrictFilters
+(
+    SlotId_e slotID
+    ///< [IN] The SIM slot ID.
 );
 
 //--------------------------------------------------------------------------------------------------
