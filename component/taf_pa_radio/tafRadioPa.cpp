@@ -4679,7 +4679,7 @@ taf_pa_result_t taf_pa_radio_Deinit()
         pa.managers.dataServingSystems[i].reset();
     }
 
-    // Step 5: Deinitialize the private/proprietary radio platform adaptor only if its init
+    // Step 5: Deinitialize radio platform adaptor only if its init
     // completed successfully.
     if (pa.propRadioInitialized.load(std::memory_order_acquire))
     {
@@ -7150,7 +7150,7 @@ taf_pa_result_t taf_pa_radio_RegisterIndication
 
     taf_prop_result_t result = taf_prop_radio_RegisterIndication(instance, registration, propMode);
     if (result != TAF_PROP_OK)
-        TAF_PA_ERROR("Failed to control radio proprietary indications for instance %d.", instance);
+        TAF_PA_ERROR("RegisterIndication failed for instance %d.", instance);
 
     auto& pa = PlatformAdaptor::GetInstance();
     switch (registration)
@@ -7217,7 +7217,7 @@ taf_pa_result_t taf_pa_radio_PerformPciNetworkScan
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
-    // The proprietary scan is synchronous, so only its response can be rejected after shutdown.
+
     uint64_t generation = pa.lifecycleGeneration.load(std::memory_order_acquire);
     if (pa.isShuttingDown.load(std::memory_order_acquire) ||
         !pa.gRadioPaInitialized.load(std::memory_order_acquire))
