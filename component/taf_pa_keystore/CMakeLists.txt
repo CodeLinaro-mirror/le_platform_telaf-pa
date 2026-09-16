@@ -23,6 +23,9 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/stub/inclu
 
 target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
 target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_keystore)
+# libcrypto is required by tafFilePa.c (SHA1 used to derive backup file names).
+target_link_libraries(${TARGET_NAME} PRIVATE crypto)
+target_link_libraries(${TARGET_NAME} PRIVATE selinux)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib
