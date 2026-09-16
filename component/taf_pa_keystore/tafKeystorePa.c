@@ -10,6 +10,13 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Directory used to store the backup copies of the KeyStore files.
+ */
+//--------------------------------------------------------------------------------------------------
+#define TAF_PA_KS_FILE_BACKUP_STORAGE   "/data/persist/tafKeyStoreSvc/AppKey/"
+
 // Thread-safe initialization flag
 static _Atomic(bool) g_keystore_initialized = false;
 static _Atomic(bool) g_file_vtable_initialized = false;
@@ -25,7 +32,7 @@ static const taf_prop_file_vtable_t g_file_vtable = {
     .abi_version = 1,
     .size = sizeof(taf_prop_file_vtable_t),
 
-    // RFS File Operations
+    // File Operations
     .prop_open = taf_pa_file_Open,
     .prop_close = taf_pa_file_Close,
     .prop_read = taf_pa_file_Read,
@@ -48,21 +55,44 @@ pa_result_t taf_pa_ks_Init(void)
 {
     PA_INFO("Telaf keyStore PA initializing ...");
 
-    // Initialize RFS vtable injection first
+    // Initialize file vtable injection first
 
     bool expected = false;
     if (!atomic_compare_exchange_strong(&g_file_vtable_initialized, &expected, true))
     {
-        PA_WARN("RFS vtable already initialized");
+        PA_WARN("file vtable already initialized");
         return PA_OK;
     }
 
-    PA_INFO("Injecting RFS vtable into keystore noship component");
+    // Initialize the file PA (backup storage directory, checksum/backup feature) before
+    // it gets used through the injected vtable below. Without this, BackupEnabled defaults
+    // to true while BackupStorage stays empty, which makes every backup/restore attempt
+    // fail and aborts otherwise-successful file opens.
+    if (taf_pa_file_Init(true, NULL) != PA_OK)
+    {
+        PA_ERROR("Failed to initialize file PA.");
+        // Roll back so a subsequent Init() call is not permanently blocked by the
+        // "already initialized" guard above, since the vtable was never bound.
+        atomic_store(&g_file_vtable_initialized, false);
+        return PA_FAULT;
+    }
+
+    // Keep the KeyStore backups in its own data directory instead of the generic
+    // TAF_PA_FILE_BACKUP_STORAGE default. Note that they then live on the same partition as the
+    // primary key files, so this protects against a single file corruption, not a partition wipe.
+    if (taf_pa_file_SetBackupStorage(TAF_PA_KS_FILE_BACKUP_STORAGE) != PA_OK)
+    {
+        PA_ERROR("Failed to set file backup storage to %s.", TAF_PA_KS_FILE_BACKUP_STORAGE);
+        atomic_store(&g_file_vtable_initialized, false);
+        return PA_FAULT;
+    }
+
+    PA_INFO("Injecting file vtable into keystore noship component");
 
     // Get the vtable from taf_pa_file.c and inject it into noship component
     taf_prop_file_vtable_Bind(&g_file_vtable);
 
-    PA_INFO("RFS vtable injection completed successfully");
+    PA_INFO("file vtable injection completed successfully");
 
     // Initialize the proprietary keystore
     pa_result_t result = taf_prop_ks_Init();
@@ -90,18 +120,18 @@ pa_result_t taf_pa_ks_Deinit(void)
 
      if (!atomic_load(&g_file_vtable_initialized))
     {
-        PA_WARN("RFS vtable not initialized - ignoring deinit request");
+        PA_WARN("file vtable not initialized - ignoring deinit request");
         return PA_FAULT;
     }
 
-    PA_INFO("Unbinding RFS vtable from keystore noship component");
+    PA_INFO("Unbinding file vtable from keystore noship component");
 
     // Unbind the vtable
     taf_prop_file_vtable_Bind(NULL);
 
     // Reset initialization flag
     atomic_store(&g_file_vtable_initialized, false);
-    PA_INFO("RFS vtable unbinding completed successfully");
+    PA_INFO("file vtable unbinding completed successfully");
 
     atomic_store(&g_keystore_initialized, false);
     PA_INFO("Telaf keyStore PA deinitialized.");
