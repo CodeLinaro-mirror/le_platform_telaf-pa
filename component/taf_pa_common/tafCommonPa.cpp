@@ -224,6 +224,8 @@ static void ResolveCommonLogApis(void)
                     dlsym(gNsCommonHandle, "taf_prop_common_LogSetlevel"));
         }
     }
+
+    dlerror();
 }
 
 /* ===== PA -> common injected vtable implementation ===== */
