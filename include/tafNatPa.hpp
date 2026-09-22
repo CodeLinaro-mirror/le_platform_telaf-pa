@@ -36,33 +36,33 @@ taf_pa_net_ipproto_t;
  * Initialize NAT platform adapter
  *
  * @return
- *      - LE_OK on success
- *      - LE_FAULT on failure
+ *      - TAF_PA_OK on success
+ *      - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_nat_Init();
+TAF_PA_SHARED taf_pa_result_t taf_pa_nat_Init();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Deinitialize NAT platform adapter
  *
  * @return
- *      - PA_OK on success
- *      - PA_FAULT on failure
+ *      - TAF_PA_OK on success
+ *      - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_nat_Deinit();
+TAF_PA_SHARED taf_pa_result_t taf_pa_nat_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Add a destination NAT entry
  *
  * @return
- *      - LE_OK on success
- *      - LE_FAULT on failure
+ *      - TAF_PA_OK on success
+ *      - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_nat_AddDestNatEntry(
+TAF_PA_SHARED taf_pa_result_t taf_pa_nat_AddDestNatEntry(
     uint32_t profileId,
     uint8_t slotId,
     const taf_pa_net_NatConfig_t *natConfig
@@ -73,11 +73,11 @@ PA_SHARED pa_result_t taf_pa_nat_AddDestNatEntry(
  * Remove a destination NAT entry
  *
  * @return
- *      - LE_OK on success
- *      - LE_FAULT on failure
+ *      - TAF_PA_OK on success
+ *      - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_nat_RemoveDestNatEntry(
+TAF_PA_SHARED taf_pa_result_t taf_pa_nat_RemoveDestNatEntry(
     uint32_t profileId,
     uint8_t slotId,
     const taf_pa_net_NatConfig_t *natConfig
@@ -88,12 +88,12 @@ PA_SHARED pa_result_t taf_pa_nat_RemoveDestNatEntry(
  * Query destination NAT entry list for a profile
  *
  * @return
- *      - LE_OK on success
- *      - LE_FAULT on failure
- *      - LE_TIMEOUT on timeout
+ *      - TAF_PA_OK on success
+ *      - TAF_PA_FAULT on failure
+ *      - TAF_PA_TIMEOUT on timeout
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_nat_QueryDestNatEntryList(
+TAF_PA_SHARED taf_pa_result_t taf_pa_nat_QueryDestNatEntryList(
     uint32_t profileId,
     uint8_t slotId,
     std::vector<taf_pa_net_NatConfig_t> &natEntryInfo

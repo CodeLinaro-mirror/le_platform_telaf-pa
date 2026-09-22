@@ -53,12 +53,12 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::fillCallEndReason
         paReason.handOffCode = static_cast<HandoffReasonCode_e>(teluxReason.handOffCode);
         break;
     default:
-        PA_WARN("Invalid Reason type: %d", static_cast<int32_t>(teluxReason.type));
+        TAF_PA_WARN("Invalid Reason type: %d", static_cast<int32_t>(teluxReason.type));
         break;
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
 (
     const std::shared_ptr<telux::data::IDataCall> &dataCall,
     telux::data::BitRateInfo &bitRate
@@ -77,17 +77,17 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
         auto it = callStatusMap_.find(dataCall);
         if (it == callStatusMap_.end())
         {
-            PA_DEBUG("IDataCall %p not found in callStatusMap_", rawPtr);
+            TAF_PA_DEBUG("IDataCall %p not found in callStatusMap_", rawPtr);
             // First call. Proceed to get the bit rate
         }
         else
         {
-            PA_DEBUG("IDataCall %p found in callStatusMap_", rawPtr);
+            TAF_PA_DEBUG("IDataCall %p found in callStatusMap_", rawPtr);
             // Check if the data call status is the same or has changed.
             if (it->second == datacallStatus)
             {
-                PA_DEBUG("IDataCall %p data call status has not changed.", rawPtr);
-                return PA_DUPLICATE;
+                TAF_PA_DEBUG("IDataCall %p data call status has not changed.", rawPtr);
+                return TAF_PA_DUPLICATE;
             }
         }
     }
@@ -113,33 +113,33 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
             if (telux::common::ErrorCode::SUCCESS == errorCode)
             {
                 // Success
-                PA_DEBUG("maxRxRate: %" PRIu64 "", cbkBitRate.maxRxRate);
-                PA_DEBUG("maxTxRate: %" PRIu64 "", cbkBitRate.maxTxRate);
+                TAF_PA_DEBUG("maxRxRate: %" PRIu64 "", cbkBitRate.maxRxRate);
+                TAF_PA_DEBUG("maxTxRate: %" PRIu64 "", cbkBitRate.maxTxRate);
                 bitRatePtr->maxRxRate = cbkBitRate.maxRxRate;
                 bitRatePtr->maxTxRate = cbkBitRate.maxTxRate;
                 bResult = true;
             }
             else
             {
-                PA_WARN("requestDataCallBitRateCb error: %d", static_cast<int>(errorCode));
+                TAF_PA_WARN("requestDataCallBitRateCb error: %d", static_cast<int>(errorCode));
             }
             promisePtr->set_value(bResult);
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
             // Try to set promise to false to unblock waiting thread
             // suppress this secondary exception since already logged the primary error
             try { promisePtr->set_value(false); } catch(...) {}
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
             try { promisePtr->set_value(false); } catch(...) {}
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in requestDataCallBitRate callback.");
+            TAF_PA_ERROR("Unknown error in requestDataCallBitRate callback.");
             try { promisePtr->set_value(false); } catch(...) {}
         }
     };
@@ -147,29 +147,29 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
     telux::common::Status status = dataCall->requestDataCallBitRate(respCb);
     if (telux::common::Status::SUCCESS == status)
     {
-        PA_DEBUG("requestDataCallBitRate SUCCESS. Wait for cbk");
+        TAF_PA_DEBUG("requestDataCallBitRate SUCCESS. Wait for cbk");
         std::future_status waitStatus = fut.wait_for(span);
         if (std::future_status::timeout == waitStatus)
         {
-            PA_ERROR("requestDataCallBitRate promise timeout");
-            return PA_TIMEOUT;
+            TAF_PA_ERROR("requestDataCallBitRate promise timeout");
+            return TAF_PA_TIMEOUT;
         }
         bool bFutResult;
-        FUTURE_GET_RET_VAL(fut, bFutResult, PA_FAULT);
+        FUTURE_GET_RET_VAL(fut, bFutResult, TAF_PA_FAULT);
         if (bFutResult)
         {
-            PA_DEBUG("requestDataCallBitRate SUCCESS");
+            TAF_PA_DEBUG("requestDataCallBitRate SUCCESS");
             // Copy the result from the shared object back to the caller's output parameter.
             bitRate = *bitRatePtr;
-            return PA_OK;
+            return TAF_PA_OK;
         }
     }
     else
     {
-        PA_WARN("requestDataCallBitRate failed: %d", static_cast<int>(status));
+        TAF_PA_WARN("requestDataCallBitRate failed: %d", static_cast<int>(status));
     }
-    PA_DEBUG("requestDataCallBitRate failed");
-    return PA_FAULT;
+    TAF_PA_DEBUG("requestDataCallBitRate failed");
+    return TAF_PA_FAULT;
 }
 
 void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
@@ -185,8 +185,8 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
 
     eventInfo.slotId = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
 
-    pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result, "PaGetPhoneIdFromSlotId err: %d. Dropping event",
+    taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "PaGetPhoneIdFromSlotId err: %d. Dropping event",
                                                                                           result);
     telux::data::IpFamilyInfo IPv4Info = iDataCall->getIpv4Info();
     telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
@@ -202,7 +202,7 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
     // Fill the common call end reason
     if (telux::data::DataCallStatus::NET_NO_NET == datacallStatus)
     {
-        PA_DEBUG("Fill call end reason.");
+        TAF_PA_DEBUG("Fill call end reason.");
         telux::common::DataCallEndReason callEndReason = iDataCall->getDataCallEndReason();
         fillCallEndReason(callEndReason, eventInfo.callEndReason);
     }
@@ -214,7 +214,7 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         telux::data::DataCallStatus::NET_RECONFIGURED == IPv4Info.status ||
         telux::data::DataCallStatus::NET_NEWADDR == IPv4Info.status)
     {
-        PA_DEBUG("Fill in IPv4 call info.");
+        TAF_PA_DEBUG("Fill in IPv4 call info.");
         eventInfo.ipv4DataCallInfo.ipAddr = IPv4Info.addr.ifAddress;
         eventInfo.ipv4DataCallInfo.ipAddrMask = IPv4Info.addr.ifMask;
         eventInfo.ipv4DataCallInfo.gwAddr = IPv4Info.addr.gwAddress;
@@ -226,17 +226,17 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         if (IPv4Info.addr.mtu > 0)
         {
             eventInfo.ipv4DataCallInfo.mtu = static_cast<int32_t>(IPv4Info.addr.mtu);
-            PA_DEBUG("IPv4 MTU: %d", eventInfo.ipv4DataCallInfo.mtu);
+            TAF_PA_DEBUG("IPv4 MTU: %d", eventInfo.ipv4DataCallInfo.mtu);
         }
         else
         {
-            PA_WARN("MTU not available in IPv4 IpAddrInfo");
+            TAF_PA_WARN("MTU not available in IPv4 IpAddrInfo");
         }
     }
     // Checks status and fill IPv4 call end reason
     if (telux::data::DataCallStatus::NET_NO_NET == IPv4Info.status)
     {
-        PA_DEBUG("Fill IPv4 call end reason.");
+        TAF_PA_DEBUG("Fill IPv4 call end reason.");
         telux::common::DataCallEndReason callEndReason = iDataCall->getDataCallEndReason();
         fillCallEndReason(callEndReason, eventInfo.ipv4DataCallInfo.callEndReason);
     }
@@ -248,7 +248,7 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         telux::data::DataCallStatus::NET_RECONFIGURED == IPv6Info.status ||
         telux::data::DataCallStatus::NET_NEWADDR == IPv6Info.status)
     {
-        PA_DEBUG("Fill in IPv6 call info.");
+        TAF_PA_DEBUG("Fill in IPv6 call info.");
         eventInfo.ipv6DataCallInfo.ipAddr = IPv6Info.addr.ifAddress;
         eventInfo.ipv6DataCallInfo.ipAddrMask = IPv6Info.addr.ifMask;
         eventInfo.ipv6DataCallInfo.gwAddr = IPv6Info.addr.gwAddress;
@@ -260,17 +260,17 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         if (IPv6Info.addr.mtu > 0)
         {
             eventInfo.ipv6DataCallInfo.mtu = static_cast<int32_t>(IPv6Info.addr.mtu);
-            PA_DEBUG("IPv6 MTU: %d", eventInfo.ipv6DataCallInfo.mtu);
+            TAF_PA_DEBUG("IPv6 MTU: %d", eventInfo.ipv6DataCallInfo.mtu);
         }
         else
         {
-            PA_WARN("MTU not available in IPv6 IpAddrInfo");
+            TAF_PA_WARN("MTU not available in IPv6 IpAddrInfo");
         }
     }
     // Checks status and fill IPv6 call end reason
     if (telux::data::DataCallStatus::NET_NO_NET == IPv6Info.status)
     {
-        PA_DEBUG("Fill IPv6 call end reason.");
+        TAF_PA_DEBUG("Fill IPv6 call end reason.");
         telux::common::DataCallEndReason callEndReason = iDataCall->getDataCallEndReason();
         fillCallEndReason(callEndReason, eventInfo.ipv6DataCallInfo.callEndReason);
     }
@@ -282,12 +282,12 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         telux::data::DataCallStatus::NET_CONNECTED == IPv4Info.status ||
         telux::data::DataCallStatus::NET_CONNECTED == IPv6Info.status)
     {
-        PA_DEBUG("Get max data bit rate");
+        TAF_PA_DEBUG("Get max data bit rate");
         telux::data::BitRateInfo bitRate;
-        if (PA_OK == updateBitRate(iDataCall, bitRate))
+        if (TAF_PA_OK == updateBitRate(iDataCall, bitRate))
         {
-            PA_DEBUG("maxRxRate: %" PRIu64 "", bitRate.maxRxRate);
-            PA_DEBUG("maxTxRate: %" PRIu64 "", bitRate.maxTxRate);
+            TAF_PA_DEBUG("maxRxRate: %" PRIu64 "", bitRate.maxRxRate);
+            TAF_PA_DEBUG("maxTxRate: %" PRIu64 "", bitRate.maxTxRate);
             eventInfo.maxRxBitRate = bitRate.maxRxRate;
             eventInfo.maxTxBitRate = bitRate.maxTxRate;
         }
@@ -297,16 +297,16 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
     if (telux::data::DataCallStatus::NET_NO_NET != datacallStatus)
     {
         telux::data::ServiceStatus svcStatus{};
-        pa_result_t svcResult = teluxPaData.PaGetServiceStatus(eventInfo.slotId, svcStatus);
-        if (PA_OK == svcResult)
+        taf_pa_result_t svcResult = teluxPaData.PaGetServiceStatus(eventInfo.slotId, svcStatus);
+        if (TAF_PA_OK == svcResult)
         {
             eventInfo.bearerTech = taf::pa::data::Utils::ConvertNetworkRat(svcStatus.networkRat);
-            PA_DEBUG("Bearer tech from ServiceStatus NetworkRat: %s",
+            TAF_PA_DEBUG("Bearer tech from ServiceStatus NetworkRat: %s",
                      taf::pa::data::Utils::NetworkRatToString(svcStatus.networkRat));
         }
         else
         {
-            PA_WARN("PaGetServiceStatus failed (%d), bearer tech set to UNKNOWN", svcResult);
+            TAF_PA_WARN("PaGetServiceStatus failed (%d), bearer tech set to UNKNOWN", svcResult);
             eventInfo.bearerTech = DataBearerTechnology_e::BEARER_UNKNOWN;
         }
 
@@ -315,7 +315,7 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         // Lock and updated call status in map
         std::lock_guard<std::mutex> lock(listenerMtx_);
         callStatusMap_[iDataCall] = datacallStatus;
-        PA_DEBUG("iDataCall(%p) updated in callStatusMap_. Size: %zu", rawPtr,
+        TAF_PA_DEBUG("iDataCall(%p) updated in callStatusMap_. Size: %zu", rawPtr,
                                                                             callStatusMap_.size());
     }
     else
@@ -325,12 +325,12 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         // NET_NO_NET. iDataCall is not valid anymore. Lock and remove from map
         std::lock_guard<std::mutex> lock(listenerMtx_);
         callStatusMap_.erase(iDataCall);
-        PA_DEBUG("iDataCall(%p) removed from callStatusMap_. Size: %zu", rawPtr,
+        TAF_PA_DEBUG("iDataCall(%p) removed from callStatusMap_. Size: %zu", rawPtr,
                                                                             callStatusMap_.size());
     }
 }
 
-pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::GetMtuByInterfaceName
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::GetMtuByInterfaceName
 (
     const std::string& interfaceName,
     int32_t& mtu
@@ -347,24 +347,24 @@ pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::GetMtuByInterfaceNa
             if (ipv4Info.addr.mtu > 0)
             {
                 mtu = static_cast<int32_t>(ipv4Info.addr.mtu);
-                PA_DEBUG("MTU from IPv4 IpAddrInfo for interface %s: %d",
-                         interfaceName.c_str(), mtu);
-                return PA_OK;
+                TAF_PA_DEBUG("MTU from IPv4 IpAddrInfo for interface %s: %d",
+                             interfaceName.c_str(), mtu);
+                return TAF_PA_OK;
             }
             telux::data::IpFamilyInfo ipv6Info = iDataCall->getIpv6Info();
             if (ipv6Info.addr.mtu > 0)
             {
                 mtu = static_cast<int32_t>(ipv6Info.addr.mtu);
-                PA_DEBUG("MTU from IPv6 IpAddrInfo for interface %s: %d",
-                         interfaceName.c_str(), mtu);
-                return PA_OK;
+                TAF_PA_DEBUG("MTU from IPv6 IpAddrInfo for interface %s: %d",
+                             interfaceName.c_str(), mtu);
+                return TAF_PA_OK;
             }
-            PA_WARN("MTU not available in IpAddrInfo for interface %s", interfaceName.c_str());
-            return PA_FAULT;
+            TAF_PA_WARN("MTU not available in IpAddrInfo for interface %s", interfaceName.c_str());
+            return TAF_PA_FAULT;
         }
     }
-    PA_WARN("Interface %s not found in active data calls", interfaceName.c_str());
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Interface %s not found in active data calls", interfaceName.c_str());
+    return TAF_PA_NOT_FOUND;
 }
 
 void taf::pa::data::TafPaTeluxDataConnectionListener::onDataCallInfoChanged
@@ -373,7 +373,7 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onDataCallInfoChanged
 )
 {
     SET_SDK_THREAD_NAME();
-    PA_INFO("Slot ID: %d", TO_INT(slotId_));
+    TAF_PA_INFO("Slot ID: %d", TO_INT(slotId_));
 
     taf::pa::data::TafPaTeluxDataConnection::LogDataCallInfo(iDataCall, __func__);
     DataCallEventInfo_t eventInfo;
@@ -392,18 +392,18 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onThrottledApnInfoChanged
 {
     SET_SDK_THREAD_NAME();
     std::vector<ThrottledApnEventInfo_t> throttledApnEventInfoList;
-    PA_INFO("Slot ID: %d", TO_INT(slotId_));
+    TAF_PA_INFO("Slot ID: %d", TO_INT(slotId_));
     taf::pa::data::SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(slotId_);
     taf::pa::data::PhoneId_e phoneId;
-    pa_result_t result = taf::pa::data::GetPhoneIdFromSimSlotId(slotIdPa, phoneId);
-    if (PA_OK != result)
+    taf_pa_result_t result = taf::pa::data::GetPhoneIdFromSimSlotId(slotIdPa, phoneId);
+    if (TAF_PA_OK != result)
     {
-        PA_ERROR("Failed to get phone ID for slot ID %d", TO_INT(slotIdPa));
+        TAF_PA_ERROR("Failed to get phone ID for slot ID %d", TO_INT(slotIdPa));
         return;
     }
 
     size_t numThrottledApn = throttleInfoList.size();
-    PA_DEBUG("Number of throttled APN(s): %zu", numThrottledApn);
+    TAF_PA_DEBUG("Number of throttled APN(s): %zu", numThrottledApn);
     if (numThrottledApn > 0)
     {
         for (auto &throttleInfo : throttleInfoList)
@@ -428,16 +428,16 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onTrafficFlowTemplateChang
     const std::vector<std::shared_ptr<telux::data::TftChangeInfo>> &tfts)
 {
     SET_SDK_THREAD_NAME();
-    PA_INFO("Slot ID: %d", TO_INT(slotId_));
+    TAF_PA_INFO("Slot ID: %d", TO_INT(slotId_));
 
-    PA_DEBUG("Profile Id: %d, Slot ID: %d", iDataCall->getProfileId(), iDataCall->getSlotId());
+    TAF_PA_DEBUG("Profile Id: %d, Slot ID: %d", iDataCall->getProfileId(), iDataCall->getSlotId());
     size_t numTfts = tfts.size();
-    PA_DEBUG("Number of TFT(s): %zu", numTfts);
+    TAF_PA_DEBUG("Number of TFT(s): %zu", numTfts);
 
     SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
     PhoneId_e phoneId;
-    pa_result_t result = taf::pa::data::GetPhoneIdFromSimSlotId(slotIdPa, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result, "Unable to get phone ID");
+    taf_pa_result_t result = taf::pa::data::GetPhoneIdFromSimSlotId(slotIdPa, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "Unable to get phone ID");
 
     QosTftEventInfo_t qosTftEventInfo;
 
@@ -448,11 +448,11 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onTrafficFlowTemplateChang
         for (auto &tft : tfts)
         {
             QosTft_t paTft;
-            PA_DEBUG("QOS Event: %d ", static_cast<int>(tft->stateChange));
-            PA_DEBUG("TFT Details:");
-            PA_DEBUG("  QOS Flow ID   : %d ", tft->tft->qosId);
-            PA_DEBUG("  QOS Flow State: %d ", static_cast<int>(tft->tft->stateChange));
-            PA_DEBUG("  QOS Flow Mask : %lu", tft->tft->mask.to_ulong());
+            TAF_PA_DEBUG("QOS Event: %d ", static_cast<int>(tft->stateChange));
+            TAF_PA_DEBUG("TFT Details:");
+            TAF_PA_DEBUG("  QOS Flow ID   : %d ", tft->tft->qosId);
+            TAF_PA_DEBUG("  QOS Flow State: %d ", static_cast<int>(tft->tft->stateChange));
+            TAF_PA_DEBUG("  QOS Flow Mask : %lu", tft->tft->mask.to_ulong());
             paTft.qosFlowId = tft->tft->qosId;
             paTft.state     = taf::pa::data::Utils::ConvertQosFlowState(tft->stateChange);
             paTft.paramMask = std::bitset<32>(tft->tft->mask.to_ulong());
@@ -472,13 +472,13 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onHwAccelerationChanged
 )
 {
     SET_SDK_THREAD_NAME();
-    PA_INFO("Slot ID: %d", TO_INT(slotId_));
-    PA_DEBUG("HW acceleration state: %d", static_cast<int>(state));
+    TAF_PA_INFO("Slot ID: %d", TO_INT(slotId_));
+    TAF_PA_DEBUG("HW acceleration state: %d", static_cast<int>(state));
 
     PhoneId_e phoneId;
     SlotId_e slotIdPa = taf::pa::data::Utils::ConvertSlotId(slotId_);
-    pa_result_t result = taf::pa::data::GetPhoneIdFromSimSlotId(slotIdPa, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result, "Unable to get phone ID");
+    taf_pa_result_t result = taf::pa::data::GetPhoneIdFromSimSlotId(slotIdPa, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "Unable to get phone ID");
 
     HwAccelerationChangeEvent_t event;
     event.phoneId = phoneId;
@@ -499,19 +499,19 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onServiceStatusChange
     switch (status)
     {
     case telux::common::ServiceStatus::SERVICE_AVAILABLE:
-        PA_INFO("Data connection Manager for Slot ID %d: AVAILABLE", slotId_);
+        TAF_PA_INFO("Data connection Manager for Slot ID %d: AVAILABLE", slotId_);
         sState = SubsystemState_e::AVAILABLE;
         break;
     case telux::common::ServiceStatus::SERVICE_UNAVAILABLE:
-        PA_ERROR("Data connection Manager for Slot ID %d: UNAVAILABLE", slotId_);
+        TAF_PA_ERROR("Data connection Manager for Slot ID %d: UNAVAILABLE", slotId_);
         sState = SubsystemState_e::UNAVAILABLE;
         break;
     case telux::common::ServiceStatus::SERVICE_FAILED:
-        PA_ERROR("Data connection Manager for Slot ID %d: FAILED", slotId_);
+        TAF_PA_ERROR("Data connection Manager for Slot ID %d: FAILED", slotId_);
         sState = SubsystemState_e::FAILED;
         break;
     default:
-        PA_WARN("Data connection Manager for Slot ID %d: status unknown", slotId_);
+        TAF_PA_WARN("Data connection Manager for Slot ID %d: status unknown", slotId_);
         sState = SubsystemState_e::FAILED;
         break;
     };
@@ -527,12 +527,12 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onThroughputInfoAvailable
 )
 {
     SET_SDK_THREAD_NAME();
-    PA_DEBUG("Slot ID: %d, Throughput info count: %zu", TO_INT(slotId_), info.size());
+    TAF_PA_DEBUG("Slot ID: %d, Throughput info count: %zu", TO_INT(slotId_), info.size());
 
     // Early return if no data
     if (info.empty())
     {
-        PA_DEBUG("No throughput info received, returning");
+        TAF_PA_DEBUG("No throughput info received, returning");
         return;
     }
 
@@ -542,8 +542,8 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onThroughputInfoAvailable
     // Get phone ID
     PhoneId_e phoneId;
     auto &teluxPaData = TafPaTeluxData::GetInstance();
-    pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(slotIdPa, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(PA_OK != result,
+    taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(slotIdPa, phoneId);
+    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result,
                             "PaGetPhoneIdFromSlotId err: %d. Dropping event", result);
 
     // Convert throughput info from SDK to PA format
@@ -561,18 +561,18 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onThroughputInfoAvailable
         paThroughputInfoList.push_back(paInfo);
 
         // Detailed logging for debugging
-        PA_DEBUG("Profile ID: %d, Slot: %d",
+        TAF_PA_DEBUG("Profile ID: %d, Slot: %d",
                  TO_INT(paInfo.profileId), TO_INT(paInfo.slotId));
-        PA_DEBUG("  UL: throughput=%u kbps, maxThroughput=%u kbps, queueSize=%u bytes",
+        TAF_PA_DEBUG("  UL: throughput=%u kbps, maxThroughput=%u kbps, queueSize=%u bytes",
                  paInfo.ulThroughput.throughput,
                  paInfo.ulThroughput.maxThroughput,
                  paInfo.ulThroughput.queueSize);
-        PA_DEBUG("  DL: throughput=%u kbps",
+        TAF_PA_DEBUG("  DL: throughput=%u kbps",
                  paInfo.dlThroughput.throughput);
     }
 
     // Send to registered clients
-    PA_INFO("Sending %zu throughput info entries to clients", paThroughputInfoList.size());
+    TAF_PA_INFO("Sending %zu throughput info entries to clients", paThroughputInfoList.size());
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.PaSendThroughputEventInfoToClients(paThroughputInfoList);
 }

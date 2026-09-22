@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include <errno.h>
 
 #include <cstring>
 #include <future>
@@ -52,20 +51,20 @@ static std::mutex gMrcPaMutex;
         }                                                                 \
         catch (const future_error& e)                                     \
         {                                                                 \
-            PA_ERROR("Future error in %s callback: %s", #name, e.what()); \
+            TAF_PA_ERROR("Future error in %s callback: %s", #name, e.what()); \
         }                                                                 \
         catch (const exception& e)                                        \
         {                                                                 \
-            PA_ERROR("Exception in %s callback: %s", #name, e.what());    \
+            TAF_PA_ERROR("Exception in %s callback: %s", #name, e.what());    \
         }                                                                 \
         catch (...)                                                       \
         {                                                                 \
-            PA_ERROR("Unknown error in %s callback.", #name);             \
+            TAF_PA_ERROR("Unknown error in %s callback.", #name);             \
         }                                                                 \
     };
 
 // SERVICE_READY: waits for the service-ready callback fired by getFsManager().
-// Returns PA_FAULT from the enclosing function on timeout or unavailability
+// Returns TAF_PA_FAULT from the enclosing function on timeout or unavailability
 // so that Init() never succeeds with a null/unready IFsManager.
 #define SERVICE_READY(name)                                               \
     do                                                                    \
@@ -75,16 +74,16 @@ static std::mutex gMrcPaMutex;
             chrono::seconds(SERVICE_TIMEOUT));                            \
         if (future_status::timeout == name##Status)                       \
         {                                                                 \
-            PA_CRIT("Timeout waiting for %s — aborting Init.", #name);    \
-            return PA_FAULT;                                              \
+            TAF_PA_CRIT("Timeout waiting for %s — aborting Init.", #name);    \
+            return TAF_PA_FAULT;                                              \
         }                                                                 \
         ServiceStatus name##ServiceStatus = name##Future.get();           \
         if (name##ServiceStatus != ServiceStatus::SERVICE_AVAILABLE)      \
         {                                                                 \
-            PA_CRIT("%s is not available — aborting Init.", #name);       \
-            return PA_FAULT;                                              \
+            TAF_PA_CRIT("%s is not available — aborting Init.", #name);       \
+            return TAF_PA_FAULT;                                              \
         }                                                                 \
-        PA_INFO("%s is available.", #name);                               \
+        TAF_PA_INFO("%s is available.", #name);                               \
     } while (0)
 
 typedef struct
@@ -128,7 +127,7 @@ class PlatformAdaptor
         // Caveat: the no-interleave guarantee only holds while the SDK invokes the
         // callback within its operation timeout. If it never does (e.g. a modem/backend
         // hang -- already an abnormal condition), the wait times out, the lock is
-        // released, and PA_FAULT is returned; a subsequent call can then start a new
+        // released, and TAF_PA_FAULT is returned; a subsequent call can then start a new
         // operation while the abandoned one may still be in flight on the backend. Any
         // callback for the abandoned operation that arrives after that is silently
         // dropped (its promise outlives its already-destroyed future, so set_value()
@@ -191,7 +190,7 @@ taf_pa_mrc_Result_t Utility::Convert::Result
         case TAF_PROP_MRC_RESULT_FAILURE:
             return TAF_PA_MRC_RESULT_FAILURE;
         default:
-            PA_DEBUG("Unknown result %d.", result);
+            TAF_PA_DEBUG("Unknown result %d.", result);
     }
 
     return TAF_PA_MRC_RESULT_UNKNOWN;
@@ -209,7 +208,7 @@ taf_prop_mrc_Process_t Utility::Convert::Process
         case TAF_PA_MRC_PROCESS_OTA:
             return TAF_PROP_MRC_PROCESS_OTA;
         default:
-            PA_DEBUG("Unknown process %d.", process);
+            TAF_PA_DEBUG("Unknown process %d.", process);
     }
 
     return TAF_PROP_MRC_PROCESS_UNKNOWN;
@@ -227,7 +226,7 @@ taf_pa_mrc_Process_t Utility::Convert::Process
         case TAF_PROP_MRC_PROCESS_OTA:
             return TAF_PA_MRC_PROCESS_OTA;
         default:
-            PA_DEBUG("Unknown process %d.", process);
+            TAF_PA_DEBUG("Unknown process %d.", process);
     }
 
     return TAF_PA_MRC_PROCESS_UNKNOWN;
@@ -249,7 +248,7 @@ taf_prop_mrc_Status_t Utility::Convert::Status
         case TAF_PA_MRC_STATUS_FAILED:
             return TAF_PROP_MRC_STATUS_FAILED;
         default:
-            PA_DEBUG("Unknown status %d.", status);
+            TAF_PA_DEBUG("Unknown status %d.", status);
     }
 
     return TAF_PROP_MRC_STATUS_UNKNOWN;
@@ -271,7 +270,7 @@ taf_pa_mrc_Status_t Utility::Convert::Status
         case TAF_PROP_MRC_STATUS_FAILED:
             return TAF_PA_MRC_STATUS_FAILED;
         default:
-            PA_DEBUG("Unknown status %d.", status);
+            TAF_PA_DEBUG("Unknown status %d.", status);
     }
 
     return TAF_PA_MRC_STATUS_UNKNOWN;
@@ -293,7 +292,7 @@ taf_prop_mrc_Timer_t Utility::Convert::Timer
         case TAF_PA_MRC_TIMER_DEFER:
             return TAF_PROP_MRC_TIMER_DEFER;
         default:
-            PA_DEBUG("Unknown timer %d.", timer);
+            TAF_PA_DEBUG("Unknown timer %d.", timer);
     }
 
     return TAF_PROP_MRC_TIMER_UNKNOWN;
@@ -350,7 +349,7 @@ static void ScrubStatusHandler
     void* contextPtr
 )
 {
-    PA_INFO("Scrub GPIO toggle requested");
+    TAF_PA_INFO("Scrub GPIO toggle requested");
     auto& pa = PlatformAdaptor::GetInstance();
 
     taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFunc;
@@ -369,16 +368,16 @@ static void ScrubStatusHandler
     }
 }
 
-pa_result_t taf_pa_mrc_Init()
+taf_pa_result_t taf_pa_mrc_Init()
 {
-    PA_DEBUG("PA implementation.");
+    TAF_PA_DEBUG("PA implementation.");
     std::lock_guard<std::mutex> paLock(gMrcPaMutex);
 
     // Check if already initialized (idempotent pattern)
     if (gMrcPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("MRC platform adaptor already initialized");
-        return PA_OK;  // Idempotent - safe to call multiple times
+        TAF_PA_WARN("MRC platform adaptor already initialized");
+        return TAF_PA_OK;  // Idempotent - safe to call multiple times
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
@@ -393,52 +392,55 @@ pa_result_t taf_pa_mrc_Init()
     }
     SERVICE_READY(fs);
 
-    PA_INFO("MRC platform adaptor initialization is done.");
-    int32_t result = taf_prop_mrc_Init();
+    TAF_PA_INFO("MRC platform adaptor initialization is done.");
+    taf_prop_result_t result = taf_prop_mrc_Init();
 
-    if (result == -ENOSYS)
-        PA_INFO("MRC proprietary platform adaptor is not implemented.");
-    else if (result == 0)
+    if (result == TAF_PROP_NOT_IMPLEMENTED)
+        TAF_PA_INFO("MRC prop platform adaptor is not implemented.");
+    else if (result == TAF_PROP_OK)
     {
         taf_prop_mrc_AddProcessStatusHandler(ProcessStatusHandler, nullptr);
         taf_prop_mrc_AddScrubStatusHandler(ScrubStatusHandler, nullptr);
-        PA_INFO("MRC proprietary platform adaptor initialization is done.");
+        TAF_PA_INFO("MRC prop platform adaptor initialization is done.");
     }
     else
     {
-        PA_ERROR("taf_prop_mrc_Init failed: err(%d) — aborting Init.", result);
+        TAF_PA_ERROR("taf_prop_mrc_Init failed: err(%d) — aborting Init.", (int)result);
         // Reset fs manager since we are aborting
         std::lock_guard<std::mutex> lock(pa.fsMutex);
         pa.managers.fs.reset();
-        return PA_FAULT;
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
     }
 
     gMrcPaInitialized.store(true, std::memory_order_release);
-    PA_INFO("MRC platform adaptor initialization flag set to true.");
-    return PA_OK;
+    TAF_PA_INFO("MRC platform adaptor initialization flag set to true.");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_mrc_RegisterIndication
+taf_pa_result_t taf_pa_mrc_RegisterIndication
 (
     uint8_t registration
 )
 {
-    return taf_prop_mrc_RegisterIndication(registration);
+    return PropResultToPaResult(taf_prop_mrc_RegisterIndication(registration),
+        TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_mrc_SetProcessStatus
+taf_pa_result_t taf_pa_mrc_SetProcessStatus
 (
     taf_pa_mrc_Process_t process,
     taf_pa_mrc_Status_t status
 )
 {
-    pa_result_t result = 0;
+    taf_pa_result_t result = TAF_PA_OK;
     switch (process)
     {
         case TAF_PA_MRC_PROCESS_ABSYNC:
         {
             taf_prop_mrc_Status_t nsStatus = Utility::Convert::Status(status);
-            result = taf_prop_mrc_SetProcessStatus(TAF_PROP_MRC_PROCESS_ABSYNC, nsStatus);
+            result = PropResultToPaResult(
+                taf_prop_mrc_SetProcessStatus(TAF_PROP_MRC_PROCESS_ABSYNC, nsStatus),
+                TAF_PROP_UNDERLYING_ERR_NONE);
             break;
         }
         case TAF_PA_MRC_PROCESS_OTA:
@@ -453,22 +455,22 @@ pa_result_t taf_pa_mrc_SetProcessStatus
                 }
                 catch (const future_error& e)
                 {
-                    PA_ERROR("Future error in callback: %s", e.what());
+                    TAF_PA_ERROR("Future error in callback: %s", e.what());
                 }
                 catch (const exception& e)
                 {
-                    PA_ERROR("Exception in callback: %s", e.what());
+                    TAF_PA_ERROR("Exception in callback: %s", e.what());
                 }
                 catch (...)
                 {
-                    PA_ERROR("Unknown error in callback.");
+                    TAF_PA_ERROR("Unknown error in callback.");
                 }
             };
 
             auto& pa = PlatformAdaptor::GetInstance();
 
             // Serialize IFsManager operations using try_lock: if another OTA/ABSync
-            // operation is in flight, fail fast with PA_BUSY instead of queuing.
+            // operation is in flight, fail fast with TAF_PA_BUSY instead of queuing.
             // The lock IS held across the blocking wait to prevent interleaving of
             // stateful FS/EFS operations (see fsOperationMutex's timeout caveat above).
             // The local shared_ptr keeps IFsManager alive even if Deinit resets the
@@ -479,9 +481,9 @@ pa_result_t taf_pa_mrc_SetProcessStatus
                     std::try_to_lock);
                 if (!operationLock.owns_lock())
                 {
-                    PA_WARN("Another FS operation is in progress — "
+                    TAF_PA_WARN("Another FS operation is in progress — "
                         "rejecting OTA status %d.", status);
-                    return PA_BUSY;
+                    return TAF_PA_BUSY;
                 }
 
                 {
@@ -491,8 +493,8 @@ pa_result_t taf_pa_mrc_SetProcessStatus
 
                 if (!fsManager)
                 {
-                    PA_ERROR("FsManager not initialized — cannot set OTA status %d.", status);
-                    return PA_FAULT;
+                    TAF_PA_ERROR("FsManager not initialized — cannot set OTA status %d.", status);
+                    return TAF_PA_FAULT;
                 }
 
                 switch (status)
@@ -510,8 +512,8 @@ pa_result_t taf_pa_mrc_SetProcessStatus
                         paStatus = fsManager->otaCompleted(OperationStatus::FAILURE, callback);
                         break;
                     default:
-                        PA_ERROR("Unknown status %d.", status);
-                        return -EINVAL;
+                        TAF_PA_ERROR("Unknown status %d.", status);
+                        return TAF_PA_BAD_PARAMETER;
                 }
 
                 // Check the synchronous dispatch status first: if the SDK rejected
@@ -519,39 +521,39 @@ pa_result_t taf_pa_mrc_SetProcessStatus
                 // the future would block for the full operation timeout.
                 if (paStatus != Status::SUCCESS)
                 {
-                    PA_ERROR("Failed to dispatch OTA status %d, ret = %d.",
+                    TAF_PA_ERROR("Failed to dispatch OTA status %d, ret = %d.",
                         status, (int)paStatus);
-                    return PA_FAULT;
+                    return TAF_PA_FAULT;
                 }
 
                 auto otaFuture = promisePtr->get_future();
                 if (otaFuture.wait_for(chrono::seconds(OTA_OPERATION_TIMEOUT))
                     == future_status::timeout)
                 {
-                    PA_ERROR("Timeout waiting for OTA status %d callback.", status);
-                    return PA_FAULT;
+                    TAF_PA_ERROR("Timeout waiting for OTA status %d callback.", status);
+                    return TAF_PA_FAULT;
                 }
                 ErrorCode error = otaFuture.get();
                 if (error != ErrorCode::SUCCESS)
                 {
-                    PA_ERROR("Failed to set OTA status %d, ret = %d, error = %d.", status,
+                    TAF_PA_ERROR("Failed to set OTA status %d, ret = %d, error = %d.", status,
                         (int)paStatus, (int)error);
-                    return PA_FAULT;
+                    return TAF_PA_FAULT;
                 }
             }
 
-            result = 0;
+            result = TAF_PA_OK;
             break;
         }
         default:
-            PA_ERROR("Unknown process %d.", process);
-            return -EINVAL;
+            TAF_PA_ERROR("Unknown process %d.", process);
+            return TAF_PA_BAD_PARAMETER;
     }
 
     return result;
 }
 
-pa_result_t taf_pa_mrc_PerformABSync
+taf_pa_result_t taf_pa_mrc_PerformABSync
 (
     void
 )
@@ -565,22 +567,22 @@ pa_result_t taf_pa_mrc_PerformABSync
         }
         catch (const future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     };
 
     auto& pa = PlatformAdaptor::GetInstance();
 
     // Serialize IFsManager operations using try_lock: if another OTA/ABSync
-    // operation is in flight, fail fast with PA_BUSY instead of queuing.
+    // operation is in flight, fail fast with TAF_PA_BUSY instead of queuing.
     // The lock IS held across the blocking wait to prevent interleaving of
     // stateful FS/EFS operations (see fsOperationMutex's timeout caveat above).
     // The local shared_ptr keeps IFsManager alive even if Deinit resets the
@@ -592,8 +594,8 @@ pa_result_t taf_pa_mrc_PerformABSync
         std::unique_lock<std::mutex> operationLock(pa.fsOperationMutex, std::try_to_lock);
         if (!operationLock.owns_lock())
         {
-            PA_WARN("Another FS operation is in progress — rejecting ABSync.");
-            return PA_BUSY;
+            TAF_PA_WARN("Another FS operation is in progress — rejecting ABSync.");
+            return TAF_PA_BUSY;
         }
 
         {
@@ -603,8 +605,8 @@ pa_result_t taf_pa_mrc_PerformABSync
 
         if (!fsManager)
         {
-            PA_ERROR("FsManager not initialized — cannot perform ABSync.");
-            return PA_FAULT;
+            TAF_PA_ERROR("FsManager not initialized — cannot perform ABSync.");
+            return TAF_PA_FAULT;
         }
 
         status = fsManager->startAbSync(callback);
@@ -614,29 +616,29 @@ pa_result_t taf_pa_mrc_PerformABSync
         // the future would block for the full operation timeout.
         if (status != Status::SUCCESS)
         {
-            PA_ERROR("Failed to dispatch ABSync, ret = %d.", (int)status);
-            return PA_FAULT;
+            TAF_PA_ERROR("Failed to dispatch ABSync, ret = %d.", (int)status);
+            return TAF_PA_FAULT;
         }
 
         auto abFuture = promisePtr->get_future();
         if (abFuture.wait_for(chrono::seconds(ABSYNC_OPERATION_TIMEOUT))
             == future_status::timeout)
         {
-            PA_ERROR("Timeout waiting for ABSync callback.");
-            return PA_FAULT;
+            TAF_PA_ERROR("Timeout waiting for ABSync callback.");
+            return TAF_PA_FAULT;
         }
         error = abFuture.get();
     }
     if (error != ErrorCode::SUCCESS)
     {
-        PA_ERROR("ABSync callback returned error %d.", (int)error);
-        return PA_FAULT;
+        TAF_PA_ERROR("ABSync callback returned error %d.", (int)error);
+        return TAF_PA_FAULT;
     }
 
-    return 0;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_mrc_AddProcessStatusHandler
+taf_pa_result_t taf_pa_mrc_AddProcessStatusHandler
 (
     taf_pa_mrc_ProcessStatusHdlrFunc_t handlerFuncPtr,
     void* contextPtr,
@@ -652,21 +654,21 @@ pa_result_t taf_pa_mrc_AddProcessStatusHandler
     }
 
     if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_mrc_GetEfsPeStatus
+taf_pa_result_t taf_pa_mrc_GetEfsPeStatus
 (
     taf_pa_mrc_EfsPeStatus_t* statusPtr
 )
 {
     if (statusPtr == nullptr)
     {
-        PA_ERROR("statusPtr is nullptr.");
-        return -EINVAL;
+        TAF_PA_ERROR("statusPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
     taf_prop_mrc_EfsPeStatus_t status;
-    int32_t result = taf_prop_mrc_GetEfsPeStatus(&status);
+    taf_prop_result_t result = taf_prop_mrc_GetEfsPeStatus(&status);
     uint32_t i;
     for (i = 0; i < TAF_PA_MRC_EFS_PARTITION_BLOCKS && i < TAF_PROP_MRC_EFS_PARTITION_BLOCKS
         && i < status.peCountLen; i++)
@@ -674,48 +676,48 @@ pa_result_t taf_pa_mrc_GetEfsPeStatus
 
     statusPtr->peCountLen = i;
 
-    return result;
+    return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_mrc_GetEfsBlockStatus
+taf_pa_result_t taf_pa_mrc_GetEfsBlockStatus
 (
     taf_pa_mrc_EfsBlockStatus_t* statusPtr
 )
 {
     if (statusPtr == nullptr)
     {
-        PA_ERROR("statusPtr is nullptr.");
-        return -EINVAL;
+        TAF_PA_ERROR("statusPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
     taf_prop_mrc_EfsBlockStatus_t status;
-    int32_t result = taf_prop_mrc_GetEfsBlockStatus(&status);
+    taf_prop_result_t result = taf_prop_mrc_GetEfsBlockStatus(&status);
     statusPtr->maxEraseCount = status.maxEraseCount;
     statusPtr->totalBadBlocks = status.totalBadBlocks;
 
-    return result;
+    return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_mrc_GetEfsUsageStats
+taf_pa_result_t taf_pa_mrc_GetEfsUsageStats
 (
     taf_pa_mrc_EfsUsageStats_t* statsPtr
 )
 {
     if (statsPtr == nullptr)
     {
-        PA_ERROR("statsPtr is nullptr.");
-        return -EINVAL;
+        TAF_PA_ERROR("statsPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     memset(statsPtr, 0, sizeof(*statsPtr));
-    PA_INFO("statsPtr = %p", (void *)statsPtr);
+    TAF_PA_INFO("statsPtr = %p", (void *)statsPtr);
 
     taf_prop_mrc_EfsUsageStats_t stats;
     memset(&stats, 0, sizeof(stats));
 
-    int32_t result = taf_prop_mrc_GetEfsUsageStats(&stats);
-    PA_INFO("result from taf_prop_mrc_GetEfsUsageStats = %d", result);
-    if (result != 0)
-        return result;
+    taf_prop_result_t result = taf_prop_mrc_GetEfsUsageStats(&stats);
+    TAF_PA_INFO("result from taf_prop_mrc_GetEfsUsageStats = %d", result);
+    if (result != TAF_PROP_OK)
+        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
 
     uint32_t i;
     for (i = 0; i < TAF_PA_MRC_EFS_PARTITION_BLOCKS && i < TAF_PROP_MRC_EFS_PARTITION_BLOCKS
@@ -724,13 +726,13 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
         statsPtr->blockStats[i].blockReadStats = stats.blockStats[i].blockReadStats;
         statsPtr->blockStats[i].blockEraseStats = stats.blockStats[i].blockEraseStats;
         statsPtr->blockStats[i].blockEccBitflipStats = stats.blockStats[i].blockEccBitflipStats;
-        PA_INFO("EFS blockStats[%u]: read=%u erase=%u ecc=%u", i,
+        TAF_PA_INFO("EFS blockStats[%u]: read=%u erase=%u ecc=%u", i,
             (unsigned int)statsPtr->blockStats[i].blockReadStats,
             (unsigned int)statsPtr->blockStats[i].blockEraseStats,
             (unsigned int)statsPtr->blockStats[i].blockEccBitflipStats);
     }
     statsPtr->blockStatsLen = i;
-    PA_INFO("EFS blockStatsLen = %u", statsPtr->blockStatsLen);
+    TAF_PA_INFO("EFS blockStatsLen = %u", statsPtr->blockStatsLen);
 
     for (i = 0; i < TAF_PA_MRC_EFS_WRITE_TASKS && i < TAF_PROP_MRC_EFS_WRITE_TASKS
         && i < stats.clientListLen; i++)
@@ -740,7 +742,7 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
         statsPtr->clientList[i].taskNameLen = stats.clientList[i].taskNameLen;
         taf_pa_memscpy(statsPtr->clientList[i].taskName, TAF_PA_MRC_EFS_TASK_NAME_LEN,
             stats.clientList[i].taskName, TAF_PA_MRC_EFS_TASK_NAME_LEN);
-        PA_INFO("EFS clientList[%u]: writeCalls=%u maxNbyte=%u taskNameLen=%u taskName=%.*s", i,
+        TAF_PA_INFO("EFS clientList[%u]: writeCalls=%u maxNbyte=%u taskNameLen=%u taskName=%.*s", i,
             (unsigned int)statsPtr->clientList[i].writeCallCounters,
             (unsigned int)statsPtr->clientList[i].maxNbyte,
             (unsigned int)statsPtr->clientList[i].taskNameLen,
@@ -748,21 +750,22 @@ pa_result_t taf_pa_mrc_GetEfsUsageStats
             statsPtr->clientList[i].taskName);
     }
     statsPtr->clientListLen = i;
-    PA_INFO("result = %d, EFS clientListLen = %u", result, statsPtr->clientListLen);
-    return result;
+    TAF_PA_INFO("result = %d, EFS clientListLen = %u", result, statsPtr->clientListLen);
+    return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_mrc_SetTimerPeriod
+taf_pa_result_t taf_pa_mrc_SetTimerPeriod
 (
     taf_pa_mrc_Timer_t timer,
     uint32_t period
 )
 {
     taf_prop_mrc_Timer_t nsTimer = Utility::Convert::Timer(timer);
-    return taf_prop_mrc_SetTimerPeriod(nsTimer, period);
+    return PropResultToPaResult(taf_prop_mrc_SetTimerPeriod(nsTimer, period),
+        TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_mrc_AddScrubStatusHandler
+taf_pa_result_t taf_pa_mrc_AddScrubStatusHandler
 (
     taf_pa_mrc_ScrubStatusHdlrFunc_t handlerFuncPtr,
     void* contextPtr,
@@ -776,30 +779,56 @@ pa_result_t taf_pa_mrc_AddScrubStatusHandler
         pa.indicators.scrubStatus.contextPtr = contextPtr;
     }
     if (handlerRefPtr) *handlerRefPtr = nullptr;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_mrc_AckSlotToggle
+taf_pa_result_t taf_pa_mrc_AckSlotToggle
 (
     int32_t success
 )
 {
-    return taf_prop_mrc_AckSlotToggle(success);
+    return PropResultToPaResult(taf_prop_mrc_AckSlotToggle(success),
+        TAF_PROP_UNDERLYING_ERR_NONE);
 }
 
-pa_result_t taf_pa_mrc_Deinit()
+taf_pa_result_t taf_pa_mrc_GetEfsCorruptionStats
+(
+    taf_pa_mrc_EfsCorruptionStats_t* statsPtr
+)
 {
-    PA_DEBUG("PA implementation.");
+    if (statsPtr == nullptr)
+    {
+        TAF_PA_ERROR("statsPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    *statsPtr = {};
+
+    taf_prop_mrc_EfsCorruptionStats_t stats {};
+    taf_prop_result_t result = taf_prop_mrc_GetEfsCorruptionStats(&stats);
+    if (result == TAF_PROP_OK)
+    {
+        statsPtr->numFsCorrupt = stats.numFsCorrupt;
+        statsPtr->numFsNotCorrupt = stats.numFsNotCorrupt;
+        statsPtr->numFsRestore = stats.numFsRestore;
+    }
+
+    return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
+}
+
+taf_pa_result_t taf_pa_mrc_Deinit()
+{
+    TAF_PA_DEBUG("PA implementation.");
     std::lock_guard<std::mutex> paLock(gMrcPaMutex);
 
     // Check if initialized before attempting deinit
     if (!gMrcPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
-        return PA_OK;  // Idempotent - safe to call when not initialized
+        TAF_PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return TAF_PA_OK;  // Idempotent - safe to call when not initialized
     }
 
-    PA_INFO("Starting MRC platform adaptor deinitialization...");
+    TAF_PA_INFO("Starting MRC platform adaptor deinitialization...");
 
     auto& pa = PlatformAdaptor::GetInstance();
 
@@ -809,7 +838,7 @@ pa_result_t taf_pa_mrc_Deinit()
     // Hold indicatorMutex so the clear is mutually exclusive with any in-flight
     // SB callback (ProcessStatusHandler / ScrubStatusHandler) that reads the
     // same pointers under the same mutex.
-    PA_INFO("Clearing processStatus and scrubStatus handlers and contexts");
+    TAF_PA_INFO("Clearing processStatus and scrubStatus handlers and contexts");
     {
         std::lock_guard<std::mutex> lock(pa.indicatorMutex);
         pa.indicators.processStatus.handlerFuncPtr = nullptr;
@@ -819,32 +848,32 @@ pa_result_t taf_pa_mrc_Deinit()
     }
 
     // Step 2: Ask the ns-layer to release QMI clients and clear its handlers.
-    int32_t nsResult = taf_prop_mrc_Deinit();
-    if (nsResult == -ENOSYS)
+    taf_prop_result_t nsResult = taf_prop_mrc_Deinit();
+    if (nsResult == TAF_PROP_NOT_IMPLEMENTED)
     {
-        PA_INFO("MRC proprietary platform adaptor is not implemented.");
+        TAF_PA_INFO("MRC prop platform adaptor is not implemented.");
     }
-    else if (nsResult == -EINVAL)
+    else if (nsResult == TAF_PROP_BAD_PARAMETER)
     {
-        PA_WARN("MRC proprietary platform adaptor was not initialized.");
+        TAF_PA_WARN("MRC prop platform adaptor was not initialized.");
     }
-    else if (nsResult != 0)
+    else if (nsResult != TAF_PROP_OK)
     {
-        PA_ERROR("taf_prop_mrc_Deinit failed: err(%d)", nsResult);
+        TAF_PA_ERROR("taf_prop_mrc_Deinit failed: err(%d)", (int)nsResult);
     }
 
     // Step 3: Reset the IFsManager shared pointer.
     // Take fsMutex so reset is mutually exclusive with NB calls copying pa.managers.fs.
     // NB operations keep a local shared_ptr after releasing fsMutex, so Deinit does not
     // block on long SDK operation waits and in-flight operations keep IFsManager alive.
-    PA_INFO("Resetting managers.fs");
+    TAF_PA_INFO("Resetting managers.fs");
     {
         std::lock_guard<std::mutex> lock(pa.fsMutex);
         pa.managers.fs.reset();
     }
 
     gMrcPaInitialized.store(false, std::memory_order_release);
-    PA_INFO("MRC platform adaptor initialization flag reset to false.");
-    PA_INFO("MRC platform adaptor deinitialization complete.");
-    return 0;
+    TAF_PA_INFO("MRC platform adaptor initialization flag reset to false.");
+    TAF_PA_INFO("MRC platform adaptor deinitialization complete.");
+    return TAF_PA_OK;
 }

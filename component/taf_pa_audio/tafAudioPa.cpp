@@ -41,14 +41,14 @@ static std::atomic<bool> gAudioPaInitialized(false);
 
 #define CALLBACK_TO_SET_RESULT                                                               \
     auto cb = [callback, context](ErrorCode error) {                                         \
-        PA_INFO("callback received");                                                        \
+        TAF_PA_INFO("callback received");                                                        \
             if (ErrorCode::SUCCESS == error) {                                               \
-                PA_DEBUG("Request is successful!!");                                         \
-                callback(PA_OK, context);                                                    \
+                TAF_PA_DEBUG("Request is successful!!");                                         \
+                callback(TAF_PA_OK, context);                                                    \
             }                                                                                \
             else{                                                                            \
-                PA_ERROR("Request failed, err %s", Utils::getErrorCodeAsString(error).c_str());      \
-                callback(PA_FAULT, context);                                                 \
+                TAF_PA_ERROR("Request failed, err %s", Utils::getErrorCodeAsString(error).c_str());      \
+                callback(TAF_PA_FAULT, context);                                                 \
             }                                                                                \
     };                                                                                       \
 
@@ -73,95 +73,95 @@ public:
         return instance;
     }
 
-    pa_result_t initialize();
-    pa_result_t deinitialize();
+    taf_pa_result_t initialize();
+    taf_pa_result_t deinitialize();
 
-    pa_result_t createStream(
+    taf_pa_result_t createStream(
         PaStreamConfig config,
         taf_pa_audio_cb callback,
         std::any context);
-    pa_result_t deleteStream(
+    taf_pa_result_t deleteStream(
         PaStreamConfig config,
         taf_pa_audio_cb callback,
         std::any context);
-    pa_result_t startAudio(
+    taf_pa_result_t startAudio(
         PaStreamConfig config,
         taf_pa_audio_cb callback,
         std::any context);
-    pa_result_t stopAudio(
+    taf_pa_result_t stopAudio(
         PaStreamConfig config,
         taf_pa_audio_cb callback,
         std::any context);
-    pa_result_t setVolume(
+    taf_pa_result_t setVolume(
         PaStreamConfig config,
         double volLevel,
         taf_pa_audio_cb callback,
         std::any context
     );
-    pa_result_t getVolume(
+    taf_pa_result_t getVolume(
         PaStreamConfig config,
         double *volLevel,
         taf_pa_audio_cb callback,
         std::any context
     );
-    pa_result_t setMute(
+    taf_pa_result_t setMute(
         PaStreamConfig config,
         bool isMute,
         taf_pa_audio_cb callback,
         std::any context
     );
-    pa_result_t getMute(
+    taf_pa_result_t getMute(
         PaStreamConfig config,
         bool *isMute,
         taf_pa_audio_cb callback,
         std::any context
     );
-    pa_result_t startPlayback(
+    taf_pa_result_t startPlayback(
         std::vector<taf_pa_audio_PlayFileInfo_t> &playFileInfos,
         int listSiz,
         std::weak_ptr<IPaPlayListListener> pbStatusListener
     );
-    pa_result_t stopPlayback(
+    taf_pa_result_t stopPlayback(
         PaStreamConfig streamConfig
     );
     std::shared_ptr<PaAudioCaptureStream> GetCaptureStream
     (
         PaStreamDirection streamDir
     );
-    pa_result_t playSignallingDtmfOnTx(
+    taf_pa_result_t playSignallingDtmfOnTx(
         uint32_t slotId,
         const char dtmf,
         taf_pa_audio_cb callback,
         std::any context
     );
-    pa_result_t stopSignallingDtmfOnTx(
+    taf_pa_result_t stopSignallingDtmfOnTx(
         uint32_t slotId,
         taf_pa_audio_cb callback,
         std::any context
     );
-    pa_result_t playDtmf(
+    taf_pa_result_t playDtmf(
         PaDtmfTone dtmfTone, uint16_t duration,
         uint16_t gain,
         taf_pa_audio_cb callback,
         std::any context
     );
-    pa_result_t registerDtmfListener(
+    taf_pa_result_t registerDtmfListener(
         std::weak_ptr<IPaDtmfListener> dtmfListener
     );
-    pa_result_t deregisterDtmfListener(
+    taf_pa_result_t deregisterDtmfListener(
         std::weak_ptr<IPaDtmfListener> dtmfListener
     );
-    pa_result_t stopDtmf(
+    taf_pa_result_t stopDtmf(
         PaStreamDirection direction,
         taf_pa_audio_cb callback,
         std::any context
     );
-    pa_result_t registerAudioSubsystemChangeListener(
+    taf_pa_result_t registerAudioSubsystemChangeListener(
         taf_pa_audio_SubsystemStateChangeCb callBack,
         std::shared_ptr<void> context,
         uint16_t &id
     );
-    pa_result_t deregisterAudioSubsystemChangeListener(
+    taf_pa_result_t deregisterAudioSubsystemChangeListener(
         uint16_t id
     );
     void SendSubsystemEventToClients(SubsystemState_e state);
@@ -226,14 +226,14 @@ public:
         {
             return streamBuffer_;
         }
-        pa_result_t reset()
+        taf_pa_result_t reset()
         {
             Status result = streamBuffer_->reset();
             if(Status::SUCCESS == result)
             {
-                return PA_OK;
+                return TAF_PA_OK;
             }
-            return PA_FAULT;
+            return TAF_PA_FAULT;
         };
         protected:
         std::shared_ptr<IStreamBuffer> streamBuffer_;
@@ -251,17 +251,17 @@ public:
         {
             return std::make_shared<tafPaStreamBuffer>(this->captureStream_->getStreamBuffer());
         };
-        pa_result_t read(std::shared_ptr<IPaStreamBuffer> paBuffer,
+        taf_pa_result_t read(std::shared_ptr<IPaStreamBuffer> paBuffer,
             uint32_t bytesToRead, taf_pa_audio_Readcb callback) {
             auto readCb = [callback, paBuffer](std::shared_ptr<telux::audio::IStreamBuffer> buffer,
                 telux::common::ErrorCode error){
                     if (error != ErrorCode::SUCCESS)
                     {
-                        callback(paBuffer, PA_FAULT);
+                        callback(paBuffer, TAF_PA_FAULT);
                     }
                     else
                     {
-                        callback(paBuffer, PA_OK);
+                        callback(paBuffer, TAF_PA_OK);
                     }
             };
             std::shared_ptr<tafPaStreamBuffer> paStreamBufferImpl =
@@ -269,9 +269,9 @@ public:
             Status readRes = captureStream_->read((paStreamBufferImpl->getStreamBuffer()),
                     bytesToRead, readCb);
             if (readRes == Status::SUCCESS)
-                return PA_OK;
+                return TAF_PA_OK;
             else
-                return PA_FAULT;
+                return TAF_PA_FAULT;
         };
         protected:
             std::shared_ptr<IAudioCaptureStream> captureStream_;
@@ -298,11 +298,11 @@ public:
             {
                 auto pACtrl = AudioPAController::getInstance();
                 if (status == telux::common::ServiceStatus::SERVICE_UNAVAILABLE) {
-                    PA_ERROR("Audio Service UNAVAILABLE");
+                    TAF_PA_ERROR("Audio Service UNAVAILABLE");
                     pACtrl->SendSubsystemEventToClients(SubsystemState_e::UNAVAILABLE);
                 }
                 else if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-                    PA_INFO("Audio Service AVAILABLE");
+                    TAF_PA_INFO("Audio Service AVAILABLE");
                     pACtrl->SendSubsystemEventToClients(SubsystemState_e::AVAILABLE);
                 }
             }
@@ -324,12 +324,12 @@ public:
 
             void commandResponse(telux::common::ErrorCode error)
             {
-                PA_DEBUG("Cmd resp: %d", static_cast<int>(error));
+                TAF_PA_DEBUG("Cmd resp: %d", static_cast<int>(error));
                 if (callback_) {
                     if(error == ErrorCode::SUCCESS)
-                        callback_(PA_OK, context_);
+                        callback_(TAF_PA_OK, context_);
                     else
-                        callback_(PA_FAULT, context_);
+                        callback_(TAF_PA_FAULT, context_);
                 }
             }
         protected:
@@ -373,7 +373,7 @@ private:
 
 };
 
-pa_result_t AudioPAController::initialize()
+taf_pa_result_t AudioPAController::initialize()
 {
     auto &audioFactory = telux::audio::AudioFactory::getInstance();
     bool isReady = false;
@@ -381,7 +381,7 @@ pa_result_t AudioPAController::initialize()
     auto p = std::make_shared<std::promise<telux::common::ServiceStatus>>();
     audioManager_ = audioFactory.getAudioManager(
             [&p](telux::common::ServiceStatus status) {
-        PA_INFO("Getting status: %d from audio manager", static_cast<int>(status));
+        TAF_PA_INFO("Getting status: %d from audio manager", static_cast<int>(status));
         try
         {
             // If the status is SERVICE_UNAVAILABLE,
@@ -393,21 +393,21 @@ pa_result_t AudioPAController::initialize()
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     });
 
     if (!audioManager_) {
-        PA_CRIT("Can't get IAudioManager");
-        return PA_FAULT;
+        TAF_PA_CRIT("Can't get IAudioManager");
+        return TAF_PA_FAULT;
     }
 
     std::future<telux::common::ServiceStatus> initFuture = p->get_future();
@@ -415,19 +415,19 @@ pa_result_t AudioPAController::initialize()
     telux::common::ServiceStatus serviceStatus;
     if (std::future_status::timeout == waitStatus)
     {
-        PA_CRIT("Timeout waiting for audio subsystem");
-        return PA_TIMEOUT;
+        TAF_PA_CRIT("Timeout waiting for audio subsystem");
+        return TAF_PA_TIMEOUT;
     } else {
         serviceStatus = initFuture.get();
         if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-            PA_CRIT("Unable to initialize audio subsystem");
-            return PA_UNAVAILABLE;
+            TAF_PA_CRIT("Unable to initialize audio subsystem");
+            return TAF_PA_UNAVAILABLE;
         }
         isReady = true;
     }
 
     if (isReady) {
-        PA_INFO("Audio subsystem is ready");
+        TAF_PA_INFO("Audio subsystem is ready");
         {
             std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
             audioMngrInitState_ = SubsystemState_e::AVAILABLE;
@@ -436,29 +436,29 @@ pa_result_t AudioPAController::initialize()
         auto status = audioManager_->registerListener(paServiceStatusChangeListener);
         if (status != telux::common::Status::SUCCESS)
         {
-           PA_ERROR("Failed to register with audio subsystem service status change listener");
+           TAF_PA_ERROR("Failed to register with audio subsystem service status change listener");
         }
-        return PA_OK;
+        return TAF_PA_OK;
     } else {
-        PA_CRIT("Unable to initialize audio subsystem");
-        return PA_UNAVAILABLE;
+        TAF_PA_CRIT("Unable to initialize audio subsystem");
+        return TAF_PA_UNAVAILABLE;
     }
 }
 
-pa_result_t AudioPAController::deinitialize()
+taf_pa_result_t AudioPAController::deinitialize()
 {
-    PA_INFO("Starting audio PA deinitialization...");
+    TAF_PA_INFO("Starting audio PA deinitialization...");
 
     // Step 1: Deregister the service status change listener from the audio manager
     // before tearing down any state, so no further SDK callbacks arrive.
     if (audioManager_ && paServiceStatusChangeListener)
     {
-        PA_INFO("Deregistering paServiceStatusChangeListener from audioManager_");
+        TAF_PA_INFO("Deregistering paServiceStatusChangeListener from audioManager_");
         telux::common::Status status =
         audioManager_->deRegisterListener(paServiceStatusChangeListener);
         if (status != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("Failed to deregister service status listener. Status: %d",
+            TAF_PA_ERROR("Failed to deregister service status listener. Status: %d",
                      static_cast<int>(status));
         }
         paServiceStatusChangeListener.reset();
@@ -467,7 +467,7 @@ pa_result_t AudioPAController::deinitialize()
     {
         std::lock_guard<std::mutex> lock(streamMutex_);
         // Step 2: Reset all audio stream shared pointers
-        PA_INFO("Resetting audio stream shared pointers");
+        TAF_PA_INFO("Resetting audio stream shared pointers");
         mAudioVoiceStream.reset();
         mAudioPlaybackStream.reset();
         mAudioCaptureStream.reset();
@@ -475,7 +475,7 @@ pa_result_t AudioPAController::deinitialize()
         mAudioLoopbackStream.reset();
 
         // Step 3: Reset audio player shared pointers
-        PA_INFO("Resetting audio player shared pointers");
+        TAF_PA_INFO("Resetting audio player shared pointers");
         mAudioPlayer.reset();
         mTxAudioPlayer.reset();
     }
@@ -483,14 +483,14 @@ pa_result_t AudioPAController::deinitialize()
     // Step 4: Reset call manager shared pointer
     // Protect callManager against concurrent reads in
     // playSignallingDtmfOnTx()/stopSignallingDtmfOnTx().
-    PA_INFO("Resetting callManager");
+    TAF_PA_INFO("Resetting callManager");
     {
         std::lock_guard<std::mutex> lock(callManagerMutex_);
         callManager.reset();
     }
 
     // Step 5: Reset playback listener, capture stream wrapper, and DTMF shared pointers
-    PA_INFO("Resetting listener and callback shared pointers");
+    TAF_PA_INFO("Resetting listener and callback shared pointers");
     repeatedPlayerStatusListener.reset();
     repeatedTxPlayerStatusListener.reset();
     paCaptureStream.reset();
@@ -503,7 +503,7 @@ pa_result_t AudioPAController::deinitialize()
     }
 
     // Step 6: Drain the IStreamBuffer queues
-    PA_INFO("Draining mRecFreeBuffers and mRxRecFreeBuffers queues");
+    TAF_PA_INFO("Draining mRecFreeBuffers and mRxRecFreeBuffers queues");
     while (!mRecFreeBuffers.empty())
     {
         mRecFreeBuffers.pop();
@@ -514,21 +514,21 @@ pa_result_t AudioPAController::deinitialize()
     }
 
     // Step 7: Clear subsystem event callbacks under mutex
-    PA_INFO("Clearing subsystemEventsCallbacks_");
+    TAF_PA_INFO("Clearing subsystemEventsCallbacks_");
     {
         std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
         subsystemEventsCallbacks_.clear();
     }
 
     // Step 8: Reset audio manager shared pointer (last, after all streams are gone)
-    PA_INFO("Resetting audioManager_");
+    TAF_PA_INFO("Resetting audioManager_");
     audioManager_.reset();
 
     // Step 9: Reset init state so post-deinit guard checks correctly see UNAVAILABLE
     audioMngrInitState_ = SubsystemState_e::UNAVAILABLE;
 
-    PA_INFO("Audio PA deinitialization complete");
-    return PA_OK;
+    TAF_PA_INFO("Audio PA deinitialization complete");
+    return TAF_PA_OK;
 }
 
 void AudioPAController::SendSubsystemEventToClients
@@ -536,7 +536,7 @@ void AudioPAController::SendSubsystemEventToClients
     SubsystemState_e state
 )
 {
-    PA_DEBUG("Calling registered callbacks...");
+    TAF_PA_DEBUG("Calling registered callbacks...");
     std::vector<SubsystemEventsCallbackEntry_t> localCbksCopy;
     {
         // Use exclusive lock to serialize event delivery and prevent race conditions
@@ -549,21 +549,21 @@ void AudioPAController::SendSubsystemEventToClients
     {
         try
         {
-            PA_DEBUG("Calling callback: %d", cbk.id);
+            TAF_PA_DEBUG("Calling callback: %d", cbk.id);
             cbk.callBack(state, cbk.context);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
+            TAF_PA_ERROR("Exception in callback %d: %s", cbk.id, e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown exception in callback %d", cbk.id);
+            TAF_PA_ERROR("Unknown exception in callback %d", cbk.id);
         }
     }
 }
 
-pa_result_t AudioPAController::createStream
+taf_pa_result_t AudioPAController::createStream
 (
     PaStreamConfig config,
     taf_pa_audio_cb callback,
@@ -607,7 +607,7 @@ pa_result_t AudioPAController::createStream
     }
     else
     {
-        PA_DEBUG("Format is not set");
+        TAF_PA_DEBUG("Format is not set");
     }
     if (config.type == PaStreamType::VOICE_CALL)
     {
@@ -630,32 +630,32 @@ pa_result_t AudioPAController::createStream
         {
             if (error == telux::common::ErrorCode::SUCCESS) {
                 paAudioStream = stream;
-                callback(PA_OK, context);
+                callback(TAF_PA_OK, context);
                 p->set_value(true);
             } else {
-                callback(PA_FAULT, context);
+                callback(TAF_PA_FAULT, context);
                 p->set_value(false);
-                PA_ERROR("Failed to Create a stream err : %d", error);
+                TAF_PA_ERROR("Failed to Create a stream err : %d", error);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in callback.");
+            TAF_PA_ERROR("Unknown error in callback.");
         }
     });
     if(audioStatus == Status::SUCCESS) {
-        PA_DEBUG("Request to create stream sent" );
+        TAF_PA_DEBUG("Request to create stream sent" );
     } else {
-        PA_ERROR("Request to create stream failed: %d", int(audioStatus));
-        return PA_FAULT;
+        TAF_PA_ERROR("Request to create stream failed: %d", int(audioStatus));
+        return TAF_PA_FAULT;
     }
 
     if (p->get_future().get()) {
@@ -667,36 +667,36 @@ pa_result_t AudioPAController::createStream
                 mAudioVoiceStream = std::dynamic_pointer_cast<
                     telux::audio::IAudioVoiceStream>(paAudioStream);
             }
-            PA_INFO("Voice Stream is Created on slot id %d ",config.slotId );
+            TAF_PA_INFO("Voice Stream is Created on slot id %d ",config.slotId );
         } else if(paAudioStream->getType() == StreamType::CAPTURE) {
             for(Direction dir : streamConfig.voicePaths) {
                 if(dir == telux::audio::Direction::RX) {
-                    PA_DEBUG("Create stream for incall downlink recording");
+                    TAF_PA_DEBUG("Create stream for incall downlink recording");
                     mAudioRxCaptureStream = std::dynamic_pointer_cast<
                         telux::audio::IAudioCaptureStream>(paAudioStream);
-                    return PA_OK;
+                    return TAF_PA_OK;
                 }
             }
             mAudioCaptureStream = std::dynamic_pointer_cast<
                     telux::audio::IAudioCaptureStream>(paAudioStream);
-            PA_INFO("Audio Capture Stream is Created" );
+            TAF_PA_INFO("Audio Capture Stream is Created" );
         } else if(paAudioStream->getType() == StreamType::LOOPBACK) {
             mAudioLoopbackStream = std::dynamic_pointer_cast<
                     telux::audio::IAudioLoopbackStream>(paAudioStream);
-            PA_INFO("Audio Loopback Stream is Created" );
+            TAF_PA_INFO("Audio Loopback Stream is Created" );
         } else {
-            PA_ERROR("Unknown Stream Created" );
+            TAF_PA_ERROR("Unknown Stream Created" );
         }
     }
     else
     {
-        PA_ERROR("Failed to create stream");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to create stream");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::deleteStream(PaStreamConfig streamConfig, taf_pa_audio_cb callback,
+taf_pa_result_t AudioPAController::deleteStream(PaStreamConfig streamConfig, taf_pa_audio_cb callback,
     std::any context)
 {
     telux::common::Status status = Status::FAILED;
@@ -722,7 +722,7 @@ pa_result_t AudioPAController::deleteStream(PaStreamConfig streamConfig, taf_pa_
                 // Restore the pointer so the stream is not silently lost on failure.
                 std::lock_guard<std::mutex> lock(streamMutex_);
                 mAudioVoiceStream = localStream;
-                PA_ERROR("Failed to delete voice stream");
+                TAF_PA_ERROR("Failed to delete voice stream");
             }
         }
     }
@@ -740,13 +740,13 @@ pa_result_t AudioPAController::deleteStream(PaStreamConfig streamConfig, taf_pa_
                 }
                 if (localStream)
                 {
-                    PA_DEBUG("Delete stream for incall downlink recording");
+                    TAF_PA_DEBUG("Delete stream for incall downlink recording");
                     status = audioManager_->deleteStream(localStream, cb);
                     if (status != Status::SUCCESS)
                     {
                         std::lock_guard<std::mutex> lock(streamMutex_);
                         mAudioRxCaptureStream = localStream;
-                        PA_ERROR("Failed to delete remote record stream");
+                        TAF_PA_ERROR("Failed to delete remote record stream");
                     }
                 }
             }
@@ -766,7 +766,7 @@ pa_result_t AudioPAController::deleteStream(PaStreamConfig streamConfig, taf_pa_
                 {
                     std::lock_guard<std::mutex> lock(streamMutex_);
                     mAudioCaptureStream = localStream;
-                    PA_ERROR("Failed to delete record stream");
+                    TAF_PA_ERROR("Failed to delete record stream");
                 }
             }
         }
@@ -786,20 +786,20 @@ pa_result_t AudioPAController::deleteStream(PaStreamConfig streamConfig, taf_pa_
             {
                 std::lock_guard<std::mutex> lock(streamMutex_);
                 mAudioLoopbackStream = localStream;
-                PA_ERROR("Failed to delete loopback stream");
+                TAF_PA_ERROR("Failed to delete loopback stream");
             }
         }
     }
 
     if (status != Status::SUCCESS)
     {
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
-    PA_DEBUG("Successfully deleted the stream");
-    return PA_OK;
+    TAF_PA_DEBUG("Successfully deleted the stream");
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::startAudio(PaStreamConfig streamconfig, taf_pa_audio_cb callback,
+taf_pa_result_t AudioPAController::startAudio(PaStreamConfig streamconfig, taf_pa_audio_cb callback,
     std::any context)
 {
     auto status = Status::FAILED;
@@ -819,8 +819,8 @@ pa_result_t AudioPAController::startAudio(PaStreamConfig streamconfig, taf_pa_au
         if(localVoiceStream) {
             status = localVoiceStream->startAudio(cb);
             if (status != telux::common::Status::SUCCESS) {
-                PA_ERROR("Request to start voice call audio failed.\n");
-                return PA_FAULT;
+                TAF_PA_ERROR("Request to start voice call audio failed.\n");
+                return TAF_PA_FAULT;
             }
         }
     }
@@ -833,22 +833,22 @@ pa_result_t AudioPAController::startAudio(PaStreamConfig streamconfig, taf_pa_au
         if(localLoopbackStream) {
             status = localLoopbackStream->startLoopback(cb);
             if (status != telux::common::Status::SUCCESS) {
-                PA_ERROR("Request to start loopback failed.\n");
-                return PA_FAULT;
+                TAF_PA_ERROR("Request to start loopback failed.\n");
+                return TAF_PA_FAULT;
             }
         }
     }
-    PA_DEBUG("Successfully started audio in PA");
-    return PA_OK;
+    TAF_PA_DEBUG("Successfully started audio in PA");
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::stopAudio(PaStreamConfig streamconfig, taf_pa_audio_cb callback,
+taf_pa_result_t AudioPAController::stopAudio(PaStreamConfig streamconfig, taf_pa_audio_cb callback,
     std::any context)
 {
     auto pACtrl = AudioPAController::getInstance();
     auto status = Status::FAILED;
     CALLBACK_TO_SET_RESULT;
-    PA_DEBUG("stopAudio");
+    TAF_PA_DEBUG("stopAudio");
     if(streamconfig.type == PaStreamType::VOICE_CALL) {
         // Snapshot the shared_ptr under the lock.
         std::shared_ptr<telux::audio::IAudioVoiceStream> localVoiceStream;
@@ -859,8 +859,8 @@ pa_result_t AudioPAController::stopAudio(PaStreamConfig streamconfig, taf_pa_aud
         if(localVoiceStream) {
             status = localVoiceStream->stopAudio(cb);
             if (status != telux::common::Status::SUCCESS) {
-                PA_ERROR("Request to stop voice call audio failed.");
-                return PA_FAULT;
+                TAF_PA_ERROR("Request to stop voice call audio failed.");
+                return TAF_PA_FAULT;
             }
         }
     }
@@ -873,16 +873,16 @@ pa_result_t AudioPAController::stopAudio(PaStreamConfig streamconfig, taf_pa_aud
         if(localLoopbackStream) {
             status = localLoopbackStream->stopLoopback(cb);
             if (status != telux::common::Status::SUCCESS) {
-                PA_ERROR("Request to stop loopback failed.");
-                return PA_FAULT;
+                TAF_PA_ERROR("Request to stop loopback failed.");
+                return TAF_PA_FAULT;
             }
         }
     }
-    PA_DEBUG("Successfully stopped audio in PA");
-    return PA_OK;
+    TAF_PA_DEBUG("Successfully stopped audio in PA");
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::setVolume(
+taf_pa_result_t AudioPAController::setVolume(
     PaStreamConfig streamConfig,
     double volLevel,
     taf_pa_audio_cb callback,
@@ -916,26 +916,26 @@ pa_result_t AudioPAController::setVolume(
     {
         if (!localPlayer)
         {
-            PA_ERROR("Audio player is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Audio player is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
         ErrorCode err = localPlayer->setVolume(volLevel);
         if (ErrorCode::SUCCESS != err) {
-            PA_ERROR("Request to set volume failed err: %d", int (err));
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Request to set volume failed err: %d", int (err));
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
-        callback(PA_OK, context);
-        return PA_OK;
+        callback(TAF_PA_OK, context);
+        return TAF_PA_OK;
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
         if (!localCaptureStream)
         {
-            PA_ERROR("Capture stream is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Capture stream is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
         streamVol.dir = StreamDirection::TX;
         status = localCaptureStream->setVolume(streamVol, cb);
@@ -944,28 +944,28 @@ pa_result_t AudioPAController::setVolume(
     {
         if (!localVoiceStream)
         {
-            PA_ERROR("Voice stream is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Voice stream is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
         streamVol.dir = StreamDirection::RX;
         status = localVoiceStream->setVolume(streamVol, cb);
     }
     else
     {
-        PA_ERROR("Invalid audio interface");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid audio interface");
+        return TAF_PA_BAD_PARAMETER;
     }
     if(status == telux::common::Status::SUCCESS) {
-        PA_INFO("Request to set volume sent");
+        TAF_PA_INFO("Request to set volume sent");
     } else {
-        PA_ERROR("Request to set volume failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Request to set volume failed");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::getVolume(
+taf_pa_result_t AudioPAController::getVolume(
     PaStreamConfig streamConfig,
     double *volLevel,
     taf_pa_audio_cb callback,
@@ -975,16 +975,16 @@ pa_result_t AudioPAController::getVolume(
     auto status = Status::FAILED;
     auto cb = [callback, context, volLevel](StreamVolume streamVol, ErrorCode error) {
             if (ErrorCode::SUCCESS == error) {
-                PA_DEBUG("Request is successful !!");
+                TAF_PA_DEBUG("Request is successful !!");
                 for (auto channelVolume : streamVol.volume) {
-                    PA_INFO("vol is %f", channelVolume.vol);
+                    TAF_PA_INFO("vol is %f", channelVolume.vol);
                     *volLevel  = channelVolume.vol;
                 }
-                callback(PA_OK, context);
+                callback(TAF_PA_OK, context);
             }
             else{
-                PA_ERROR("Failed to start dtmf tone, err %d", (int)error);
-                callback(PA_FAULT, context);
+                TAF_PA_ERROR("Failed to start dtmf tone, err %d", (int)error);
+                callback(TAF_PA_FAULT, context);
             }
     };
     // Snapshot required pointers under streamMutex_.
@@ -1002,31 +1002,31 @@ pa_result_t AudioPAController::getVolume(
     {
         if (!localPlayer)
         {
-            PA_ERROR("Audio player is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Audio player is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
 
         float volume;
         ErrorCode err = localPlayer->getVolume(volume);
         if (ErrorCode::SUCCESS != err) {
-            PA_ERROR("Request to get volume failed err: %d", int (err));
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Request to get volume failed err: %d", int (err));
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         } else {
-            PA_INFO("vol is %f", volume);
+            TAF_PA_INFO("vol is %f", volume);
             *volLevel  = volume;
-            callback(PA_OK, context);
-            return PA_OK;
+            callback(TAF_PA_OK, context);
+            return TAF_PA_OK;
         }
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
         if (!localCaptureStream)
         {
-            PA_ERROR("Capture stream is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Capture stream is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
         StreamDirection dir = StreamDirection::TX;;
         status = localCaptureStream->getVolume(dir, cb);
@@ -1035,27 +1035,27 @@ pa_result_t AudioPAController::getVolume(
     {
         if (!localVoiceStream)
         {
-            PA_ERROR("Voice stream is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Voice stream is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
         status = localVoiceStream->getVolume(StreamDirection::RX, cb);
     }
     else
     {
-        PA_ERROR("Invalid audio interface");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid audio interface");
+        return TAF_PA_BAD_PARAMETER;
     }
     if(status == telux::common::Status::SUCCESS) {
-        PA_INFO("Request to get volume sent");
+        TAF_PA_INFO("Request to get volume sent");
     } else {
-        PA_ERROR("Request to get volume failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Request to get volume failed");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::setMute(
+taf_pa_result_t AudioPAController::setMute(
     PaStreamConfig streamConfig,
     bool isMute,
     taf_pa_audio_cb callback,
@@ -1081,23 +1081,23 @@ pa_result_t AudioPAController::setMute(
     {
         if (!localPlayer)
         {
-            PA_ERROR("Audio player is null");
-            return PA_FAULT;
+            TAF_PA_ERROR("Audio player is null");
+            return TAF_PA_FAULT;
         }
         ErrorCode err = localPlayer->setMute(isMute);
         if (ErrorCode::SUCCESS != err) {
-            PA_ERROR("Request to set mute failed err: %d", int (err));
-            return PA_FAULT;
+            TAF_PA_ERROR("Request to set mute failed err: %d", int (err));
+            return TAF_PA_FAULT;
         }
-        callback(PA_OK, context);
-        return PA_OK;
+        callback(TAF_PA_OK, context);
+        return TAF_PA_OK;
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
         if (!localCaptureStream)
         {
-            PA_ERROR("Capture stream is null");
-            return PA_FAULT;
+            TAF_PA_ERROR("Capture stream is null");
+            return TAF_PA_FAULT;
         }
         muteObj.dir = StreamDirection::TX;
         status = localCaptureStream->setMute(muteObj, cb);
@@ -1106,8 +1106,8 @@ pa_result_t AudioPAController::setMute(
     {
         if (!localVoiceStream)
         {
-            PA_ERROR("Voice stream is null");
-            return PA_FAULT;
+            TAF_PA_ERROR("Voice stream is null");
+            return TAF_PA_FAULT;
         }
         for(PaStreamDirection dir : streamConfig.streamDir){
             if (dir == PaStreamDirection::RX)
@@ -1124,19 +1124,19 @@ pa_result_t AudioPAController::setMute(
     }
     else
     {
-        PA_ERROR("Invalid audio interface");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid audio interface");
+        return TAF_PA_BAD_PARAMETER;
     }
     if(status == telux::common::Status::SUCCESS) {
-        PA_INFO("Request to set mute sent");
+        TAF_PA_INFO("Request to set mute sent");
     } else {
-        PA_ERROR("Request to set mute failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Request to set mute failed");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::getMute(
+taf_pa_result_t AudioPAController::getMute(
     PaStreamConfig streamConfig,
     bool *isMute,
     taf_pa_audio_cb callback,
@@ -1150,10 +1150,10 @@ pa_result_t AudioPAController::getMute(
     {
             if (error == ErrorCode::SUCCESS) {
                 *isMute = mute.enable;
-                callback(PA_OK, context);
+                callback(TAF_PA_OK, context);
             } else {
-                PA_ERROR("Failed to get mute status, error : %d", (int)error);
-                callback(PA_FAULT, context);
+                TAF_PA_ERROR("Failed to get mute status, error : %d", (int)error);
+                callback(TAF_PA_FAULT, context);
             }
 
     };
@@ -1173,29 +1173,29 @@ pa_result_t AudioPAController::getMute(
     {
         if (!localPlayer)
         {
-            PA_ERROR("Audio player is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Audio player is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
 
         ErrorCode err = localPlayer->getMute(*isMute);
         if (ErrorCode::SUCCESS != err) {
-            PA_ERROR("Request to get Mute status failed err: %d", int (err));
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Request to get Mute status failed err: %d", int (err));
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         } else {
-            PA_INFO("Mute status for playback is %s", isMute ? "true" : "false");
-            callback(PA_OK, context);
-            return PA_OK;
+            TAF_PA_INFO("Mute status for playback is %s", isMute ? "true" : "false");
+            callback(TAF_PA_OK, context);
+            return TAF_PA_OK;
         }
     }
     else if (streamConfig.type == PaStreamType::CAPTURE)
     {
         if (!localCaptureStream)
         {
-            PA_ERROR("Capture stream is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Capture stream is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
         status = localCaptureStream->getMute(StreamDirection::TX, cb);
     }
@@ -1203,9 +1203,9 @@ pa_result_t AudioPAController::getMute(
     {
         if (!localVoiceStream)
         {
-            PA_ERROR("Voice stream is null");
-            callback(PA_FAULT, context);
-            return PA_FAULT;
+            TAF_PA_ERROR("Voice stream is null");
+            callback(TAF_PA_FAULT, context);
+            return TAF_PA_FAULT;
         }
         for(PaStreamDirection dir : streamConfig.streamDir){
             if (dir == PaStreamDirection::RX)
@@ -1222,21 +1222,21 @@ pa_result_t AudioPAController::getMute(
     }
     else
     {
-        PA_ERROR("Invalid audio interface");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid audio interface");
+        return TAF_PA_BAD_PARAMETER;
     }
     if(status == telux::common::Status::SUCCESS) {
-        PA_INFO("Request to get mute sent");
+        TAF_PA_INFO("Request to get mute sent");
     } else {
-        PA_ERROR("Request to get mute failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Request to get mute failed");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::startPlayback(std::vector<taf_pa_audio_PlayFileInfo_t> &playFileInfos, int listSize, std::weak_ptr<IPaPlayListListener> pbListener)
+taf_pa_result_t AudioPAController::startPlayback(std::vector<taf_pa_audio_PlayFileInfo_t> &playFileInfos, int listSize, std::weak_ptr<IPaPlayListListener> pbListener)
 {
-    PA_DEBUG("startPlayback");
+    TAF_PA_DEBUG("startPlayback");
     telux::audio::PlaybackConfig pbConfig = {};
     telux::common::ErrorCode ec = telux::common::ErrorCode::INTERNAL_ERROR;
     std::vector<telux::audio::PlaybackConfig> filesToPlay;
@@ -1244,7 +1244,7 @@ pa_result_t AudioPAController::startPlayback(std::vector<taf_pa_audio_PlayFileIn
     {
         pbConfig = {};
         pbConfig.absoluteFilePath = fileInfo.absoluteFilePath.c_str();
-        PA_INFO("absoluteFilePath path is %s", pbConfig.absoluteFilePath.c_str());
+        TAF_PA_INFO("absoluteFilePath path is %s", pbConfig.absoluteFilePath.c_str());
         pbConfig.streamConfig.type = StreamType::PLAY;
         pbConfig.streamConfig.sampleRate = fileInfo.streamConfig.sampleRate;
         pbConfig.streamConfig.channelTypeMask = fileInfo.streamConfig.channelTypeMask;
@@ -1260,7 +1260,7 @@ pa_result_t AudioPAController::startPlayback(std::vector<taf_pa_audio_PlayFileIn
             pbConfig.streamConfig.format = AudioFormat::AMRNB;
         else if (fileInfo.streamConfig.format == PaFileFormat::AMR_WB)
             pbConfig.streamConfig.format = AudioFormat::AMRWB;
-        PA_DEBUG("samplerate is %d channelmask is %d count is %d format is %d",
+        TAF_PA_DEBUG("samplerate is %d channelmask is %d count is %d format is %d",
             pbConfig.streamConfig.sampleRate, pbConfig.streamConfig.channelTypeMask,
             pbConfig.repeatInfo.count, pbConfig.streamConfig.format);
         for (PaAudioIf audioIf : fileInfo.streamConfig.deviceTypes)
@@ -1278,69 +1278,69 @@ pa_result_t AudioPAController::startPlayback(std::vector<taf_pa_audio_PlayFileIn
                 pbConfig.streamConfig.voicePaths.emplace_back(telux::audio::Direction::TX);
         }
 
-        PA_DEBUG("devices sizes %d, voicePaths sizes %d", pbConfig.streamConfig.deviceTypes.size(),
+        TAF_PA_DEBUG("devices sizes %d, voicePaths sizes %d", pbConfig.streamConfig.deviceTypes.size(),
                 pbConfig.streamConfig.voicePaths.size());
         filesToPlay.push_back(pbConfig);
     }
-    PA_DEBUG("playfile sizes %d", filesToPlay.size());
+    TAF_PA_DEBUG("playfile sizes %d", filesToPlay.size());
     ec = telux::common::ErrorCode::INTERNAL_ERROR;
     if(pbConfig.streamConfig.voicePaths.size() > 0)
     {
-        PA_DEBUG("Create stream for incall uplink playback and start playback");
+        TAF_PA_DEBUG("Create stream for incall uplink playback and start playback");
         ec = AudioFactory::getInstance().getAudioPlayer(mTxAudioPlayer);
         if (ec != telux::common::ErrorCode::SUCCESS) {
-            PA_ERROR("can't get IAudioPlayer");
-            return PA_FAULT;
+            TAF_PA_ERROR("can't get IAudioPlayer");
+            return TAF_PA_FAULT;
         }
         repeatedTxPlayerStatusListener = std::make_shared<tafPaPromptsStatusListener>();
         repeatedTxPlayerStatusListener->pbStatusListener = pbListener;
         ec = mTxAudioPlayer->startPlayback(filesToPlay, repeatedTxPlayerStatusListener);
         if (ec != telux::common::ErrorCode::SUCCESS) {
-            PA_ERROR("failed start, err %d", static_cast<int>(ec));
-            return PA_FAULT;
+            TAF_PA_ERROR("failed start, err %d", static_cast<int>(ec));
+            return TAF_PA_FAULT;
         }
     }
     else
     {
-        PA_DEBUG("Create stream for local playback and start playback");
+        TAF_PA_DEBUG("Create stream for local playback and start playback");
         ec = AudioFactory::getInstance().getAudioPlayer(mAudioPlayer);
         if (ec != telux::common::ErrorCode::SUCCESS) {
-            PA_ERROR("can't get IAudioPlayer");
-            return PA_FAULT;
+            TAF_PA_ERROR("can't get IAudioPlayer");
+            return TAF_PA_FAULT;
         }
         repeatedPlayerStatusListener = std::make_shared<tafPaPromptsStatusListener>();
         repeatedPlayerStatusListener->pbStatusListener = pbListener;
         ec = mAudioPlayer->startPlayback(filesToPlay, repeatedPlayerStatusListener);
         if (ec != telux::common::ErrorCode::SUCCESS) {
-            PA_ERROR("failed start, err %d", static_cast<int>(ec));
-            return PA_FAULT;
+            TAF_PA_ERROR("failed start, err %d", static_cast<int>(ec));
+            return TAF_PA_FAULT;
         }
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::stopPlayback(PaStreamConfig streamConfig)
+taf_pa_result_t AudioPAController::stopPlayback(PaStreamConfig streamConfig)
 {
     telux::common::ErrorCode ec = ErrorCode::INTERNAL_ERROR;
     if(streamConfig.streamDir.size() > 0)
     {
-        PA_INFO("Stop remote playback");
+        TAF_PA_INFO("Stop remote playback");
         if (mTxAudioPlayer)
             ec = mTxAudioPlayer->stopPlayback();
     }
     else
     {
-        PA_INFO("Stop local playback");
+        TAF_PA_INFO("Stop local playback");
         if (mAudioPlayer)
             ec = mAudioPlayer->stopPlayback();
     }
     if (ec != telux::common::ErrorCode::SUCCESS) {
         if (ec == telux::common::ErrorCode::INVALID_STATE) {
-            PA_ERROR("no playback in progress");
-            return PA_FAULT;
+            TAF_PA_ERROR("no playback in progress");
+            return TAF_PA_FAULT;
         }
-        PA_ERROR("failed stoping playback, err %d",static_cast<int>(ec));
-        return PA_FAULT;
+        TAF_PA_ERROR("failed stoping playback, err %d",static_cast<int>(ec));
+        return TAF_PA_FAULT;
     }
     if(streamConfig.streamDir.size() > 0)
     {
@@ -1352,14 +1352,14 @@ pa_result_t AudioPAController::stopPlayback(PaStreamConfig streamConfig)
         mAudioPlayer.reset();
         mAudioPlayer = nullptr;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 std::shared_ptr<PaAudioCaptureStream> AudioPAController::GetCaptureStream(
     tafpa::audio::PaStreamDirection streamDir
 )
 {
-    PA_DEBUG("GetCaptureStream");
+    TAF_PA_DEBUG("GetCaptureStream");
 
     // Snapshot stream pointers under streamMutex_.
     std::shared_ptr<telux::audio::IAudioCaptureStream> localTx;
@@ -1389,13 +1389,13 @@ std::shared_ptr<PaAudioCaptureStream> AudioPAController::GetCaptureStream(
     return NULL;
 }
 
-pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const char dtmf,
+taf_pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const char dtmf,
         taf_pa_audio_cb callback, std::any context )
 {
-    PA_INFO("Playing signaling DTMF for slot %d: '%c'", slotId, dtmf);
+    TAF_PA_INFO("Playing signaling DTMF for slot %d: '%c'", slotId, dtmf);
     if (!dtmf) {
-        PA_ERROR("Invalid DTMF string");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid DTMF string");
+        return TAF_PA_BAD_PARAMETER;
     }
     std::promise<ServiceStatus> callMgrprom;
     std::shared_ptr<telux::tel::ICall> spCall = nullptr;
@@ -1411,19 +1411,19 @@ pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const ch
                 callMgrprom.set_value(status);
             });
             if(!callManager) {
-                PA_ERROR(" Failed to get CallManager instance");
-                callback(PA_FAULT, context);
-                return PA_FAULT;
+                TAF_PA_ERROR(" Failed to get CallManager instance");
+                callback(TAF_PA_FAULT, context);
+                return TAF_PA_FAULT;
             }
-            PA_DEBUG("CallManager subsystem is not ready, Please wait ");
+            TAF_PA_DEBUG("CallManager subsystem is not ready, Please wait ");
 
             ServiceStatus callMgrsubSystemStatus = callMgrprom.get_future().get();
             if(callMgrsubSystemStatus == ServiceStatus::SERVICE_AVAILABLE) {
-                PA_DEBUG("CallManager subsystem is ready ");
+                TAF_PA_DEBUG("CallManager subsystem is ready ");
             } else {
-                PA_ERROR("Unable to initialise CallManager subsystem ");
-                callback(PA_FAULT, context);
-                return PA_FAULT;
+                TAF_PA_ERROR("Unable to initialise CallManager subsystem ");
+                callback(TAF_PA_FAULT, context);
+                return TAF_PA_FAULT;
             }
         }
     }
@@ -1437,9 +1437,9 @@ pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const ch
     }
     if (!localCallManager)
     {
-        PA_ERROR("CallManager is null");
-        callback(PA_FAULT, context);
-        return PA_FAULT;
+        TAF_PA_ERROR("CallManager is null");
+        callback(TAF_PA_FAULT, context);
+        return TAF_PA_FAULT;
     }
 
     inProgressCalls = localCallManager->getInProgressCalls();
@@ -1448,7 +1448,7 @@ pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const ch
     // progress calls on user provided slot, send DTMF request
     for(auto callIterator = std::begin(inProgressCalls);
         callIterator != std::end(inProgressCalls); ++callIterator) {
-        if ((*callIterator)->getPhoneId() == slotId) {
+        if ((*callIterator)->getPhoneId() == static_cast<int>(slotId)) {
             spCall = *callIterator;
             break;
         }
@@ -1456,8 +1456,8 @@ pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const ch
 
     if(!spCall)
     {
-        PA_ERROR("No progressing calls");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("No progressing calls");
+        return TAF_PA_NOT_FOUND;
     }
 
     // Create the callback in a local variable, assign it to dtmfCb under
@@ -1471,16 +1471,16 @@ pa_result_t AudioPAController::playSignallingDtmfOnTx( uint32_t slotId, const ch
     }
     auto ret = spCall->startDtmfTone(dtmf, localDtmfCb);
     if (ret != telux::common::Status::SUCCESS) {
-        PA_ERROR("Play tone request failed, err %d", (int)ret);
-        return PA_FAULT;
+        TAF_PA_ERROR("Play tone request failed, err %d", (int)ret);
+        return TAF_PA_FAULT;
     }
-    PA_INFO("Signaling DTMF request successfully");
-    return PA_OK;
+    TAF_PA_INFO("Signaling DTMF request successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::stopSignallingDtmfOnTx( uint32_t slotId, taf_pa_audio_cb callback, std::any context )
+taf_pa_result_t AudioPAController::stopSignallingDtmfOnTx( uint32_t slotId, taf_pa_audio_cb callback, std::any context )
 {
-    PA_INFO("Stopping signaling DTMF for slot %d", slotId);
+    TAF_PA_INFO("Stopping signaling DTMF for slot %d", slotId);
 
     auto status = Status::FAILED;
     std::shared_ptr<telux::tel::ICall> spCall = nullptr;
@@ -1495,8 +1495,8 @@ pa_result_t AudioPAController::stopSignallingDtmfOnTx( uint32_t slotId, taf_pa_a
     }
     if (!localCallManager)
     {
-        PA_ERROR("CallManager is null");
-        return PA_FAULT;
+        TAF_PA_ERROR("CallManager is null");
+        return TAF_PA_FAULT;
     }
 
     inProgressCalls = localCallManager->getInProgressCalls();
@@ -1510,8 +1510,8 @@ pa_result_t AudioPAController::stopSignallingDtmfOnTx( uint32_t slotId, taf_pa_a
         }
     }
     if(!spCall) {
-        PA_ERROR("No call found on slot Id %d", slotId);
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("No call found on slot Id %d", slotId);
+        return TAF_PA_NOT_FOUND;
     }
     // Same local-variable pattern as playSignallingDtmfOnTx() — create
     // the callback locally, assign to dtmfCb under dtmfCbMutex_, then pass the local
@@ -1524,15 +1524,15 @@ pa_result_t AudioPAController::stopSignallingDtmfOnTx( uint32_t slotId, taf_pa_a
     }
     status = spCall->stopDtmfTone(localDtmfCb);
     if(status != Status::SUCCESS) {
-        PA_ERROR("Request to stop Dtmf Tone failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Request to stop Dtmf Tone failed");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Signaling DTMF stopped request successfully");
-    return PA_OK;
+    TAF_PA_INFO("Signaling DTMF stopped request successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::playDtmf( PaDtmfTone paDtmfTone, uint16_t duration,
+taf_pa_result_t AudioPAController::playDtmf( PaDtmfTone paDtmfTone, uint16_t duration,
         uint16_t gain,
         taf_pa_audio_cb callback,
         std::any context )
@@ -1542,7 +1542,7 @@ pa_result_t AudioPAController::playDtmf( PaDtmfTone paDtmfTone, uint16_t duratio
     dtmfTone.direction = static_cast<telux::audio::StreamDirection>(paDtmfTone.direction);
     dtmfTone.lowFreq = static_cast<telux::audio::DtmfLowFreq>(paDtmfTone.lowFreq);
     dtmfTone.highFreq = static_cast<telux::audio::DtmfHighFreq>(paDtmfTone.highFreq);
-    PA_DEBUG("Playing frequencies low: %d, high: %d\n", dtmfTone.lowFreq,
+    TAF_PA_DEBUG("Playing frequencies low: %d, high: %d\n", dtmfTone.lowFreq,
     dtmfTone.highFreq);
     CALLBACK_TO_SET_RESULT;
     // Snapshot the shared_ptr under the lock.
@@ -1553,19 +1553,19 @@ pa_result_t AudioPAController::playDtmf( PaDtmfTone paDtmfTone, uint16_t duratio
     }
     if (!localVoiceStream)
     {
-        PA_ERROR("Voice stream is not active!");
-        return PA_FAULT;
+        TAF_PA_ERROR("Voice stream is not active!");
+        return TAF_PA_FAULT;
     }
     status = localVoiceStream->playDtmfTone( dtmfTone, duration, gain, cb);
     if (status != Status::SUCCESS)
     {
-        PA_ERROR("Failed to send request to start dtmf tone, err : %d", (int)status);
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send request to start dtmf tone, err : %d", (int)status);
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::stopDtmf(PaStreamDirection direction, taf_pa_audio_cb callback,
+taf_pa_result_t AudioPAController::stopDtmf(PaStreamDirection direction, taf_pa_audio_cb callback,
     std::any context)
 {
     CALLBACK_TO_SET_RESULT;
@@ -1578,20 +1578,20 @@ pa_result_t AudioPAController::stopDtmf(PaStreamDirection direction, taf_pa_audi
     }
     if (!localVoiceStream)
     {
-        PA_ERROR("Voice stream is not active!");
-        return PA_FAULT;
+        TAF_PA_ERROR("Voice stream is not active!");
+        return TAF_PA_FAULT;
     }
     status = localVoiceStream->stopDtmfTone(static_cast<StreamDirection>(direction), cb);
     if(status == Status::SUCCESS) {
-        PA_DEBUG("Stop Dtmf Tone request sent successfully");
+        TAF_PA_DEBUG("Stop Dtmf Tone request sent successfully");
     }else {
-        PA_ERROR("Request to stop Dtmf Tone failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Request to stop Dtmf Tone failed");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::registerDtmfListener(
+taf_pa_result_t AudioPAController::registerDtmfListener(
     std::weak_ptr<IPaDtmfListener> listener
 )
 {
@@ -1608,19 +1608,19 @@ pa_result_t AudioPAController::registerDtmfListener(
         dtmfListener->paDtmfListener = listener;
         telux::common::Status st = localVoiceStream->registerListener(dtmfListener);
         if(st!=telux::common::Status::SUCCESS) {
-            PA_ERROR("Request to register for DTMF detection failed error : %d", (int)st);
-            return PA_FAULT;
+            TAF_PA_ERROR("Request to register for DTMF detection failed error : %d", (int)st);
+            return TAF_PA_FAULT;
         }
-        PA_DEBUG("Request to register dtmf listener successful" );
+        TAF_PA_DEBUG("Request to register dtmf listener successful" );
     }
     else{
-        PA_ERROR("Voice stream is not active!");
-        return PA_FAULT;
+        TAF_PA_ERROR("Voice stream is not active!");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::deregisterDtmfListener(
+taf_pa_result_t AudioPAController::deregisterDtmfListener(
     std::weak_ptr<IPaDtmfListener> listener
 )
 {
@@ -1635,32 +1635,32 @@ pa_result_t AudioPAController::deregisterDtmfListener(
     if(localVoiceStream) {
         telux::common::Status st = localVoiceStream->deRegisterListener(dtmfListener);
         if(st!=telux::common::Status::SUCCESS) {
-            PA_ERROR("Request to register for DTMF detection failed error : %d", (int)st);
-            return PA_FAULT;
+            TAF_PA_ERROR("Request to register for DTMF detection failed error : %d", (int)st);
+            return TAF_PA_FAULT;
         }
-        PA_DEBUG("Request to deregister dtmf listener successful" );
+        TAF_PA_DEBUG("Request to deregister dtmf listener successful" );
     }
     else{
-        PA_ERROR("Voice stream is not active!");
-        return  PA_FAULT;
+        TAF_PA_ERROR("Voice stream is not active!");
+        return  TAF_PA_FAULT;
     }
     dtmfListener.reset();
     dtmfListener = nullptr;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::registerAudioSubsystemChangeListener
+taf_pa_result_t AudioPAController::registerAudioSubsystemChangeListener
 (
     taf_pa_audio_SubsystemStateChangeCb callBack,
     std::shared_ptr<void> context,
     uint16_t &id
 )
 {
-    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, PA_BAD_PARAMETER, "callBack is NULL!");
+    TAF_PA_ERROR_IF_RET_VAL(nullptr == callBack, TAF_PA_BAD_PARAMETER, "callBack is NULL!");
 
     // Lock before checking audioMngrInitState_ to avoid TOCTOU race
     std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != audioMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != audioMngrInitState_, TAF_PA_FAULT,
                                                               "PA audio manager not initialized.");
     // Add the callback
     SubsystemEventsCallbackEntry_t entry = {
@@ -1674,81 +1674,81 @@ pa_result_t AudioPAController::registerAudioSubsystemChangeListener
     // Increment the ID.
     subsystemEventsCallbackId_++;
 
-    PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
-    PA_INFO("Number of registered callbacks: %zu", subsystemEventsCallbacks_.size());
+    TAF_PA_INFO("Id: %d, Cbk: %p, Ctx: %p", entry.id, entry.callBack, entry.context.get());
+    TAF_PA_INFO("Number of registered callbacks: %zu", subsystemEventsCallbacks_.size());
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t AudioPAController::deregisterAudioSubsystemChangeListener
+taf_pa_result_t AudioPAController::deregisterAudioSubsystemChangeListener
 (
     uint16_t id
 )
 {
     // Lock before checking audioMngrInitState_ to avoid TOCTOU race
     std::lock_guard<std::mutex> lock(subsystemEventsCbksMtx_);
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != audioMngrInitState_, PA_FAULT,
+    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != audioMngrInitState_, TAF_PA_FAULT,
                                                               "PA audio manager not initialized.");
     // Iterate over the vector and remove the one with the provided id.
     for (auto cbk = subsystemEventsCallbacks_.begin();cbk != subsystemEventsCallbacks_.end(); ++cbk)
     {
         if (cbk->id == id)
         {
-            PA_INFO("Id: %d, Cbk: %p", id, cbk);
+            TAF_PA_INFO("Id: %d, Cbk: %p", id, cbk);
             subsystemEventsCallbacks_.erase(cbk);
-            return PA_OK;
+            return TAF_PA_OK;
         }
     }
-    PA_WARN("Callback not found. Id: %d", id);
-    return PA_NOT_FOUND;
+    TAF_PA_WARN("Callback not found. Id: %d", id);
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_Init()
+taf_pa_result_t tafpa::audio::taf_pa_audio_Init()
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->initialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->initialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio platform adapter initialization is done");
+        TAF_PA_INFO("Audio platform adapter initialization is done");
         // Mark initialization as complete
         gAudioPaInitialized.store(true, std::memory_order_release);
-        PA_INFO("Audio PA initialization flag set to true.");
+        TAF_PA_INFO("Audio PA initialization flag set to true.");
     }
     else
     {
-        PA_CRIT("Failed to initialize audio platform adapter, ret: %d", result);
+        TAF_PA_CRIT("Failed to initialize audio platform adapter, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_Deinit()
+taf_pa_result_t tafpa::audio::taf_pa_audio_Deinit()
 {
     // Check if Init() was called before Deinit()
     if (!gAudioPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() - ignoring deinit request.");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() - ignoring deinit request.");
+        return TAF_PA_FAULT;
     }
 
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->deinitialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->deinitialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio platform adapter deinitialization is done");
+        TAF_PA_INFO("Audio platform adapter deinitialization is done");
         // Reset initialization flag
         gAudioPaInitialized.store(false, std::memory_order_release);
-        PA_INFO("Audio PA initialization flag reset to false.");
+        TAF_PA_INFO("Audio PA initialization flag reset to false.");
     }
     else
     {
-        PA_ERROR("Failed to deinitialize audio platform adapter, ret: %d", result);
+        TAF_PA_ERROR("Failed to deinitialize audio platform adapter, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_CreateStream(
+taf_pa_result_t tafpa::audio::taf_pa_audio_CreateStream(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,
     std::any context
@@ -1756,19 +1756,19 @@ pa_result_t tafpa::audio::taf_pa_audio_CreateStream(
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->createStream(streamConfig, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->createStream(streamConfig, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio PA create stream request is successful");
+        TAF_PA_INFO("Audio PA create stream request is successful");
     }
     else
     {
-        PA_ERROR("Failed to create stream in audio PA, ret: %d", result);
+        TAF_PA_ERROR("Failed to create stream in audio PA, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_DeleteStream(
+taf_pa_result_t tafpa::audio::taf_pa_audio_DeleteStream(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,
     std::any context
@@ -1776,19 +1776,19 @@ pa_result_t tafpa::audio::taf_pa_audio_DeleteStream(
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->deleteStream(streamConfig, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->deleteStream(streamConfig, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio PA delete stream request is successful");
+        TAF_PA_INFO("Audio PA delete stream request is successful");
     }
     else
     {
-        PA_ERROR("Failed to delete stream in audio PA, ret: %d", result);
+        TAF_PA_ERROR("Failed to delete stream in audio PA, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_StartAudio(
+taf_pa_result_t tafpa::audio::taf_pa_audio_StartAudio(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,
     std::any context
@@ -1796,19 +1796,19 @@ pa_result_t tafpa::audio::taf_pa_audio_StartAudio(
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->startAudio(streamConfig, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->startAudio(streamConfig, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio PA start stream request is successful");
+        TAF_PA_INFO("Audio PA start stream request is successful");
     }
     else
     {
-        PA_ERROR("Failed to start stream in audio PA, ret: %d", result);
+        TAF_PA_ERROR("Failed to start stream in audio PA, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_StopAudio(
+taf_pa_result_t tafpa::audio::taf_pa_audio_StopAudio(
     PaStreamConfig streamConfig,
     taf_pa_audio_cb callback,
     std::any context
@@ -1816,56 +1816,56 @@ pa_result_t tafpa::audio::taf_pa_audio_StopAudio(
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->stopAudio(streamConfig, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->stopAudio(streamConfig, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio PA stop stream request is successful");
+        TAF_PA_INFO("Audio PA stop stream request is successful");
     }
     else
     {
-        PA_ERROR("Failed to stop stream in audio PA, ret: %d", result);
+        TAF_PA_ERROR("Failed to stop stream in audio PA, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_StartPlayback(
+taf_pa_result_t tafpa::audio::taf_pa_audio_StartPlayback(
     std::vector<taf_pa_audio_PlayFileInfo_t> &playFileInfos,
     int listSiz,
     std::weak_ptr<IPaPlayListListener> pbStatusListener)
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->startPlayback(playFileInfos, listSiz, pbStatusListener);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->startPlayback(playFileInfos, listSiz, pbStatusListener);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Successfully sent the request to start the playback");
+        TAF_PA_INFO("Successfully sent the request to start the playback");
     }
     else
     {
-        PA_ERROR("Failed to start the playback, ret: %d", result);
+        TAF_PA_ERROR("Failed to start the playback, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_StopPlayback(
+taf_pa_result_t tafpa::audio::taf_pa_audio_StopPlayback(
     PaStreamConfig streamConfig
 )
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->stopPlayback(streamConfig);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->stopPlayback(streamConfig);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Successfully sent the request to stop the playback");
+        TAF_PA_INFO("Successfully sent the request to stop the playback");
     }
     else
     {
-        PA_ERROR("Failed to stop the playback, ret: %d", result);
+        TAF_PA_ERROR("Failed to stop the playback, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_SetVolume(
+taf_pa_result_t tafpa::audio::taf_pa_audio_SetVolume(
     PaStreamConfig streamConfig,
     double volLevel,
     taf_pa_audio_cb callback,
@@ -1874,19 +1874,19 @@ pa_result_t tafpa::audio::taf_pa_audio_SetVolume(
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->setVolume(streamConfig, volLevel, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->setVolume(streamConfig, volLevel, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio PA setVolume request is successful");
+        TAF_PA_INFO("Audio PA setVolume request is successful");
     }
     else
     {
-        PA_ERROR("Failed to setVolume in audio PA, ret: %d", result);
+        TAF_PA_ERROR("Failed to setVolume in audio PA, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_GetVolume(
+taf_pa_result_t tafpa::audio::taf_pa_audio_GetVolume(
     PaStreamConfig streamConfig,
     double *volLevel,
     taf_pa_audio_cb callback,
@@ -1895,19 +1895,19 @@ pa_result_t tafpa::audio::taf_pa_audio_GetVolume(
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->getVolume(streamConfig, volLevel, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->getVolume(streamConfig, volLevel, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio PA getVolume request is successful");
+        TAF_PA_INFO("Audio PA getVolume request is successful");
     }
     else
     {
-        PA_ERROR("Failed to getVolume in audio PA, ret: %d", result);
+        TAF_PA_ERROR("Failed to getVolume in audio PA, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_SetMute(
+taf_pa_result_t tafpa::audio::taf_pa_audio_SetMute(
     PaStreamConfig streamConfig,
     bool isMute,
     taf_pa_audio_cb callback,
@@ -1916,19 +1916,19 @@ pa_result_t tafpa::audio::taf_pa_audio_SetMute(
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->setMute(streamConfig, isMute, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->setMute(streamConfig, isMute, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio PA setMute request is successful");
+        TAF_PA_INFO("Audio PA setMute request is successful");
     }
     else
     {
-        PA_ERROR("Failed to setMute in audio PA, ret: %d", result);
+        TAF_PA_ERROR("Failed to setMute in audio PA, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_GetMute(
+taf_pa_result_t tafpa::audio::taf_pa_audio_GetMute(
     PaStreamConfig streamConfig,
     bool *isMute,
     taf_pa_audio_cb callback,
@@ -1937,19 +1937,19 @@ pa_result_t tafpa::audio::taf_pa_audio_GetMute(
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->getMute(streamConfig, isMute, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->getMute(streamConfig, isMute, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Audio PA getMute request is successful");
+        TAF_PA_INFO("Audio PA getMute request is successful");
     }
     else
     {
-        PA_ERROR("Failed to getMute in audio PA, ret: %d", result);
+        TAF_PA_ERROR("Failed to getMute in audio PA, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_PlayDtmf(PaDtmfTone dtmfTone, uint16_t duration,
+taf_pa_result_t tafpa::audio::taf_pa_audio_PlayDtmf(PaDtmfTone dtmfTone, uint16_t duration,
         uint16_t gain,
         taf_pa_audio_cb callback,
         std::any context
@@ -1957,39 +1957,39 @@ pa_result_t tafpa::audio::taf_pa_audio_PlayDtmf(PaDtmfTone dtmfTone, uint16_t du
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->playDtmf(dtmfTone, duration, gain, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->playDtmf(dtmfTone, duration, gain, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Successfully sent the request to start dtmf tone");
+        TAF_PA_INFO("Successfully sent the request to start dtmf tone");
     }
     else
     {
-        PA_ERROR("Failed to send request to start the dtmf tone, ret: %d", result);
+        TAF_PA_ERROR("Failed to send request to start the dtmf tone, ret: %d", result);
     }
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_StopDtmf(
+taf_pa_result_t tafpa::audio::taf_pa_audio_StopDtmf(
     PaStreamDirection direction, taf_pa_audio_cb callback,
     std::any context
 )
 {
     auto pACtrl = AudioPAController::getInstance();
 
-    pa_result_t result = pACtrl->stopDtmf(direction, callback, context);
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->stopDtmf(direction, callback, context);
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Successfully sent the request to stop the dtmf tone");
+        TAF_PA_INFO("Successfully sent the request to stop the dtmf tone");
     }
     else
     {
-        PA_ERROR("Failed to stop the dtmf tone, ret: %d", result);
+        TAF_PA_ERROR("Failed to stop the dtmf tone, ret: %d", result);
     }
 
     return result;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_GetCaptureStream(
+taf_pa_result_t tafpa::audio::taf_pa_audio_GetCaptureStream(
     tafpa::audio::PaStreamDirection streamDir,
     std::shared_ptr<PaAudioCaptureStream>& captureStream
 )
@@ -1997,10 +1997,10 @@ pa_result_t tafpa::audio::taf_pa_audio_GetCaptureStream(
     auto pACtrl = AudioPAController::getInstance();
 
     captureStream = pACtrl->GetCaptureStream(streamDir);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_registerDtmfListener(
+taf_pa_result_t tafpa::audio::taf_pa_audio_registerDtmfListener(
     std::weak_ptr<IPaDtmfListener> dtmfListener
 )
 {
@@ -2009,7 +2009,7 @@ pa_result_t tafpa::audio::taf_pa_audio_registerDtmfListener(
     return pACtrl->registerDtmfListener(dtmfListener);
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_deregisterDtmfListener(
+taf_pa_result_t tafpa::audio::taf_pa_audio_deregisterDtmfListener(
     std::weak_ptr<IPaDtmfListener> dtmfListener
 )
 {
@@ -2018,7 +2018,7 @@ pa_result_t tafpa::audio::taf_pa_audio_deregisterDtmfListener(
     return pACtrl->deregisterDtmfListener(dtmfListener);
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_PlaySignallingDtmfOnTx(
+taf_pa_result_t tafpa::audio::taf_pa_audio_PlaySignallingDtmfOnTx(
     uint32_t slotId,
     const char dtmf,
     taf_pa_audio_cb callback,
@@ -2030,7 +2030,7 @@ pa_result_t tafpa::audio::taf_pa_audio_PlaySignallingDtmfOnTx(
     return pACtrl->playSignallingDtmfOnTx(slotId, dtmf, callback, context);
 }
 
-pa_result_t tafpa::audio::taf_pa_audio_StopSignallingDtmfOnTx(
+taf_pa_result_t tafpa::audio::taf_pa_audio_StopSignallingDtmfOnTx(
     uint32_t slotId,
     taf_pa_audio_cb callback,
     std::any context
@@ -2041,7 +2041,7 @@ pa_result_t tafpa::audio::taf_pa_audio_StopSignallingDtmfOnTx(
     return pACtrl->stopSignallingDtmfOnTx(slotId, callback, context);
 }
 
-pa_result_t tafpa::audio::AddSubsystemStateChangeListener
+taf_pa_result_t tafpa::audio::AddSubsystemStateChangeListener
 (
     taf_pa_audio_SubsystemStateChangeCb callBack,
     std::shared_ptr<void> context,
@@ -2053,7 +2053,7 @@ pa_result_t tafpa::audio::AddSubsystemStateChangeListener
     return pACtrl->registerAudioSubsystemChangeListener(callBack, context, id);
 }
 
-pa_result_t tafpa::audio::RemoveSubsystemStateChangeListener
+taf_pa_result_t tafpa::audio::RemoveSubsystemStateChangeListener
 (
     uint16_t id
 )

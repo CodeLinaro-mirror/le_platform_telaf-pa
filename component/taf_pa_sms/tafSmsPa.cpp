@@ -314,8 +314,8 @@ public:
         return CbManagers;
     }
 
-    pa_result_t initialize();
-    pa_result_t deinitialize();
+    taf_pa_result_t initialize();
+    taf_pa_result_t deinitialize();
 
     void setIncomingSmsCallback(IncomingSmsCallback cb)
     {
@@ -340,7 +340,7 @@ public:
     class tafSmscAddressCallback : public telux::tel::ISmscAddressCallback
     {
     public:
-        tafSmscAddressCallback(std::shared_ptr<std::promise<pa_result_t>> promise,
+        tafSmscAddressCallback(std::shared_ptr<std::promise<taf_pa_result_t>> promise,
                                std::shared_ptr<std::string> addrStr)
             : promise_(std::move(promise)), addrStr_(std::move(addrStr))
         {
@@ -355,34 +355,34 @@ public:
                 {
                     // Store the address; the caller will copy into its buffer after wait
                     *addrStr_ = address;
-                    promise_->set_value(PA_OK);
+                    promise_->set_value(TAF_PA_OK);
                 }
                 else
                 {
-                    promise_->set_value(PA_FAULT);
+                    promise_->set_value(TAF_PA_FAULT);
                 }
             }
             catch (const std::exception &e)
             {
-                PA_ERROR("Exception in callback: %s", e.what());
-                try { promise_->set_value(PA_FAULT); } catch (...) {}
+                TAF_PA_ERROR("Exception in callback: %s", e.what());
+                try { promise_->set_value(TAF_PA_FAULT); } catch (...) {}
             }
             catch (...)
             {
-                PA_ERROR("Unknown error in SMS callback.");
-                try { promise_->set_value(PA_FAULT); } catch (...) {}
+                TAF_PA_ERROR("Unknown error in SMS callback.");
+                try { promise_->set_value(TAF_PA_FAULT); } catch (...) {}
             }
         }
 
     private:
-        std::shared_ptr<std::promise<pa_result_t>> promise_;
+        std::shared_ptr<std::promise<taf_pa_result_t>> promise_;
         std::shared_ptr<std::string> addrStr_;
     };
 
     class tafSetSmscAddressCallback : public telux::tel::ISmscAddressCallback
     {
     public:
-        tafSetSmscAddressCallback(std::promise<pa_result_t>* promise)
+        tafSetSmscAddressCallback(std::promise<taf_pa_result_t>* promise)
             : promise_(promise)
         {
         }
@@ -394,25 +394,25 @@ public:
             {
                 if (error == telux::common::ErrorCode::SUCCESS)
                 {
-                    promise_->set_value(PA_OK);
+                    promise_->set_value(TAF_PA_OK);
                 }
                 else
                 {
-                    promise_->set_value(PA_FAULT);
+                    promise_->set_value(TAF_PA_FAULT);
                 }
             }
             catch (const std::exception& e)
             {
-                PA_ERROR("Exception in callback: %s", e.what());
+                TAF_PA_ERROR("Exception in callback: %s", e.what());
             }
             catch (...)
             {
-                PA_ERROR("Unknown error in SMS callback.");
+                TAF_PA_ERROR("Unknown error in SMS callback.");
             }
         }
 
     private:
-        std::promise<pa_result_t>* promise_;
+        std::promise<taf_pa_result_t>* promise_;
     };
 
     std::shared_ptr<tafSmsListener> mySmsListener;
@@ -447,7 +447,7 @@ void SmsPAController::tafSmsListener::onMemoryFull
     telux::tel::StorageType type
 )
 {
-    PA_INFO("onMemoryFull, phoneId %d", phoneId);
+    TAF_PA_INFO("onMemoryFull, phoneId %d", phoneId);
     taf_pa_sms_StorageFullType fullType = taf_pa_sms_StorageFullType::TAF_PA_FULL_UNKNOWN;
     switch (type)
     {
@@ -486,7 +486,7 @@ void SmsPAController::tafSmsListener::onIncomingSms
 {
     if(smsMsg == nullptr)
     {
-        PA_ERROR("smsMsg is nullptr!");
+        TAF_PA_ERROR("smsMsg is nullptr!");
         return;
     }
 
@@ -497,8 +497,8 @@ void SmsPAController::tafSmsListener::onIncomingSms
     std::string pdu(rawPduBytes.begin(), rawPduBytes.end());
     std::string sender = smsMsg->getSender();
 
-    PA_DEBUG("Received SMS from phone ID %d from: %s", phoneId, sender.c_str());
-    PA_DEBUG("message: %s", smsMsg->getText().c_str());
+    TAF_PA_DEBUG("Received SMS from phone ID %d from: %s", phoneId, sender.c_str());
+    TAF_PA_DEBUG("message: %s", smsMsg->getText().c_str());
 
     int storageIdx = -1;
 
@@ -523,99 +523,99 @@ void SmsPAController::tafSmsListener::onIncomingSms
     }
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_RegisterIncomingSmsCallback
+taf_pa_result_t tafpa::sms::taf_pa_sms_RegisterIncomingSmsCallback
 (
     IncomingSmsCallback cb
 )
 {
-    PA_INFO("taf_pa_sms_RegisterIncomingSmsCallback");
+    TAF_PA_INFO("taf_pa_sms_RegisterIncomingSmsCallback");
     auto pACtrl = SmsPAController::getInstance();
     pACtrl->setIncomingSmsCallback(cb);
-  return PA_OK;
+  return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_RegisterMemoryFullCallback
+taf_pa_result_t tafpa::sms::taf_pa_sms_RegisterMemoryFullCallback
 (
     MemoryFullCallback cb
 )
 {
-    PA_INFO("taf_pa_sms_RegisterMemoryFullCallback");
+    TAF_PA_INFO("taf_pa_sms_RegisterMemoryFullCallback");
     auto pACtrl = SmsPAController::getInstance();
     pACtrl->setMemoryFullCallback(cb);
-  return PA_OK;
+  return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_SetActivationStatus
+taf_pa_result_t tafpa::sms::taf_pa_sms_SetActivationStatus
 (
     uint8_t phoneId,
     bool activate,
     uint32_t timeout
 )
 {
-    PA_INFO("taf_pa_sms_SetActivationStatus");
+    TAF_PA_INFO("taf_pa_sms_SetActivationStatus");
     auto pACtrl = SmsPAController::getInstance();
     auto cbManagers = pACtrl->getCbManagersList();
     if (cbManagers.empty() || phoneId < 1 || phoneId > cbManagers.size())
     {
-        PA_ERROR("Invalid phoneId or CellBroadcastManager not available");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId or CellBroadcastManager not available");
+        return TAF_PA_FAULT;
     }
 
     auto cbMgr = cbManagers[phoneId - 1];
     if (!cbMgr)
     {
-        PA_ERROR("CellBroadcastManager is NULL");
-        return PA_FAULT;
+        TAF_PA_ERROR("CellBroadcastManager is NULL");
+        return TAF_PA_FAULT;
     }
 
     // Check service status before using
     telux::common::ServiceStatus status = cbMgr->getServiceStatus();
     if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
+        TAF_PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
             phoneId, static_cast<int>(status));
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto cb = [promisePtr](telux::common::ErrorCode err)
     {
         try
         {
             if (err == telux::common::ErrorCode::SUCCESS)
             {
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else
             {
-                promisePtr->set_value(PA_FAULT);
+                promisePtr->set_value(TAF_PA_FAULT);
             }
         }
         catch (...)
         {
-            PA_ERROR("Exception in cell broadcast activation callback");
+            TAF_PA_ERROR("Exception in cell broadcast activation callback");
         }
     };
 
     telux::common::Status reqStatus = cbMgr->setActivationStatus(activate, cb);
     if (reqStatus != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("setActivationStatus request failed to send");
-        return PA_FAULT;
+        TAF_PA_ERROR("setActivationStatus request failed to send");
+        return TAF_PA_FAULT;
     }
 
-    std::future<pa_result_t> futResult = promisePtr->get_future();
+    std::future<taf_pa_result_t> futResult = promisePtr->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (waitStatus == std::future_status::timeout)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
     return futResult.get();
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
+taf_pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
 (
     uint32_t* idxArray,
     size_t idxArraySize,
@@ -625,21 +625,21 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
     int32_t* countPtr
 )
 {
-    PA_INFO("taf_pa_sms_RequestSmsMessageList");
+    TAF_PA_INFO("taf_pa_sms_RequestSmsMessageList");
     auto pACtrl = SmsPAController::getInstance();
     auto smsManagers = pACtrl->getSmsManagersList();
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_INFO("smsManager is NULL\n");
-        return PA_FAULT;
+        TAF_PA_INFO("smsManager is NULL\n");
+        return TAF_PA_FAULT;
     }
 
     telux::tel::SmsTagType smsTagType;
@@ -664,24 +664,24 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
         {
             if (err != telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO("Request for message list failed with errorCode: %d",
+                TAF_PA_INFO("Request for message list failed with errorCode: %d",
                     static_cast<int>(err));
                 // Ensure the promise is fulfilled even on error to avoid unnecessary timeout waits
                 prom->set_value({});
                 return;
             }
-            PA_INFO("Request for message list sent successfully ");
-            PA_INFO("SMS List Size: %zu", infos.size());
+            TAF_PA_INFO("Request for message list sent successfully ");
+            TAF_PA_INFO("SMS List Size: %zu", infos.size());
             for (auto& info : infos)
             {
-                PA_INFO(" Msg Index: %d, Tag Type: %s", info.msgIndex,
+                TAF_PA_INFO(" Msg Index: %d, Tag Type: %s", info.msgIndex,
                     convertTagTypeToString(info.tagType).c_str());
             }
             prom->set_value(infos);
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
             try
             {
                 prom->set_value({});
@@ -692,7 +692,7 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
             try
             {
                 prom->set_value({});
@@ -707,16 +707,16 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
     auto status = smsManager->requestSmsMessageList(smsTagType, cb);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_INFO("requestSmsMessageList failed");
-        return PA_FAULT;
+        TAF_PA_INFO("requestSmsMessageList failed");
+        return TAF_PA_FAULT;
     }
 
     std::future<std::vector<telux::tel::SmsMetaInfo>> futResult = prom->get_future();
     std::future_status waitStatus = futResult.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_FAULT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_FAULT;
     }
     else
     {
@@ -726,8 +726,8 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
         // Allow exact-size matches; prevent overflow
         if (static_cast<size_t>(numOfIdx) > idxArraySize)
         {
-            PA_ERROR("Too many SMS to read %u (capacity: %zu)", numOfIdx, idxArraySize);
-            return PA_FAULT;
+            TAF_PA_ERROR("Too many SMS to read %u (capacity: %zu)", numOfIdx, idxArraySize);
+            return TAF_PA_FAULT;
         }
 
         for (uint32_t idx = 0; idx < numOfIdx; ++idx)
@@ -737,10 +737,10 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestSmsMessageList
     }
 
     if (countPtr) *countPtr = static_cast<int32_t>(numOfIdx);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_GetSmsCenterAddress
+taf_pa_result_t tafpa::sms::taf_pa_sms_GetSmsCenterAddress
 (
     uint8_t phoneId,
     char *addr,
@@ -748,45 +748,45 @@ pa_result_t tafpa::sms::taf_pa_sms_GetSmsCenterAddress
     uint32_t timeout
 )
 {
-    PA_INFO("taf_pa_sms_GetSmsCenterAddress");
+    TAF_PA_INFO("taf_pa_sms_GetSmsCenterAddress");
     auto pACtrl = SmsPAController::getInstance();
     auto smsManagers = pACtrl->getSmsManagersList();
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_ERROR("smsManager is NULL");
-        return PA_FAULT;
+        TAF_PA_ERROR("smsManager is NULL");
+        return TAF_PA_FAULT;
     }
 
-    auto prom = std::make_shared<std::promise<pa_result_t>>();
+    auto prom = std::make_shared<std::promise<taf_pa_result_t>>();
     auto addrStr = std::make_shared<std::string>();
     auto cb = std::make_shared<SmsPAController::tafSmscAddressCallback>(prom, addrStr);
 
     telux::common::Status reqStatus = smsManager->requestSmscAddress(cb);
     if (reqStatus != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("requestSmscAddress failed to send");
-        return PA_FAULT;
+        TAF_PA_ERROR("requestSmscAddress failed to send");
+        return TAF_PA_FAULT;
     }
 
-    std::future<pa_result_t> futResult = prom->get_future();
+    std::future<taf_pa_result_t> futResult = prom->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (waitStatus == std::future_status::timeout)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t rc = futResult.get();
-    if (rc != PA_OK)
+    taf_pa_result_t rc = futResult.get();
+    if (rc != TAF_PA_OK)
     {
         return rc;
     }
@@ -794,89 +794,89 @@ pa_result_t tafpa::sms::taf_pa_sms_GetSmsCenterAddress
     // Copy into caller buffer, respecting len
     if (addr == nullptr || len == 0)
     {
-        PA_ERROR("Invalid output buffer");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid output buffer");
+        return TAF_PA_FAULT;
     }
 
     if (addrStr->size() >= len)
     {
-        PA_ERROR("Output buffer too small: need %zu, have %zu", addrStr->size() + 1, len);
-        return PA_OVERFLOW;
+        TAF_PA_ERROR("Output buffer too small: need %zu, have %zu", addrStr->size() + 1, len);
+        return TAF_PA_OVERFLOW;
     }
 
     size_t n = addrStr->copy(addr, len - 1);
     addr[n] = '\0';
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_SetSmsCenterAddress
+taf_pa_result_t tafpa::sms::taf_pa_sms_SetSmsCenterAddress
 (
     uint8_t phoneId,
     const char* addr,
     uint32_t timeout
 )
 {
-    PA_INFO("taf_pa_sms_SetSmsCenterAddress");
+    TAF_PA_INFO("taf_pa_sms_SetSmsCenterAddress");
     auto pACtrl = SmsPAController::getInstance();
     auto smsManagers = pACtrl->getSmsManagersList();
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_ERROR("smsManager is NULL");
-        return PA_FAULT;
+        TAF_PA_ERROR("smsManager is NULL");
+        return TAF_PA_FAULT;
     }
 
-    std::shared_ptr<std::promise<pa_result_t>> prom = std::make_shared<std::promise<pa_result_t>>();
+    std::shared_ptr<std::promise<taf_pa_result_t>> prom = std::make_shared<std::promise<taf_pa_result_t>>();
     telux::common::ResponseCallback callback = [prom](telux::common::ErrorCode error)
     {
         try
         {
             if (error == telux::common::ErrorCode::SUCCESS)
             {
-                prom->set_value(PA_OK);
+                prom->set_value(TAF_PA_OK);
             }
             else
             {
-                prom->set_value(PA_FAULT);
+                prom->set_value(TAF_PA_FAULT);
             }
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
         }
     };
 
     telux::common::Status reqStatus = smsManager->setSmscAddress(addr, callback);
     if (reqStatus != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("setSmscAddress failed to send");
-        return PA_FAULT;
+        TAF_PA_ERROR("setSmscAddress failed to send");
+        return TAF_PA_FAULT;
     }
 
-    std::future<pa_result_t> futResult = prom->get_future();
+    std::future<taf_pa_result_t> futResult = prom->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (waitStatus == std::future_status::timeout)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
     return futResult.get();
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
+taf_pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
 (
     uint8_t phoneId,
     uint32_t timeout
@@ -886,24 +886,24 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
     auto cbManagers = pACtrl->getCbManagersList();
     if (cbManagers.empty() || phoneId < 1 || phoneId > cbManagers.size())
     {
-        PA_ERROR("Invalid phoneId or CellBroadcastManager not available");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId or CellBroadcastManager not available");
+        return TAF_PA_FAULT;
     }
 
     auto cbMgr = cbManagers[phoneId - 1];
     if (!cbMgr)
     {
-        PA_ERROR("CellBroadcastManager is NULL");
-        return PA_FAULT;
+        TAF_PA_ERROR("CellBroadcastManager is NULL");
+        return TAF_PA_FAULT;
     }
 
     // Check service status before using
     telux::common::ServiceStatus status = cbMgr->getServiceStatus();
     if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
+        TAF_PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
             phoneId, static_cast<int>(status));
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     auto prom = std::make_shared<std::promise<std::vector<telux::tel::CellBroadcastFilter>>>();
@@ -914,9 +914,9 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
         {
             for (int i = 0; i < (int)filters.size(); ++i)
             {
-                PA_INFO("Filter[%d]:", i);
-                PA_INFO("Start msg id: %d", filters[i].startMessageId);
-                PA_INFO("End msg id: %d", filters[i].endMessageId);
+                TAF_PA_INFO("Filter[%d]:", i);
+                TAF_PA_INFO("Start msg id: %d", filters[i].startMessageId);
+                TAF_PA_INFO("End msg id: %d", filters[i].endMessageId);
 
                 telux::tel::CellBroadcastFilter tafF;
                 tafF.startMessageId = filters[i].startMessageId;
@@ -934,8 +934,8 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
     telux::common::Status reqStatus = cbMgr->requestMessageFilters(cb);
     if (reqStatus != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("requestMessageFilters request failed to send");
-        return PA_FAULT;
+        TAF_PA_ERROR("requestMessageFilters request failed to send");
+        return TAF_PA_FAULT;
     }
 
     std::future<std::vector<telux::tel::CellBroadcastFilter>> futResult = prom->get_future();
@@ -943,8 +943,8 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
     std::future_status waitStatus = futResult.wait_for(span);
     if (waitStatus == std::future_status::timeout)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
     auto filters = futResult.get();
@@ -952,10 +952,10 @@ pa_result_t tafpa::sms::taf_pa_sms_RequestMessageFilters
         std::lock_guard<std::mutex> lk(pACtrl->cbFilterMutex);
         pACtrl->CBFilterList = std::move(filters);
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_AddCellBroadcastIds
+taf_pa_result_t tafpa::sms::taf_pa_sms_AddCellBroadcastIds
 (
     uint8_t phoneId,
     uint16_t fromId,
@@ -967,24 +967,24 @@ pa_result_t tafpa::sms::taf_pa_sms_AddCellBroadcastIds
     auto cbManagers = pACtrl->getCbManagersList();
     if (cbManagers.empty() || phoneId < 1 || phoneId > cbManagers.size())
     {
-        PA_ERROR("Invalid phoneId or CellBroadcastManager not available");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId or CellBroadcastManager not available");
+        return TAF_PA_FAULT;
     }
 
     auto cbMgr = cbManagers[phoneId - 1];
     if (!cbMgr)
     {
-        PA_ERROR("CellBroadcastManager is NULL");
-        return PA_FAULT;
+        TAF_PA_ERROR("CellBroadcastManager is NULL");
+        return TAF_PA_FAULT;
     }
 
     // Check service status before using
     telux::common::ServiceStatus status = cbMgr->getServiceStatus();
     if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
+        TAF_PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
             phoneId, static_cast<int>(status));
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     // Add new filter to current filter list
@@ -998,50 +998,50 @@ pa_result_t tafpa::sms::taf_pa_sms_AddCellBroadcastIds
         newList.emplace_back(filter);
     }
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto cb = [promisePtr](telux::common::ErrorCode err) {
         try
         {
             if (err == telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO("Update message filters request sent successfully");
-                promisePtr->set_value(PA_OK);
+                TAF_PA_INFO("Update message filters request sent successfully");
+                promisePtr->set_value(TAF_PA_OK);
             }
             else
             {
-                PA_INFO("Update message filters request failed with errorCode: %d",
+                TAF_PA_INFO("Update message filters request failed with errorCode: %d",
                     static_cast<int>(err));
-                promisePtr->set_value(PA_FAULT);
+                promisePtr->set_value(TAF_PA_FAULT);
             }
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
         }
     };
 
     telux::common::Status reqStatus = cbMgr->updateMessageFilters(newList, cb);
     if (reqStatus != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Update message filters failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Update message filters failed");
+        return TAF_PA_FAULT;
     }
 
-    std::future<pa_result_t> futResult = promisePtr->get_future();
+    std::future<taf_pa_result_t> futResult = promisePtr->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (waitStatus == std::future_status::timeout)
     {
-        PA_ERROR("Waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t rc = futResult.get();
-    if (rc == PA_OK)
+    taf_pa_result_t rc = futResult.get();
+    if (rc == TAF_PA_OK)
     {
         // Commit on success
         std::lock_guard<std::mutex> lk(pACtrl->cbFilterMutex);
@@ -1050,7 +1050,7 @@ pa_result_t tafpa::sms::taf_pa_sms_AddCellBroadcastIds
     return rc;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_RemoveCellBroadcastIds
+taf_pa_result_t tafpa::sms::taf_pa_sms_RemoveCellBroadcastIds
 (
     uint8_t phoneId,
     uint16_t fromId,
@@ -1062,24 +1062,24 @@ pa_result_t tafpa::sms::taf_pa_sms_RemoveCellBroadcastIds
     auto cbManagers = pACtrl->getCbManagersList();
     if (cbManagers.empty() || phoneId < 1 || phoneId > cbManagers.size())
     {
-        PA_ERROR("Invalid phoneId or CellBroadcastManager not available");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId or CellBroadcastManager not available");
+        return TAF_PA_FAULT;
     }
 
     auto cbMgr = cbManagers[phoneId - 1];
     if (!cbMgr)
     {
-        PA_ERROR("CellBroadcastManager is NULL");
-        return PA_FAULT;
+        TAF_PA_ERROR("CellBroadcastManager is NULL");
+        return TAF_PA_FAULT;
     }
 
     // Check service status before using
     telux::common::ServiceStatus status = cbMgr->getServiceStatus();
     if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
+        TAF_PA_ERROR("CellBroadcastManager not available for slot %d, status: %d",
              phoneId, static_cast<int>(status));
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     // Work on a local copy under lock to avoid races
@@ -1138,55 +1138,55 @@ pa_result_t tafpa::sms::taf_pa_sms_RemoveCellBroadcastIds
 
     if (!overlapped)
     {
-        return PA_OK;
+        return TAF_PA_OK;
     }
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto cb = [promisePtr](telux::common::ErrorCode err)
     {
         try
         {
             if (err == telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO("Update message filters request sent successfully");
-                promisePtr->set_value(PA_OK);
+                TAF_PA_INFO("Update message filters request sent successfully");
+                promisePtr->set_value(TAF_PA_OK);
             }
             else
             {
-                PA_INFO("Update message filters request failed with errorCode: %d",
+                TAF_PA_INFO("Update message filters request failed with errorCode: %d",
                         static_cast<int>(err));
-                promisePtr->set_value(PA_FAULT);
+                promisePtr->set_value(TAF_PA_FAULT);
             }
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
         }
     };
 
     telux::common::Status reqStatus = cbMgr->updateMessageFilters(result, cb);
     if (reqStatus != telux::common::Status::SUCCESS)
     {
-        PA_INFO("Update message filters failed");
-        return PA_FAULT;
+        TAF_PA_INFO("Update message filters failed");
+        return TAF_PA_FAULT;
     }
 
     // blocking here to get call event response
-    std::future<pa_result_t> futResult = promisePtr->get_future();
+    std::future<taf_pa_result_t> futResult = promisePtr->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("Waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t rc = futResult.get();
-    if (rc == PA_OK)
+    taf_pa_result_t rc = futResult.get();
+    if (rc == TAF_PA_OK)
     {
         // Commit on success
         std::lock_guard<std::mutex> lk(pACtrl->cbFilterMutex);
@@ -1195,38 +1195,38 @@ pa_result_t tafpa::sms::taf_pa_sms_RemoveCellBroadcastIds
     return rc;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_GetPreferredStorage
+taf_pa_result_t tafpa::sms::taf_pa_sms_GetPreferredStorage
 (
     taf_pa_sms_Storage* type,
     uint32_t timeout,
     uint8_t phoneId
 )
 {
-    PA_INFO("taf_pa_sms_GetPreferredStorage");
+    TAF_PA_INFO("taf_pa_sms_GetPreferredStorage");
     auto pACtrl = SmsPAController::getInstance();
     auto smsManagers = pACtrl->getSmsManagersList();
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_INFO("smsManager is NULL\n");
-        return PA_FAULT;
+        TAF_PA_INFO("smsManager is NULL\n");
+        return TAF_PA_FAULT;
     }
 
-    auto resPtr = std::make_shared<std::promise<pa_result_t>>();
+    auto resPtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto typePtr = std::make_shared<std::promise<taf_pa_sms_Storage>>();
     auto cb = [resPtr, typePtr](telux::tel::StorageType strType, telux::common::ErrorCode err) {
         try
         {
             if (err == telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO("Request for get preferred storage sent successfully");
+                TAF_PA_INFO("Request for get preferred storage sent successfully");
                 switch (strType)
                 {
                     case telux::tel::StorageType::NONE:
@@ -1239,45 +1239,45 @@ pa_result_t tafpa::sms::taf_pa_sms_GetPreferredStorage
                         typePtr->set_value(taf_pa_sms_Storage::TAF_PA_STORAGE_UNKNOWN);
                         break;
                 }
-                resPtr->set_value(PA_OK);
+                resPtr->set_value(TAF_PA_OK);
             }
             else
             {
-                PA_INFO("Request for get preferred storage failed with errorCode: %d",
+                TAF_PA_INFO("Request for get preferred storage failed with errorCode: %d",
                     static_cast<int>(err));
-                resPtr->set_value(PA_FAULT);
+                resPtr->set_value(TAF_PA_FAULT);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
         }
     };
 
     telux::common::Status reqStatus = smsManager->requestPreferredStorage(cb);
     if (reqStatus != telux::common::Status::SUCCESS)
     {
-        PA_INFO("Get preferred storage failed");
-        return PA_FAULT;
+        TAF_PA_INFO("Get preferred storage failed");
+        return TAF_PA_FAULT;
     }
 
-    std::future<pa_result_t> resultFuture = resPtr->get_future();
+    std::future<taf_pa_result_t> resultFuture = resPtr->get_future();
     std::future<taf_pa_sms_Storage> typeFuture = typePtr->get_future();
 
     std::chrono::seconds span(timeout);
     if (resultFuture.wait_for(span) == std::future_status::ready
         && typeFuture.wait_for(span) == std::future_status::ready)
     {
-        pa_result_t res = resultFuture.get();
-        if (res == PA_OK)
+        taf_pa_result_t res = resultFuture.get();
+        if (res == TAF_PA_OK)
         {
             *type = typeFuture.get();
         }
@@ -1285,33 +1285,33 @@ pa_result_t tafpa::sms::taf_pa_sms_GetPreferredStorage
     }
     else
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_SetPreferredStorage
+taf_pa_result_t tafpa::sms::taf_pa_sms_SetPreferredStorage
 (
     taf_pa_sms_Storage type,
     uint32_t timeout,
     uint8_t phoneId
 )
 {
-    PA_INFO("taf_pa_sms_SetPreferredStorage");
+    TAF_PA_INFO("taf_pa_sms_SetPreferredStorage");
     auto pACtrl = SmsPAController::getInstance();
     auto smsManagers = pACtrl->getSmsManagersList();
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_INFO("smsManager is NULL\n");
-        return PA_FAULT;
+        TAF_PA_INFO("smsManager is NULL\n");
+        return TAF_PA_FAULT;
     }
 
     telux::tel::StorageType storage;
@@ -1325,60 +1325,60 @@ pa_result_t tafpa::sms::taf_pa_sms_SetPreferredStorage
             storage = telux::tel::StorageType::SIM;
             break;
         default:
-            return PA_UNSUPPORTED;
+            return TAF_PA_UNSUPPORTED;
     }
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto cb = [promisePtr](telux::common::ErrorCode err) {
         try
         {
             if (err == telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO("Request for set preferred storage sent successfully");
-                promisePtr->set_value(PA_OK);
+                TAF_PA_INFO("Request for set preferred storage sent successfully");
+                promisePtr->set_value(TAF_PA_OK);
             }
             else
             {
-                PA_INFO("Request for set preferred storage failed with errorCode: %d",
+                TAF_PA_INFO("Request for set preferred storage failed with errorCode: %d",
                     static_cast<int>(err));
-                promisePtr->set_value(PA_FAULT);
+                promisePtr->set_value(TAF_PA_FAULT);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
         }
     };
 
     telux::common::Status reqStatus = smsManager->setPreferredStorage(storage, cb);
     if (reqStatus != telux::common::Status::SUCCESS)
     {
-        PA_INFO("Set preferred storage failed");
-        return PA_FAULT;
+        TAF_PA_INFO("Set preferred storage failed");
+        return TAF_PA_FAULT;
     }
 
     // blocking here to set preferred storage
     std::chrono::seconds span(timeout);
-    std::future<pa_result_t> futResult = promisePtr->get_future();
+    std::future<taf_pa_result_t> futResult = promisePtr->get_future();
     std::future_status waitStatus = futResult.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
     return futResult.get();
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
+taf_pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
 (
     uint32_t readAtIdx,
     uint32_t timeout,
@@ -1388,21 +1388,21 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
     uint32_t *pduMsgIndex
 )
 {
-    PA_INFO("taf_pa_sms_ReadMessage");
+    TAF_PA_INFO("taf_pa_sms_ReadMessage");
     auto pACtrl = SmsPAController::getInstance();
     auto smsManagers = pACtrl->getSmsManagersList();
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_INFO("smsManager is NULL\n");
-        return PA_FAULT;
+        TAF_PA_INFO("smsManager is NULL\n");
+        return TAF_PA_FAULT;
     }
 
     auto promisePtr = std::make_shared<std::promise<telux::tel::SmsMessage>>();
@@ -1412,7 +1412,7 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
         {
             if (err != telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO("Request for read message failed with errorCode: %d",
+                TAF_PA_INFO("Request for read message failed with errorCode: %d",
                         static_cast<int>(err));
                 try
                 {
@@ -1432,23 +1432,23 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
 
             if (partInfo)
             {
-                PA_INFO("Multi Part Message ");
-                PA_INFO("Message: %s", smsMsg.getText().c_str());
-                PA_DEBUG("PDU: %s", pduStr.c_str());
-                PA_DEBUG("RefNumber: %d", static_cast<int>(partInfo->refNumber));
-                PA_DEBUG("NumberOfSegments: %d", static_cast<int>(partInfo->numberOfSegments));
-                PA_DEBUG("SegmentNumber: %d", static_cast<int>(partInfo->segmentNumber));
+                TAF_PA_INFO("Multi Part Message ");
+                TAF_PA_INFO("Message: %s", smsMsg.getText().c_str());
+                TAF_PA_DEBUG("PDU: %s", pduStr.c_str());
+                TAF_PA_DEBUG("RefNumber: %d", static_cast<int>(partInfo->refNumber));
+                TAF_PA_DEBUG("NumberOfSegments: %d", static_cast<int>(partInfo->numberOfSegments));
+                TAF_PA_DEBUG("SegmentNumber: %d", static_cast<int>(partInfo->segmentNumber));
             }
             else
             {
-                PA_INFO("Message: %s", smsMsg.getText().c_str());
-                PA_DEBUG("PDU: %s", pduStr.c_str());
+                TAF_PA_INFO("Message: %s", smsMsg.getText().c_str());
+                TAF_PA_DEBUG("PDU: %s", pduStr.c_str());
             }
             promisePtr->set_value(smsMsg);
         }
         catch (const std::exception &e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
             try
             {
                 promisePtr->set_exception(std::make_exception_ptr(e));
@@ -1459,7 +1459,7 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
             try
             {
                 promisePtr->set_exception(std::make_exception_ptr(
@@ -1474,18 +1474,18 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
     telux::common::Status status = smsManager->readMessage(readAtIdx, cb);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Read message request failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Read message request failed");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Read message request succeeded");
+    TAF_PA_INFO("Read message request succeeded");
     std::future<telux::tel::SmsMessage> futResult = promisePtr->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
     try
@@ -1509,8 +1509,8 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
         status = smsMsg.getMetaInfo(metaInfo);
         if (status != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("getMetaInfo failed");
-            return PA_FAULT;
+            TAF_PA_ERROR("getMetaInfo failed");
+            return TAF_PA_FAULT;
         }
         *pduMsgIndex = metaInfo.msgIndex;
         switch (metaInfo.tagType)
@@ -1525,21 +1525,21 @@ pa_result_t tafpa::sms::taf_pa_sms_ReadMessage
             *pduRxStatus = taf_pa_sms_Tag::TAF_PA_UNKNOWN;
         }
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
     catch (const std::exception &e)
     {
-        PA_ERROR("readMessage failed: %s", e.what());
-        return PA_FAULT;
+        TAF_PA_ERROR("readMessage failed: %s", e.what());
+        return TAF_PA_FAULT;
     }
     catch (...)
     {
-        PA_ERROR("readMessage failed: unknown exception");
-        return PA_FAULT;
+        TAF_PA_ERROR("readMessage failed: unknown exception");
+        return TAF_PA_FAULT;
     }
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_SendRawSms
+taf_pa_result_t tafpa::sms::taf_pa_sms_SendRawSms
 (
     uint8_t* pduData,
     uint32_t pduLength,
@@ -1547,11 +1547,11 @@ pa_result_t tafpa::sms::taf_pa_sms_SendRawSms
     uint8_t phoneId
 )
 {
-    PA_INFO("taf_pa_sms_SendRawSms");
+    TAF_PA_INFO("taf_pa_sms_SendRawSms");
     if (pduData == nullptr || pduLength == 0)
     {
-        PA_ERROR("Invalid input: pduData is null or pduLength is 0");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid input: pduData is null or pduLength is 0");
+        return TAF_PA_FAULT;
     }
 
     auto pACtrl = SmsPAController::getInstance();
@@ -1559,15 +1559,15 @@ pa_result_t tafpa::sms::taf_pa_sms_SendRawSms
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d", phoneId);
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d", phoneId);
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_INFO("smsManager is NULL\n");
-        return PA_FAULT;
+        TAF_PA_INFO("smsManager is NULL\n");
+        return TAF_PA_FAULT;
     }
 
     std::ostringstream oss;
@@ -1579,90 +1579,90 @@ pa_result_t tafpa::sms::taf_pa_sms_SendRawSms
     }
 
     std::string pduStr = oss.str();
-    PA_DEBUG("pduStr = %s", pduStr.c_str());
+    TAF_PA_DEBUG("pduStr = %s", pduStr.c_str());
 
     std::vector<uint8_t> buffer(pduStr.begin(), pduStr.end());
     std::vector<telux::tel::PduBuffer> rawPdus;
     rawPdus.emplace_back(buffer);
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto cb = [promisePtr](std::vector<int> msgIDs, telux::common::ErrorCode err) {
         try
         {
             if (err == telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO(
+                TAF_PA_INFO(
                     "SMS sent successfully. Number of MsgIDs: %u", (unsigned int)msgIDs.size());
                 for (unsigned int i = 0; i < (unsigned int)msgIDs.size(); ++i)
                 {
-                    PA_INFO("MsgID[%u]: %d", i, msgIDs[i]);
+                    TAF_PA_INFO("MsgID[%u]: %d", i, msgIDs[i]);
                 }
-                promisePtr->set_value(PA_OK);
+                promisePtr->set_value(TAF_PA_OK);
             }
             else
             {
-                PA_ERROR("Error Code: %s", getErrorCodeAsString(err).c_str());
-                promisePtr->set_value(PA_FAULT);
+                TAF_PA_ERROR("Error Code: %s", getErrorCodeAsString(err).c_str());
+                promisePtr->set_value(TAF_PA_FAULT);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
         }
     };
 
     auto status = smsManager->sendRawSms(rawPdus, cb);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_INFO("SMS was not sent, a failure occured");
-        return PA_FAULT;
+        TAF_PA_INFO("SMS was not sent, a failure occured");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Waiting for SMS response or timeout...");
-    std::future<pa_result_t> futResult = promisePtr->get_future();
+    TAF_PA_INFO("Waiting for SMS response or timeout...");
+    std::future<taf_pa_result_t> futResult = promisePtr->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (waitStatus == std::future_status::timeout)
     {
-        PA_ERROR("SMS send timed out after %u seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("SMS send timed out after %u seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t res = futResult.get();
-    if (res != PA_OK)
+    taf_pa_result_t res = futResult.get();
+    if (res != TAF_PA_OK)
     {
-        PA_INFO("SMS sending failed");
-        return PA_FAULT;
+        TAF_PA_INFO("SMS sending failed");
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("SMS was sent successfully");
-    return PA_OK;
+    TAF_PA_INFO("SMS was sent successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_SendPDUMessageAsync
+taf_pa_result_t tafpa::sms::taf_pa_sms_SendPDUMessageAsync
 (
     uint8_t phoneId,
     const uint8_t* pduData,
     size_t pduLength,
-    std::function<void(pa_result_t)> cb
+    std::function<void(taf_pa_result_t)> cb
 )
 {
-    PA_INFO("taf_pa_sms_SendPDUMessageAsync");
+    TAF_PA_INFO("taf_pa_sms_SendPDUMessageAsync");
 
     if (pduData == nullptr || pduLength == 0)
     {
-        PA_ERROR("Invalid input: pduData is null or pduLength is 0");
+        TAF_PA_ERROR("Invalid input: pduData is null or pduLength is 0");
         if (cb)
-            cb(PA_FAULT);
-        return PA_FAULT;
+            cb(TAF_PA_FAULT);
+        return TAF_PA_FAULT;
     }
 
     auto pACtrl = SmsPAController::getInstance();
@@ -1670,16 +1670,16 @@ pa_result_t tafpa::sms::taf_pa_sms_SendPDUMessageAsync
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        cb(PA_FAULT);
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        cb(TAF_PA_FAULT);
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        cb(PA_FAULT);
-        return PA_FAULT;
+        cb(TAF_PA_FAULT);
+        return TAF_PA_FAULT;
     }
 
     std::ostringstream oss;
@@ -1689,21 +1689,21 @@ pa_result_t tafpa::sms::taf_pa_sms_SendPDUMessageAsync
         oss << std::setw(2) << static_cast<int>(pduData[i]);
     }
     std::string pduStr = oss.str();
-    PA_DEBUG("pduStr = %s", pduStr.c_str());
+    TAF_PA_DEBUG("pduStr = %s", pduStr.c_str());
     std::vector<uint8_t> buffer(pduStr.begin(), pduStr.end());
     std::vector<telux::tel::PduBuffer> rawPdus;
     rawPdus.emplace_back(buffer);
 
     smsManager->sendRawSms(
         rawPdus, [cb](std::vector<int> msgIds, telux::common::ErrorCode err) {
-            pa_result_t result = (err == telux::common::ErrorCode::SUCCESS) ? PA_OK : PA_FAULT;
+            taf_pa_result_t result = (err == telux::common::ErrorCode::SUCCESS) ? TAF_PA_OK : TAF_PA_FAULT;
             if (cb)
                 cb(result);
         });
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_SetTag
+taf_pa_result_t tafpa::sms::taf_pa_sms_SetTag
 (
     uint32_t msgIndex,
     taf_pa_sms_Tag tagType,
@@ -1711,49 +1711,49 @@ pa_result_t tafpa::sms::taf_pa_sms_SetTag
     uint8_t phoneId
 )
 {
-    PA_INFO("taf_pa_sms_SetTag");
+    TAF_PA_INFO("taf_pa_sms_SetTag");
     auto pACtrl = SmsPAController::getInstance();
     auto smsManagers = pACtrl->getSmsManagersList();
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_INFO("smsManager is NULL\n");
-        return PA_FAULT;
+        TAF_PA_INFO("smsManager is NULL\n");
+        return TAF_PA_FAULT;
     }
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto cb = [promisePtr](telux::common::ErrorCode err) {
         try
         {
             if (err == telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO("Set tag successfully done");
-                promisePtr->set_value(PA_OK);
+                TAF_PA_INFO("Set tag successfully done");
+                promisePtr->set_value(TAF_PA_OK);
             }
             else
             {
-                PA_INFO("Set tag failed, errorCode: %d", static_cast<int>(err));
-                promisePtr->set_value(PA_FAULT);
+                TAF_PA_INFO("Set tag failed, errorCode: %d", static_cast<int>(err));
+                promisePtr->set_value(TAF_PA_FAULT);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
         }
     };
 
@@ -1774,49 +1774,49 @@ pa_result_t tafpa::sms::taf_pa_sms_SetTag
     auto status = smsManager->setTag(msgIndex, teluxTagType, cb);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_INFO("setTag failed");
-        return PA_FAULT;
+        TAF_PA_INFO("setTag failed");
+        return TAF_PA_FAULT;
     }
 
-    std::future<pa_result_t> futResult = promisePtr->get_future();
+    std::future<taf_pa_result_t> futResult = promisePtr->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t res = futResult.get();
-    if (res == PA_OK)
+    taf_pa_result_t res = futResult.get();
+    if (res == TAF_PA_OK)
     {
-        PA_INFO("setTag succeeded");
+        TAF_PA_INFO("setTag succeeded");
     }
     return res;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_DeleteMessage
+taf_pa_result_t tafpa::sms::taf_pa_sms_DeleteMessage
 (
     uint32_t msgIndex,
     uint32_t timeout,
     uint8_t phoneId
 )
 {
-    PA_INFO("taf_pa_sms_DeleteMessage");
+    TAF_PA_INFO("taf_pa_sms_DeleteMessage");
     auto pACtrl = SmsPAController::getInstance();
     auto smsManagers = pACtrl->getSmsManagersList();
 
     if (phoneId < 1 || phoneId > smsManagers.size())
     {
-        PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid phoneId: %d (valid range: 1-%zu)", phoneId, smsManagers.size());
+        return TAF_PA_FAULT;
     }
 
     auto smsManager = smsManagers[phoneId - 1];
     if (smsManager == nullptr)
     {
-        PA_INFO("smsManager is NULL\n");
-        return PA_FAULT;
+        TAF_PA_INFO("smsManager is NULL\n");
+        return TAF_PA_FAULT;
     }
 
     telux::tel::DeleteInfo info;
@@ -1824,65 +1824,65 @@ pa_result_t tafpa::sms::taf_pa_sms_DeleteMessage
     info.delType = telux::tel::DeleteType::DELETE_MSG_AT_INDEX;
     info.msgIndex = msgIndex;
 
-    auto promisePtr = std::make_shared<std::promise<pa_result_t>>();
+    auto promisePtr = std::make_shared<std::promise<taf_pa_result_t>>();
     auto cb = [promisePtr](telux::common::ErrorCode err) {
         try
         {
             if (err == telux::common::ErrorCode::SUCCESS)
             {
-                PA_INFO("deleteMessage successfully done");
-                promisePtr->set_value(PA_OK);
+                TAF_PA_INFO("deleteMessage successfully done");
+                promisePtr->set_value(TAF_PA_OK);
             }
             else
             {
-                PA_INFO("deleteMessage failed, errorCode: %d", static_cast<int>(err));
-                promisePtr->set_value(PA_FAULT);
+                TAF_PA_INFO("deleteMessage failed, errorCode: %d", static_cast<int>(err));
+                promisePtr->set_value(TAF_PA_FAULT);
             }
         }
         catch (const std::future_error& e)
         {
-            PA_ERROR("Future error in callback: %s", e.what());
+            TAF_PA_ERROR("Future error in callback: %s", e.what());
         }
         catch (const std::exception& e)
         {
-            PA_ERROR("Exception in callback: %s", e.what());
+            TAF_PA_ERROR("Exception in callback: %s", e.what());
         }
         catch (...)
         {
-            PA_ERROR("Unknown error in SMS callback.");
+            TAF_PA_ERROR("Unknown error in SMS callback.");
         }
     };
 
     auto status = smsManager->deleteMessage(info, cb);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_INFO("deleteMessage failed");
-        return PA_FAULT;
+        TAF_PA_INFO("deleteMessage failed");
+        return TAF_PA_FAULT;
     }
 
-    std::future<pa_result_t> futResult = promisePtr->get_future();
+    std::future<taf_pa_result_t> futResult = promisePtr->get_future();
     std::chrono::seconds span(timeout);
     std::future_status waitStatus = futResult.wait_for(span);
     if (std::future_status::timeout == waitStatus)
     {
-        PA_ERROR("waiting promise timeout for %d seconds", timeout);
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("waiting promise timeout for %d seconds", timeout);
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t res = futResult.get();
-    if (res == PA_OK)
+    taf_pa_result_t res = futResult.get();
+    if (res == TAF_PA_OK)
     {
-        PA_INFO("deleteMessage succeeded");
+        TAF_PA_INFO("deleteMessage succeeded");
     }
     return res;
 }
 
-pa_result_t SmsPAController::initialize
+taf_pa_result_t SmsPAController::initialize
 (
     void
 )
 {
-    PA_INFO("SmsPAController::initialize");
+    TAF_PA_INFO("SmsPAController::initialize");
 
     auto& phoneFactory = telux::tel::PhoneFactory::getInstance();
     mySmsListener = std::make_shared<tafSmsListener>();
@@ -1891,7 +1891,7 @@ pa_result_t SmsPAController::initialize
     if (telux::common::DeviceConfig::isMultiSimSupported())
     {
         NumOfSlot = MAX_SIM_SLOT_COUNT;
-        PA_INFO("MultiSim supported");
+        TAF_PA_INFO("MultiSim supported");
     }
 
     for (auto index = 1; index <= NumOfSlot; ++index)
@@ -1908,14 +1908,14 @@ pa_result_t SmsPAController::initialize
                 }
                 catch (const std::future_error& e)
                 {
-                    PA_ERROR("Failed to set SMS Manager promise value: %s", e.what());
+                    TAF_PA_ERROR("Failed to set SMS Manager promise value: %s", e.what());
                 }
             });
         constexpr int WAIT_TIMEOUT_SECONDS = 30;
 
         if (!smsMgr)
         {
-            PA_ERROR("Failed to get SMS Manager instance ");
+            TAF_PA_ERROR("Failed to get SMS Manager instance ");
         }
         else
         {
@@ -1926,7 +1926,7 @@ pa_result_t SmsPAController::initialize
 
                 if (waitStatus == std::future_status::timeout)
                 {
-                    PA_ERROR("Timeout waiting for SMS Manager initialization for slot %d", index);
+                    TAF_PA_ERROR("Timeout waiting for SMS Manager initialization for slot %d", index);
                 }
                 else if (waitStatus == std::future_status::ready)
                 {
@@ -1936,28 +1936,28 @@ pa_result_t SmsPAController::initialize
                         auto status = smsMgr->registerListener(mySmsListener);
                         if (status != telux::common::Status::SUCCESS)
                         {
-                            PA_ERROR("Unable to register Listener for slot %d", index);
+                            TAF_PA_ERROR("Unable to register Listener for slot %d", index);
                         }
                         else
                         {
                             smsManagers.emplace_back(smsMgr);
-                            PA_INFO("SMS Manager initialized successfully for slot %d", index);
+                            TAF_PA_INFO("SMS Manager initialized successfully for slot %d", index);
                         }
                     }
                     else
                     {
-                        PA_ERROR("Unable to initialize SMS Manager for slot %d, status: %d",
+                        TAF_PA_ERROR("Unable to initialize SMS Manager for slot %d, status: %d",
                             index, static_cast<int>(smsMgrStatus));
                     }
                 }
             }
             catch (const std::future_error& e)
             {
-                PA_ERROR("Failed to get SMS Manager initialization status: %s", e.what());
+                TAF_PA_ERROR("Failed to get SMS Manager initialization status: %s", e.what());
             }
             catch (const std::exception& e)
             {
-                PA_ERROR("Unexpected exception during SMS Manager initialization: %s", e.what());
+                TAF_PA_ERROR("Unexpected exception during SMS Manager initialization: %s", e.what());
             }
         }
 
@@ -1974,7 +1974,7 @@ pa_result_t SmsPAController::initialize
                 }
                 catch (const std::future_error& e)
                 {
-                    PA_ERROR("Failed to set CellBroadcast Manager promise value: %s", e.what());
+                    TAF_PA_ERROR("Failed to set CellBroadcast Manager promise value: %s", e.what());
                 }
             }
         );
@@ -1987,7 +1987,7 @@ pa_result_t SmsPAController::initialize
                 auto cbWaitStatus = cbFuture.wait_for(std::chrono::seconds(WAIT_TIMEOUT_SECONDS));
                 if (cbWaitStatus == std::future_status::timeout)
                 {
-                    PA_ERROR("Timeout waiting for CellBroadcast Manager initialization for "
+                    TAF_PA_ERROR("Timeout waiting for CellBroadcast Manager initialization for "
                         "slot %d", index);
                 }
                 else if (cbWaitStatus == std::future_status::ready)
@@ -1995,68 +1995,68 @@ pa_result_t SmsPAController::initialize
                     telux::common::ServiceStatus cbMgrStatus = cbFuture.get();
                     if (cbMgrStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
                     {
-                        PA_INFO("CellBroadcast Manager initialized successfully for slot %d",
+                        TAF_PA_INFO("CellBroadcast Manager initialized successfully for slot %d",
                             index);
                         CbManagers.emplace_back(cbMgr);
                     }
                     else
                     {
-                        PA_ERROR("Unable to initialize CellBroadcast Manager for slot %d, "
+                        TAF_PA_ERROR("Unable to initialize CellBroadcast Manager for slot %d, "
                             "status: %d", index, static_cast<int>(cbMgrStatus));
                     }
                 }
             }
             catch (const std::future_error& e)
             {
-                PA_ERROR("Failed to get CellBroadcast Manager initialization status for slot %d: "
+                TAF_PA_ERROR("Failed to get CellBroadcast Manager initialization status for slot %d: "
                     "%s", index, e.what());
             }
             catch (const std::exception& e)
             {
-                PA_ERROR("Unexpected exception during CellBroadcast Manager initialization for "
+                TAF_PA_ERROR("Unexpected exception during CellBroadcast Manager initialization for "
                     "slot %d: %s", index, e.what());
             }
         }
         else
         {
-            PA_ERROR("Failed to get CellBroadcast Manager instance for slot %d", index);
+            TAF_PA_ERROR("Failed to get CellBroadcast Manager instance for slot %d", index);
         }
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_Init
+taf_pa_result_t tafpa::sms::taf_pa_sms_Init
 (
     void
 )
 {
     auto pACtrl = SmsPAController::getInstance();
 
-    pa_result_t result = pACtrl->initialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->initialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("SMS platform adapter initialization is done");
+        TAF_PA_INFO("SMS platform adapter initialization is done");
         g_smsPaInitialized.store(true, std::memory_order_release);
     }
     else
     {
-        PA_CRIT("Failed to initialize SMS platform adapter, ret: %d", result);
+        TAF_PA_CRIT("Failed to initialize SMS platform adapter, ret: %d", result);
     }
 
     return result;
 }
 
-pa_result_t SmsPAController::deinitialize
+taf_pa_result_t SmsPAController::deinitialize
 (
     void
 )
 {
-    PA_INFO("Starting SMS platform adaptor deinitialization...");
+    TAF_PA_INFO("Starting SMS platform adaptor deinitialization...");
 
     // Step 1: Clear the incoming SMS and memory-full callbacks under the mutex
     // so no further notifications are dispatched after this point.
-    PA_INFO("Clearing incomingSmsCb and memoryFullCb");
+    TAF_PA_INFO("Clearing incomingSmsCb and memoryFullCb");
     {
         std::lock_guard<std::mutex> lk(cbMutex);
         incomingSmsCb = nullptr;
@@ -2065,7 +2065,7 @@ pa_result_t SmsPAController::deinitialize
 
     // Step 2: Deregister the SMS listener from every SMS manager so the SDK
     // stops delivering events to it.
-    PA_INFO("Deregistering SMS listener from all SMS managers");
+    TAF_PA_INFO("Deregistering SMS listener from all SMS managers");
     for (auto& smsMgr : smsManagers)
     {
         if (smsMgr && mySmsListener)
@@ -2073,7 +2073,7 @@ pa_result_t SmsPAController::deinitialize
             telux::common::Status status = smsMgr->removeListener(mySmsListener);
             if (status != telux::common::Status::SUCCESS)
             {
-                PA_ERROR("Failed to remove SMS listener from a manager");
+                TAF_PA_ERROR("Failed to remove SMS listener from a manager");
                 // Continue cleanup even if removal failed
             }
         }
@@ -2081,31 +2081,31 @@ pa_result_t SmsPAController::deinitialize
 
     // Step 3: Reset the SMS listener shared pointer so the listener object is
     // released once no other owners remain.
-    PA_INFO("Resetting mySmsListener");
+    TAF_PA_INFO("Resetting mySmsListener");
     mySmsListener.reset();
 
     // Step 4: Clear the SMS manager vector so all ISmsManager shared pointers
     // are released.
-    PA_INFO("Clearing smsManagers vector");
+    TAF_PA_INFO("Clearing smsManagers vector");
     smsManagers.clear();
 
     // Step 5: Clear the CellBroadcast manager vector so all ICellBroadcastManager
     // shared pointers are released.
-    PA_INFO("Clearing CbManagers vector");
+    TAF_PA_INFO("Clearing CbManagers vector");
     CbManagers.clear();
 
     // Step 6: Clear the cached cell-broadcast filter list.
-    PA_INFO("Clearing CBFilterList");
+    TAF_PA_INFO("Clearing CBFilterList");
     {
         std::lock_guard<std::mutex> lk(cbFilterMutex);
         CBFilterList.clear();
     }
 
-    PA_INFO("SMS platform adaptor deinitialization complete.");
-    return PA_OK;
+    TAF_PA_INFO("SMS platform adaptor deinitialization complete.");
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::sms::taf_pa_sms_Deinit
+taf_pa_result_t tafpa::sms::taf_pa_sms_Deinit
 (
     void
 )
@@ -2113,21 +2113,21 @@ pa_result_t tafpa::sms::taf_pa_sms_Deinit
     // Step 0: Check if Init() was called successfully
     if (!g_smsPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() was successfully called");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() was successfully called");
+        return TAF_PA_FAULT;
     }
 
     auto pACtrl = SmsPAController::getInstance();
 
-    pa_result_t result = pACtrl->deinitialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->deinitialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("SMS platform adapter deinitialization done.");
+        TAF_PA_INFO("SMS platform adapter deinitialization done.");
         g_smsPaInitialized.store(false, std::memory_order_release);
     }
     else
     {
-        PA_ERROR("SMS platform adapter deinitialization failed, ret: %d", result);
+        TAF_PA_ERROR("SMS platform adapter deinitialization failed, ret: %d", result);
     }
 
     return result;

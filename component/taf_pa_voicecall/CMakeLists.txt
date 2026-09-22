@@ -9,9 +9,11 @@ set(LIBRARY_SOVERSION "1")
 set(TARGET_NAME taf_pa_voicecall)
 set(OUTPUT_NAME Component_${TARGET_NAME})
 
-# common headers
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 add_library(${TARGET_NAME} SHARED tafVoicecallPa.cpp)
+
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
 # link glib-2.0
 find_package(PkgConfig REQUIRED)

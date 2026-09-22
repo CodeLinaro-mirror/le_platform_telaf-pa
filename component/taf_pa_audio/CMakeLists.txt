@@ -23,6 +23,7 @@ endif()
 if(TELUX_AUDIO_SUPPORTED)
     # common headers
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
     add_library(${TARGET_NAME} SHARED tafAudioPa.cpp)
 

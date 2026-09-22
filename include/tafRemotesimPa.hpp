@@ -76,7 +76,7 @@ using taf_pa_remotesim_onServiceStatusChange =
     std::function<void(const std::shared_ptr<taf_pa_remotesim_ServiceStatus_t>& statusEvent)>;
 
 // Per-call callback type (for API responses with context)
-using taf_pa_remotesim_ResponseCb = std::function<void(pa_result_t result, std::any context)>;
+using taf_pa_remotesim_ResponseCb = std::function<void(taf_pa_result_t result, std::any context)>;
 
 // Event listener structure (ONLY for unsolicited events from modem)
 struct taf_pa_remotesim_EventListener
@@ -98,33 +98,33 @@ struct taf_pa_remotesim_EventListener
  *  The slot ID for the RemoteSim manager
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_Init(int slotId);
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_Init(int slotId);
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Deinitialize PA RemoteSim
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_Deinit();
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Register event listener for RemoteSim events
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_RegisterEventListener(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_RegisterEventListener(
     taf_pa_remotesim_EventListener* eventListener,
     std::any context
 );
@@ -134,11 +134,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_RegisterEventListener(
  * Deregister event listener for RemoteSim events
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_DeregisterEventListener();
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_DeregisterEventListener();
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -148,11 +148,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_DeregisterEventListener();
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendConnectionAvailable(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendConnectionAvailable(
     taf_pa_remotesim_ResponseCb callback,
     std::any context
 );
@@ -165,11 +165,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_SendConnectionAvailable(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendConnectionUnavailable(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendConnectionUnavailable(
     taf_pa_remotesim_ResponseCb callback,
     std::any context
 );
@@ -187,11 +187,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_SendConnectionUnavailable(
  * @param [in] context    Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendApdu(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendApdu(
     unsigned int id,
     const std::vector<uint8_t>& apdu,
     bool isSuccess,
@@ -210,11 +210,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_SendApdu(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendCardReset(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendCardReset(
     const std::vector<uint8_t>& atr,
     taf_pa_remotesim_ResponseCb callback,
     std::any context
@@ -229,11 +229,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_SendCardReset(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendCardInserted(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendCardInserted(
     const std::vector<uint8_t>& atr,
     taf_pa_remotesim_ResponseCb callback,
     std::any context
@@ -247,11 +247,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_SendCardInserted(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendCardRemoved(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendCardRemoved(
     taf_pa_remotesim_ResponseCb callback,
     std::any context
 );
@@ -265,11 +265,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_SendCardRemoved(
  * @param [in] context     Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendCardError(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendCardError(
     taf_pa_remotesim_CardErrorCause_t errorCause,
     taf_pa_remotesim_ResponseCb callback,
     std::any context
@@ -283,11 +283,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_SendCardError(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendCardWakeup(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendCardWakeup(
     taf_pa_remotesim_ResponseCb callback,
     std::any context
 );
@@ -300,11 +300,11 @@ PA_SHARED pa_result_t taf_pa_remotesim_SendCardWakeup(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_remotesim_SendReset(
+TAF_PA_SHARED taf_pa_result_t taf_pa_remotesim_SendReset(
     taf_pa_remotesim_ResponseCb callback,
     std::any context
 );

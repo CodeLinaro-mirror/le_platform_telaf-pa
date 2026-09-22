@@ -143,11 +143,11 @@ typedef std::function<void(const taf_pa_therm_CoolingLevelChangeInfo&)> taf_pa_t
 /**
  * Initialize the thermal PA layer
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_Init(void);
-PA_SHARED pa_result_t taf_pa_therm_Deinit(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_Init(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_Deinit(void);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -155,10 +155,10 @@ PA_SHARED pa_result_t taf_pa_therm_Deinit(void);
  *
  * @param[out] thermalZones Vector to store thermal zone information
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_GetThermalZones(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_GetThermalZones(
     std::vector<taf_pa_therm_ThermalZoneInfo>& thermalZones
 );
 
@@ -169,10 +169,10 @@ PA_SHARED pa_result_t taf_pa_therm_GetThermalZones(
  * @param[in]  zoneId Thermal zone ID
  * @param[out] zoneInfo Thermal zone information
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_GetThermalZoneById(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_GetThermalZoneById(
     uint32_t zoneId,
     taf_pa_therm_ThermalZoneInfo& zoneInfo
 );
@@ -184,10 +184,10 @@ PA_SHARED pa_result_t taf_pa_therm_GetThermalZoneById(
  * @param[in]  zoneName Thermal zone name/description
  * @param[out] zoneInfo Thermal zone information
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_GetThermalZoneByName(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_GetThermalZoneByName(
     const std::string& zoneName,
     taf_pa_therm_ThermalZoneInfo& zoneInfo
 );
@@ -199,10 +199,10 @@ PA_SHARED pa_result_t taf_pa_therm_GetThermalZoneByName(
  * @param[in]  zoneId Thermal zone ID
  * @param[out] tripPoints Vector to store trip point information
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_GetTripPoints(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_GetTripPoints(
     uint32_t zoneId,
     std::vector<taf_pa_therm_TripPointInfo>& tripPoints
 );
@@ -214,10 +214,10 @@ PA_SHARED pa_result_t taf_pa_therm_GetTripPoints(
  * @param[in]  zoneId Thermal zone ID
  * @param[out] boundDevices Vector to store bound cooling device information
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_GetBoundCoolingDevices(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_GetBoundCoolingDevices(
     uint32_t zoneId,
     std::vector<taf_pa_therm_BoundCoolingDevice>& boundDevices
 );
@@ -228,10 +228,10 @@ PA_SHARED pa_result_t taf_pa_therm_GetBoundCoolingDevices(
  *
  * @param[out] coolingDevices Vector to store cooling device information
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_GetCoolingDevices(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_GetCoolingDevices(
     std::vector<taf_pa_therm_CoolingDeviceInfo>& coolingDevices
 );
 
@@ -242,10 +242,10 @@ PA_SHARED pa_result_t taf_pa_therm_GetCoolingDevices(
  * @param[in]  deviceId Cooling device ID
  * @param[out] deviceInfo Cooling device information
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_GetCoolingDeviceById(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_GetCoolingDeviceById(
     uint32_t deviceId,
     taf_pa_therm_CoolingDeviceInfo& deviceInfo
 );
@@ -257,10 +257,10 @@ PA_SHARED pa_result_t taf_pa_therm_GetCoolingDeviceById(
  * @param[in]  deviceName Cooling device name/description
  * @param[out] deviceInfo Cooling device information
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_GetCoolingDeviceByName(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_GetCoolingDeviceByName(
     const std::string& deviceName,
     taf_pa_therm_CoolingDeviceInfo& deviceInfo
 );
@@ -271,10 +271,10 @@ PA_SHARED pa_result_t taf_pa_therm_GetCoolingDeviceByName(
  *
  * @param[in] handler Callback function for trip events
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_RegisterTripEventHandler(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_RegisterTripEventHandler(
     taf_pa_therm_TripEventHandler_t handler, void* contextPtr
 );
 
@@ -282,10 +282,10 @@ PA_SHARED pa_result_t taf_pa_therm_RegisterTripEventHandler(
 /**
  * Deregister trip event handler
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_DeregisterTripEventHandler(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_DeregisterTripEventHandler(void);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -293,10 +293,10 @@ PA_SHARED pa_result_t taf_pa_therm_DeregisterTripEventHandler(void);
  *
  * @param[in] handler Callback function for cooling level changes
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
     taf_pa_therm_CoolingLevelChangeHandler_t handler, void* contextPtr
 );
 
@@ -304,9 +304,9 @@ PA_SHARED pa_result_t taf_pa_therm_RegisterCoolingLevelChangeHandler(
 /**
  * Deregister cooling level change handler
  *
- * @return PA_OK on success, PA_FAILED on error
+ * @return TAF_PA_OK on success
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void);
+TAF_PA_SHARED taf_pa_result_t taf_pa_therm_DeregisterCoolingLevelChangeHandler(void);
 
 #endif // TAF_THERM_PA_HPP

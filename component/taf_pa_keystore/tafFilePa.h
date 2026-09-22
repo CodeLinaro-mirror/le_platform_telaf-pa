@@ -106,11 +106,11 @@ typedef void (*taf_pa_file_ErrorHandler_t)
  *       synchronization if a second concurrent caller is ever added.
  *
  * @return
- *      PA_OK on success.
- *      PA_FAULT if the backup storage cannot be created.
+ *      TAF_PA_OK on success.
+ *      TAF_PA_FAULT if the backup storage cannot be created.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_file_Init
+taf_pa_result_t taf_pa_file_Init
 (
     bool enableBackup,                      ///< [IN] Enable the backup/restore feature.
     taf_pa_file_ErrorHandler_t handlerFunc  ///< [IN] Error handler, NULL to unregister.
@@ -125,13 +125,13 @@ pa_result_t taf_pa_file_Init
  * in its own directory.
  *
  * @return
- *      PA_OK on success.
- *      PA_BAD_PARAMETER if the path is invalid or cannot be created.
- *      PA_BUSY if the path exists but is not a directory.
- *      PA_OVERFLOW if the path is too long.
+ *      TAF_PA_OK on success.
+ *      TAF_PA_BAD_PARAMETER if the path is invalid or cannot be created.
+ *      TAF_PA_BUSY if the path exists but is not a directory.
+ *      TAF_PA_OVERFLOW if the path is too long.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_file_SetBackupStorage
+taf_pa_result_t taf_pa_file_SetBackupStorage
 (
     const char* pathPtr       ///< [IN] Path to the backup storage directory.
 );
@@ -141,11 +141,11 @@ pa_result_t taf_pa_file_SetBackupStorage
  * Set the backup storage capacity limits.
  *
  * @return
- *      PA_OK on success.
- *      PA_BAD_PARAMETER if one of the limits is zero.
+ *      TAF_PA_OK on success.
+ *      TAF_PA_BAD_PARAMETER if one of the limits is zero.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_file_SetBackupCapacity
+taf_pa_result_t taf_pa_file_SetBackupCapacity
 (
     uint32_t maxFileSizeBytes,  ///< [IN] Maximum size of a single backed up file, in bytes.
     uint16_t maxFileCount       ///< [IN] Maximum number of backed up files.
@@ -156,12 +156,12 @@ pa_result_t taf_pa_file_SetBackupCapacity
  * Verify the integrity of a file against its stored checksum.
  *
  * @return
- *      PA_OK if the file content matches its stored checksum.
- *      PA_BAD_PARAMETER if the path is invalid.
- *      PA_FAULT if the file is corrupted or has no stored checksum.
+ *      TAF_PA_OK if the file content matches its stored checksum.
+ *      TAF_PA_BAD_PARAMETER if the path is invalid.
+ *      TAF_PA_FAULT if the file is corrupted or has no stored checksum.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_file_Verify
+taf_pa_result_t taf_pa_file_Verify
 (
     const char* filePathPtr   ///< [IN] Path to the file to verify.
 );

@@ -26,13 +26,13 @@ static std::atomic<bool> g_remotesimPaInitialized(false);
 // Callback class for RemoteSim operations with per-call context
 class tafPaRemoteSimResponseCallback : public telux::common::ICommandResponseCallback {
 public:
-    tafPaRemoteSimResponseCallback(taf_pa_remotesim_ResponseCb cb, std::any ctx, std::promise<pa_result_t>* prom = nullptr)
+    tafPaRemoteSimResponseCallback(taf_pa_remotesim_ResponseCb cb, std::any ctx, std::promise<taf_pa_result_t>* prom = nullptr)
         : callback(cb), context(ctx), promise(prom) {}
     void commandResponse(telux::common::ErrorCode errorCode) override;
 private:
     taf_pa_remotesim_ResponseCb callback;
     std::any context;
-    std::promise<pa_result_t>* promise;
+    std::promise<taf_pa_result_t>* promise;
 };
 
 // RemoteSim Listener for RemoteSimDaemon
@@ -62,8 +62,8 @@ public:
 
     static PlatformAdaptor& GetInstance();
 
-    pa_result_t RegisterEventListener(taf_pa_remotesim_EventListener* listener, std::any context);
-    pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
+    taf_pa_result_t RegisterEventListener(taf_pa_remotesim_EventListener* listener, std::any context);
+    taf_pa_result_t MapErrorCode(telux::common::ErrorCode errorCode);
 
     PlatformAdaptor() = default;
     ~PlatformAdaptor() = default;
@@ -75,62 +75,62 @@ PlatformAdaptor& PlatformAdaptor::GetInstance()
     return instance;
 }
 
-pa_result_t PlatformAdaptor::RegisterEventListener(
+taf_pa_result_t PlatformAdaptor::RegisterEventListener(
     taf_pa_remotesim_EventListener* listener,
     std::any context)
 {
-    PA_INFO("RegisterEventListener listener: %p", listener);
+    TAF_PA_INFO("RegisterEventListener listener: %p", listener);
     if (listener != nullptr) {
         std::lock_guard<std::mutex> lock(eventListenerMutex_);
         eventListener_ = listener;
     }
     else
     {
-        return PA_BAD_PARAMETER;
+        return TAF_PA_BAD_PARAMETER;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t PlatformAdaptor::MapErrorCode(telux::common::ErrorCode errorCode)
+taf_pa_result_t PlatformAdaptor::MapErrorCode(telux::common::ErrorCode errorCode)
 {
     switch(errorCode)
     {
         case telux::common::ErrorCode::SUCCESS:
-            PA_DEBUG("Operation processed successfully");
-            return PA_OK;
+            TAF_PA_DEBUG("Operation processed successfully");
+            return TAF_PA_OK;
         case telux::common::ErrorCode::GENERIC_FAILURE:
-            PA_ERROR("Operation processing failed");
-            return PA_FAULT;
+            TAF_PA_ERROR("Operation processing failed");
+            return TAF_PA_FAULT;
         case telux::common::ErrorCode::INVALID_ARGUMENTS:
-            PA_ERROR("Input parameters are invalid");
-            return PA_BAD_PARAMETER;
+            TAF_PA_ERROR("Input parameters are invalid");
+            return TAF_PA_BAD_PARAMETER;
         case telux::common::ErrorCode::OPERATION_NOT_ALLOWED:
-            PA_ERROR("Operation not allowed");
-            return PA_NOT_PERMITTED;
+            TAF_PA_ERROR("Operation not allowed");
+            return TAF_PA_NOT_PERMITTED;
         case telux::common::ErrorCode::TIMEOUT_ERROR:
-            PA_ERROR("TimeOut Error");
-            return PA_TIMEOUT;
+            TAF_PA_ERROR("TimeOut Error");
+            return TAF_PA_TIMEOUT;
         case telux::common::ErrorCode::INFO_UNAVAILABLE:
-            PA_ERROR("Information not available");
-            return PA_UNAVAILABLE;
+            TAF_PA_ERROR("Information not available");
+            return TAF_PA_UNAVAILABLE;
         case telux::common::ErrorCode::SUBSYSTEM_UNAVAILABLE:
-            PA_ERROR("Subsystem Not Available");
-            return PA_UNAVAILABLE;
+            TAF_PA_ERROR("Subsystem Not Available");
+            return TAF_PA_UNAVAILABLE;
         case telux::common::ErrorCode::REQUEST_NOT_SUPPORTED:
-            PA_ERROR("Request Not supported");
-            return PA_UNSUPPORTED;
+            TAF_PA_ERROR("Request Not supported");
+            return TAF_PA_UNSUPPORTED;
         default:
-            return PA_FAULT;
+            return TAF_PA_FAULT;
     }
 }
 
 // RemoteSim Response Callback implementation with per-call context
 void tafPaRemoteSimResponseCallback::commandResponse(telux::common::ErrorCode errorCode)
 {
-    PA_INFO("RemoteSim callback: errorCode=%d", static_cast<int>(errorCode));
+    TAF_PA_INFO("RemoteSim callback: errorCode=%d", static_cast<int>(errorCode));
     auto& pa = PlatformAdaptor::GetInstance();
 
-    pa_result_t result = pa.MapErrorCode(errorCode);
+    taf_pa_result_t result = pa.MapErrorCode(errorCode);
 
     if (promise)
     {
@@ -139,7 +139,7 @@ void tafPaRemoteSimResponseCallback::commandResponse(telux::common::ErrorCode er
 
     if (callback)
     {
-        PA_INFO("Invoking per-call callback with context");
+        TAF_PA_INFO("Invoking per-call callback with context");
         callback(result, context);
     }
 }
@@ -147,7 +147,7 @@ void tafPaRemoteSimResponseCallback::commandResponse(telux::common::ErrorCode er
 // RemoteSimListener implementations
 void tafPaRemoteSimListener::onApduTransfer(const unsigned int id, const std::vector<uint8_t> &apdu)
 {
-    PA_INFO("Received Apdu transfer notification from modem");
+    TAF_PA_INFO("Received Apdu transfer notification from modem");
     auto& pa = PlatformAdaptor::GetInstance();
 
     auto apduEvent = std::make_shared<taf_pa_remotesim_ApduTransfer_t>();
@@ -162,18 +162,18 @@ void tafPaRemoteSimListener::onApduTransfer(const unsigned int id, const std::ve
 
     if(listener && listener->onApduTransfer)
     {
-        PA_INFO("onApduTransfer triggered");
+        TAF_PA_INFO("onApduTransfer triggered");
         listener->onApduTransfer(apduEvent);
     }
     else
     {
-        PA_ERROR("unable to find event Listener for onApduTransfer");
+        TAF_PA_ERROR("unable to find event Listener for onApduTransfer");
     }
 }
 
 void tafPaRemoteSimListener::onCardConnect()
 {
-    PA_INFO("Received Card Connect notification from modem");
+    TAF_PA_INFO("Received Card Connect notification from modem");
     auto& pa = PlatformAdaptor::GetInstance();
 
     taf_pa_remotesim_EventListener* listener = nullptr;
@@ -184,18 +184,18 @@ void tafPaRemoteSimListener::onCardConnect()
 
     if(listener && listener->onCardConnect)
     {
-        PA_INFO("onCardConnect triggered");
+        TAF_PA_INFO("onCardConnect triggered");
         listener->onCardConnect();
     }
     else
     {
-        PA_ERROR("unable to find event Listener for onCardConnect");
+        TAF_PA_ERROR("unable to find event Listener for onCardConnect");
     }
 }
 
 void tafPaRemoteSimListener::onCardDisconnect()
 {
-    PA_INFO("Received Card Disconnect notification from modem");
+    TAF_PA_INFO("Received Card Disconnect notification from modem");
     auto& pa = PlatformAdaptor::GetInstance();
 
     taf_pa_remotesim_EventListener* listener = nullptr;
@@ -206,18 +206,18 @@ void tafPaRemoteSimListener::onCardDisconnect()
 
     if(listener && listener->onCardDisconnect)
     {
-        PA_INFO("onCardDisconnect triggered");
+        TAF_PA_INFO("onCardDisconnect triggered");
         listener->onCardDisconnect();
     }
     else
     {
-        PA_ERROR("unable to find event Listener for onCardDisconnect");
+        TAF_PA_ERROR("unable to find event Listener for onCardDisconnect");
     }
 }
 
 void tafPaRemoteSimListener::onCardPowerUp()
 {
-    PA_INFO("Received Card Power Up notification from modem");
+    TAF_PA_INFO("Received Card Power Up notification from modem");
     auto& pa = PlatformAdaptor::GetInstance();
 
     taf_pa_remotesim_EventListener* listener = nullptr;
@@ -228,18 +228,18 @@ void tafPaRemoteSimListener::onCardPowerUp()
 
     if(listener && listener->onCardPowerUp)
     {
-        PA_INFO("onCardPowerUp triggered");
+        TAF_PA_INFO("onCardPowerUp triggered");
         listener->onCardPowerUp();
     }
     else
     {
-        PA_ERROR("unable to find event Listener for onCardPowerUp");
+        TAF_PA_ERROR("unable to find event Listener for onCardPowerUp");
     }
 }
 
 void tafPaRemoteSimListener::onCardPowerDown()
 {
-    PA_INFO("Received Card Power Down notification from modem");
+    TAF_PA_INFO("Received Card Power Down notification from modem");
     auto& pa = PlatformAdaptor::GetInstance();
 
     taf_pa_remotesim_EventListener* listener = nullptr;
@@ -250,18 +250,18 @@ void tafPaRemoteSimListener::onCardPowerDown()
 
     if(listener && listener->onCardPowerDown)
     {
-        PA_INFO("onCardPowerDown triggered");
+        TAF_PA_INFO("onCardPowerDown triggered");
         listener->onCardPowerDown();
     }
     else
     {
-        PA_ERROR("unable to find event Listener for onCardPowerDown");
+        TAF_PA_ERROR("unable to find event Listener for onCardPowerDown");
     }
 }
 
 void tafPaRemoteSimListener::onCardReset()
 {
-    PA_INFO("Received Card Reset notification from modem");
+    TAF_PA_INFO("Received Card Reset notification from modem");
     auto& pa = PlatformAdaptor::GetInstance();
 
     taf_pa_remotesim_EventListener* listener = nullptr;
@@ -272,12 +272,12 @@ void tafPaRemoteSimListener::onCardReset()
 
     if(listener && listener->onCardReset)
     {
-        PA_INFO("onCardReset triggered");
+        TAF_PA_INFO("onCardReset triggered");
         listener->onCardReset();
     }
     else
     {
-        PA_ERROR("unable to find event Listener for onCardReset");
+        TAF_PA_ERROR("unable to find event Listener for onCardReset");
     }
 }
 
@@ -298,19 +298,19 @@ void tafPaRemoteSimListener::onServiceStatusChange(ServiceStatus status)
 
     if(listener && listener->onServiceStatusChange)
     {
-        PA_INFO("onServiceStatusChange triggered");
+        TAF_PA_INFO("onServiceStatusChange triggered");
         listener->onServiceStatusChange(statusEvent);
     }
     else
     {
-        PA_ERROR("unable to find event Listener for onServiceStatusChange");
+        TAF_PA_ERROR("unable to find event Listener for onServiceStatusChange");
     }
 }
 
 // PA API implementations
-pa_result_t taf_pa_remotesim_Init(int slotId)
+taf_pa_result_t taf_pa_remotesim_Init(int slotId)
 {
-    PA_INFO("taf_pa_remotesim_Init with slot ID: %d", slotId);
+    TAF_PA_INFO("taf_pa_remotesim_Init with slot ID: %d", slotId);
     auto& pa = PlatformAdaptor::GetInstance();
     auto& phoneFactory = telux::tel::PhoneFactory::getInstance();
 
@@ -318,24 +318,24 @@ pa_result_t taf_pa_remotesim_Init(int slotId)
     pa.slotId = slotId;
 
     // Initialize RemoteSimManager
-    PA_INFO("Initializing RemoteSimManager...");
+    TAF_PA_INFO("Initializing RemoteSimManager...");
     pa.remoteSimMgr = phoneFactory.getRemoteSimManager(slotId);
 
     if (!pa.remoteSimMgr)
     {
-        PA_CRIT("Failed to create RemoteSimManager");
-        return PA_FAULT;
+        TAF_PA_CRIT("Failed to create RemoteSimManager");
+        return TAF_PA_FAULT;
     }
 
     telux::common::ServiceStatus remoteSimStatus = pa.remoteSimMgr->getServiceStatus();
     if (remoteSimStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_INFO("RemoteSim subsystem is not ready, waiting for it to be ready...");
+        TAF_PA_INFO("RemoteSim subsystem is not ready, waiting for it to be ready...");
         std::promise<telux::common::ServiceStatus> remoteSimProm;
         pa.remoteSimMgr = phoneFactory.getRemoteSimManager(pa.slotId,
             [&](telux::common::ServiceStatus status)
         {
-            PA_INFO("Getting status:%d from RemoteSim manager", (int)status);
+            TAF_PA_INFO("Getting status:%d from RemoteSim manager", (int)status);
             if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE)
             {
                 remoteSimProm.set_value(telux::common::ServiceStatus::SERVICE_AVAILABLE);
@@ -352,9 +352,9 @@ pa_result_t taf_pa_remotesim_Init(int slotId)
 
         if (std::future_status::timeout == waitStatus)
         {
-            PA_CRIT("Timeout waiting for RemoteSim subsystem");
+            TAF_PA_CRIT("Timeout waiting for RemoteSim subsystem");
             pa.remoteSimMgr = nullptr;
-            return PA_TIMEOUT;
+            return TAF_PA_TIMEOUT;
         }
         else
         {
@@ -364,42 +364,42 @@ pa_result_t taf_pa_remotesim_Init(int slotId)
 
     if (remoteSimStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_INFO("RemoteSim subsystem is ready.");
+        TAF_PA_INFO("RemoteSim subsystem is ready.");
     }
     else
     {
-        PA_ERROR("Fail to init RemoteSim subsystem");
+        TAF_PA_ERROR("Fail to init RemoteSim subsystem");
         pa.remoteSimMgr = nullptr;
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     // Create and register the RemoteSim listener
-    PA_INFO("Creating and registering RemoteSim listener...");
+    TAF_PA_INFO("Creating and registering RemoteSim listener...");
     pa.tafRemoteSimListener = std::make_shared<tafPaRemoteSimListener>();
     pa.remoteSimListener = pa.tafRemoteSimListener;
 
     if (pa.remoteSimMgr->registerListener(pa.remoteSimListener) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to register RemoteSim listener.");
+        TAF_PA_ERROR("Failed to register RemoteSim listener.");
         pa.remoteSimMgr = nullptr;
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("RemoteSim listener registered successfully.");
-    PA_INFO("RemoteSim platform adaptor initialization is done.");
+    TAF_PA_INFO("RemoteSim listener registered successfully.");
+    TAF_PA_INFO("RemoteSim platform adaptor initialization is done.");
     g_remotesimPaInitialized.store(true, std::memory_order_release);
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_remotesim_Deinit()
+taf_pa_result_t taf_pa_remotesim_Deinit()
 {
-    PA_INFO("Starting RemoteSim platform adaptor deinitialization...");
+    TAF_PA_INFO("Starting RemoteSim platform adaptor deinitialization...");
 
     if (!g_remotesimPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() was successfully called");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() was successfully called");
+        return TAF_PA_FAULT;
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
@@ -407,63 +407,63 @@ pa_result_t taf_pa_remotesim_Deinit()
     // Deregister the RemoteSim listener
     if (pa.remoteSimMgr && pa.remoteSimListener)
     {
-        PA_INFO("Deregistering RemoteSim listener...");
+        TAF_PA_INFO("Deregistering RemoteSim listener...");
         if (pa.remoteSimMgr->deregisterListener(pa.remoteSimListener) != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("Failed to deregister RemoteSim listener.");
+            TAF_PA_ERROR("Failed to deregister RemoteSim listener.");
         }
         else
         {
-            PA_INFO("RemoteSim listener deregistered successfully.");
+            TAF_PA_INFO("RemoteSim listener deregistered successfully.");
         }
     }
 
     // Clear event listener
-    PA_INFO("Clearing eventListener_");
+    TAF_PA_INFO("Clearing eventListener_");
     {
         std::lock_guard<std::mutex> lock(pa.eventListenerMutex_);
         pa.eventListener_ = nullptr;
     }
 
     // Reset listener shared pointers
-    PA_INFO("Resetting listener shared pointers");
+    TAF_PA_INFO("Resetting listener shared pointers");
     pa.remoteSimListener.reset();
     pa.tafRemoteSimListener.reset();
 
     // Reset manager shared pointer
-    PA_INFO("Resetting remoteSimMgr");
+    TAF_PA_INFO("Resetting remoteSimMgr");
     pa.remoteSimMgr.reset();
 
     // Reset initialization flag
-    PA_INFO("Resetting initialization flag");
+    TAF_PA_INFO("Resetting initialization flag");
     g_remotesimPaInitialized.store(false, std::memory_order_release);
 
-    PA_INFO("RemoteSim platform adaptor deinitialization complete.");
-    return PA_OK;
+    TAF_PA_INFO("RemoteSim platform adaptor deinitialization complete.");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_remotesim_RegisterEventListener(
+taf_pa_result_t taf_pa_remotesim_RegisterEventListener(
     taf_pa_remotesim_EventListener* eventListener,
     std::any context)
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    PA_INFO("taf_pa_remotesim_RegisterEventListener");
+    TAF_PA_INFO("taf_pa_remotesim_RegisterEventListener");
     return pa.RegisterEventListener(eventListener, context);
 }
 
-pa_result_t taf_pa_remotesim_DeregisterEventListener()
+taf_pa_result_t taf_pa_remotesim_DeregisterEventListener()
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    PA_INFO("taf_pa_remotesim_DeregisterEventListener");
+    TAF_PA_INFO("taf_pa_remotesim_DeregisterEventListener");
 
     std::lock_guard<std::mutex> lock(pa.eventListenerMutex_);
     pa.eventListener_ = nullptr;
 
-    PA_INFO("Event listener deregistered successfully");
-    return PA_OK;
+    TAF_PA_INFO("Event listener deregistered successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_remotesim_SendConnectionAvailable(
+taf_pa_result_t taf_pa_remotesim_SendConnectionAvailable(
     taf_pa_remotesim_ResponseCb callback,
     std::any context)
 {
@@ -471,12 +471,12 @@ pa_result_t taf_pa_remotesim_SendConnectionAvailable(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -487,22 +487,22 @@ pa_result_t taf_pa_remotesim_SendConnectionAvailable(
 
     if (pa.remoteSimMgr->sendConnectionAvailable(responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send connection available");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send connection available");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendConnectionAvailable response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendConnectionAvailable response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("Connection available sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("Connection available sent with result: %d", result);
     return result;
 }
 
-pa_result_t taf_pa_remotesim_SendConnectionUnavailable(
+taf_pa_result_t taf_pa_remotesim_SendConnectionUnavailable(
     taf_pa_remotesim_ResponseCb callback,
     std::any context)
 {
@@ -510,12 +510,12 @@ pa_result_t taf_pa_remotesim_SendConnectionUnavailable(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -526,22 +526,22 @@ pa_result_t taf_pa_remotesim_SendConnectionUnavailable(
 
     if (pa.remoteSimMgr->sendConnectionUnavailable(responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send connection unavailable");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send connection unavailable");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendConnectionUnavailable response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendConnectionUnavailable response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("Connection unavailable sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("Connection unavailable sent with result: %d", result);
     return result;
 }
 
-pa_result_t taf_pa_remotesim_SendApdu(
+taf_pa_result_t taf_pa_remotesim_SendApdu(
     unsigned int id,
     const std::vector<uint8_t>& apdu,
     bool isSuccess,
@@ -554,12 +554,12 @@ pa_result_t taf_pa_remotesim_SendApdu(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -571,22 +571,22 @@ pa_result_t taf_pa_remotesim_SendApdu(
     if (pa.remoteSimMgr->sendApdu(id, apdu, isSuccess, totalSize, 
                                    offset, responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send APDU");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send APDU");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendApdu response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendApdu response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("APDU sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("APDU sent with result: %d", result);
     return result;
 }
 
-pa_result_t taf_pa_remotesim_SendCardReset(
+taf_pa_result_t taf_pa_remotesim_SendCardReset(
     const std::vector<uint8_t>& atr,
     taf_pa_remotesim_ResponseCb callback,
     std::any context)
@@ -595,12 +595,12 @@ pa_result_t taf_pa_remotesim_SendCardReset(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -611,22 +611,22 @@ pa_result_t taf_pa_remotesim_SendCardReset(
 
     if (pa.remoteSimMgr->sendCardReset(atr, responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send card reset");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send card reset");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendCardReset response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendCardReset response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("Card reset sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("Card reset sent with result: %d", result);
     return result;
 }
 
-pa_result_t taf_pa_remotesim_SendCardInserted(
+taf_pa_result_t taf_pa_remotesim_SendCardInserted(
     const std::vector<uint8_t>& atr,
     taf_pa_remotesim_ResponseCb callback,
     std::any context)
@@ -635,12 +635,12 @@ pa_result_t taf_pa_remotesim_SendCardInserted(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -651,22 +651,22 @@ pa_result_t taf_pa_remotesim_SendCardInserted(
 
     if (pa.remoteSimMgr->sendCardInserted(atr, responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send card inserted");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send card inserted");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendCardInserted response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendCardInserted response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("Card inserted sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("Card inserted sent with result: %d", result);
     return result;
 }
 
-pa_result_t taf_pa_remotesim_SendCardRemoved(
+taf_pa_result_t taf_pa_remotesim_SendCardRemoved(
     taf_pa_remotesim_ResponseCb callback,
     std::any context)
 {
@@ -674,12 +674,12 @@ pa_result_t taf_pa_remotesim_SendCardRemoved(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -690,22 +690,22 @@ pa_result_t taf_pa_remotesim_SendCardRemoved(
 
     if (pa.remoteSimMgr->sendCardRemoved(responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send card removed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send card removed");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendCardRemoved response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendCardRemoved response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("Card removed sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("Card removed sent with result: %d", result);
     return result;
 }
 
-pa_result_t taf_pa_remotesim_SendCardError(
+taf_pa_result_t taf_pa_remotesim_SendCardError(
     taf_pa_remotesim_CardErrorCause_t errorCause,
     taf_pa_remotesim_ResponseCb callback,
     std::any context)
@@ -714,8 +714,8 @@ pa_result_t taf_pa_remotesim_SendCardError(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
     CardErrorCause teluxErrorCause;
@@ -741,8 +741,8 @@ pa_result_t taf_pa_remotesim_SendCardError(
             break;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -753,22 +753,22 @@ pa_result_t taf_pa_remotesim_SendCardError(
 
     if (pa.remoteSimMgr->sendCardError(teluxErrorCause, responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send card error");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send card error");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendCardError response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendCardError response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("Card error sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("Card error sent with result: %d", result);
     return result;
 }
 
-pa_result_t taf_pa_remotesim_SendCardWakeup(
+taf_pa_result_t taf_pa_remotesim_SendCardWakeup(
     taf_pa_remotesim_ResponseCb callback,
     std::any context)
 {
@@ -776,12 +776,12 @@ pa_result_t taf_pa_remotesim_SendCardWakeup(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -792,22 +792,22 @@ pa_result_t taf_pa_remotesim_SendCardWakeup(
 
     if (pa.remoteSimMgr->sendCardWakeup(responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send card wakeup");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send card wakeup");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendCardWakeup response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendCardWakeup response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("Card wakeup sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("Card wakeup sent with result: %d", result);
     return result;
 }
 
-pa_result_t taf_pa_remotesim_SendReset(
+taf_pa_result_t taf_pa_remotesim_SendReset(
     taf_pa_remotesim_ResponseCb callback,
     std::any context)
 {
@@ -815,12 +815,12 @@ pa_result_t taf_pa_remotesim_SendReset(
 
     if (!pa.remoteSimMgr)
     {
-        PA_ERROR("RemoteSimManager is not initialized.");
-        return PA_FAULT;
+        TAF_PA_ERROR("RemoteSimManager is not initialized.");
+        return TAF_PA_FAULT;
     }
 
-    std::promise<pa_result_t> promise;
-    std::future<pa_result_t> future = promise.get_future();
+    std::promise<taf_pa_result_t> promise;
+    std::future<taf_pa_result_t> future = promise.get_future();
 
     auto cb = std::make_shared<tafPaRemoteSimResponseCallback>(callback, context, &promise);
 
@@ -831,17 +831,17 @@ pa_result_t taf_pa_remotesim_SendReset(
 
     if (pa.remoteSimMgr->sendReset(responseCb) != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send reset");
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send reset");
+        return TAF_PA_FAULT;
     }
 
     if (future.wait_for(std::chrono::seconds(REQUEST_TIMEOUT)) == std::future_status::timeout)
     {
-        PA_ERROR("Timeout waiting for SendReset response");
-        return PA_TIMEOUT;
+        TAF_PA_ERROR("Timeout waiting for SendReset response");
+        return TAF_PA_TIMEOUT;
     }
 
-    pa_result_t result = future.get();
-    PA_INFO("Reset sent with result: %d", result);
+    taf_pa_result_t result = future.get();
+    TAF_PA_INFO("Reset sent with result: %d", result);
     return result;
 }
