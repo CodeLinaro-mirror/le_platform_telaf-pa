@@ -40,10 +40,12 @@ using namespace std;
 // Thread-safe initialization flag
 static std::atomic<bool> gPmsPaInitialized(false);
 
+#define TAF_MODEM_NAS_SVC_ID                          (0x03)
 #define TAF_MODEM_WMS_SVC_ID                          (0x05)
 #define TAF_MODEM_VOICE_CALL_SVC_ID                   (0x09)
 #define TAF_MODEM_SIM_SVC_ID                          (0x0B)
 
+#define TAF_MODEM_SYS_INFO_MSG_ID                     (0x004E)
 #define TAF_MODEM_SMS_COMING_MSG_ID                   (0x0001)
 #define TAF_MODEM_VCALL_COMING_MSG_ID                 (0x002E)
 #define TAF_MODEM_SIM_PROFILE_SWAP_MSG_ID             (0x0033)
@@ -51,6 +53,7 @@ static std::atomic<bool> gPmsPaInitialized(false);
 #define TAF_MODEM_WS_BIT_MASK_SMS                     (0x0001)
 #define TAF_MODEM_WS_BIT_MASK_VOICE_CALL              (0x0002)
 #define TAF_MODEM_WS_BIT_MASK_REMOTE_SIM_PROFILE_SWAP (0x0004)
+#define TAF_MODEM_WS_BIT_MASK_SYS_INFO                (0x0008)
 
 struct taf_pa_pms_RefStruct_t
 {
@@ -132,6 +135,14 @@ public:
                         wakeupInfo.qmiWakeupInfo.serviceId,
                         wakeupInfo.qmiWakeupInfo.msgId);
                 wsBitset = TAF_MODEM_WS_BIT_MASK_REMOTE_SIM_PROFILE_SWAP;
+            }
+            else if (TAF_MODEM_NAS_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
+            &&       TAF_MODEM_SYS_INFO_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
+            {
+                PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
+                         wakeupInfo.qmiWakeupInfo.serviceId,
+                         wakeupInfo.qmiWakeupInfo.msgId);
+                wsBitset = TAF_MODEM_WS_BIT_MASK_SYS_INFO;
             }
             else
             {
