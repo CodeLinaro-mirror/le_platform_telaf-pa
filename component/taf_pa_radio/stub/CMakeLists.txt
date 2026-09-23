@@ -21,6 +21,7 @@ target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../taf_pa_common/stub/include)
 
 target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
+target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_common)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib
