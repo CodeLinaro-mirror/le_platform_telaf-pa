@@ -133,6 +133,9 @@ class Utils
             int32_t& mtu
         );
 
+        static pa_result_t ConvertStatus(telux::common::Status status);
+        static pa_result_t ConvertErrorCode(telux::common::ErrorCode errorCode);
+
         // String conversions
         static const char *CallStatusToString(telux::data::DataCallStatus status);
         static const char *IpFamilyTypeToString(telux::data::IpFamilyType ipType);

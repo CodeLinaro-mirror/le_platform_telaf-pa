@@ -16,11 +16,15 @@
 
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
+#include "telux/data/DataFilterManager.hpp"
+#include "telux/data/IpFilter.hpp"
+#include "telux/data/KeepAliveManager.hpp"
 #include "telux/common/CommonDefines.hpp"
 #include "telux/common/Utils.hpp"
 
 #include <map>
 #include <mutex>
+#include <set>
 #include <future>
 #include <atomic>
 #include <chrono>
@@ -118,6 +122,87 @@ namespace data
             const std::shared_ptr<telux::data::IDataCall> &dataCall,
             telux::data::BitRateInfo &bitRate
         );
+    };
+
+    class TafPaTeluxKeepAlive
+    {
+    public:
+        TafPaTeluxKeepAlive(const TafPaTeluxKeepAlive &) = delete;
+        TafPaTeluxKeepAlive &operator=(const TafPaTeluxKeepAlive &) = delete;
+
+        static TafPaTeluxKeepAlive &GetInstance();
+
+        pa_result_t Init();
+        pa_result_t Deinit();
+
+        pa_result_t PaEnableTCPMonitor(
+            taf::pa::data::SlotId_e slotId,
+            const TcpKeepAliveParams_t &tcpKaParams,
+            TcpMonitorHandle_t &monHandle);
+        pa_result_t PaDisableTCPMonitor(taf::pa::data::SlotId_e slotId, TcpMonitorHandle_t monHandle);
+        pa_result_t PaStartTCPKeepAliveOffload(
+            taf::pa::data::SlotId_e slotId,
+            TcpMonitorHandle_t monHandle,
+            uint32_t interval,
+            TcpKeepAliveOffloadHandle_t &handle);
+        pa_result_t PaStopTCPKeepAliveOffload(taf::pa::data::SlotId_e slotId, TcpKeepAliveOffloadHandle_t handle);
+
+    private:
+        TafPaTeluxKeepAlive() = default;
+
+        static bool IsValidTcpKaParams(const TcpKeepAliveParams_t &tcpKaParams);
+        static telux::data::TCPKAParams ConvertTcpKaParams(const TcpKeepAliveParams_t &tcpKaParams);
+
+        std::mutex mutex_;
+        bool initialized_ = false;
+        std::map<SlotId, std::shared_ptr<telux::data::IKeepAliveManager>> keepAliveManagersMap_;
+        std::set<TcpMonitorHandle_t> monitorHandles_;
+        std::map<TcpKeepAliveOffloadHandle_t, TcpMonitorHandle_t> offloadHandles_;
+    };
+
+    class TafPaTeluxDataFilter
+    {
+    public:
+        TafPaTeluxDataFilter(const TafPaTeluxDataFilter &) = delete;
+        TafPaTeluxDataFilter &operator=(const TafPaTeluxDataFilter &) = delete;
+
+        static TafPaTeluxDataFilter &GetInstance();
+
+         pa_result_t Init();
+         pa_result_t Deinit();
+
+         pa_result_t PaSetDataRestrictMode(
+             taf::pa::data::SlotId_e  slotId,
+             FilterModeInfo_t mode);
+         pa_result_t PaRequestDataRestrictMode(taf::pa::data::SlotId_e  slotId, FilterModeInfo_t &mode);
+         pa_result_t PaAddDataRestrictFilter(
+             taf::pa::data::SlotId_e  slotId,
+             const IpFilter_t &filter);
+         pa_result_t PaRemoveAllDataRestrictFilters(taf::pa::data::SlotId_e  slotId);
+
+    private:
+        TafPaTeluxDataFilter() = default;
+
+        pa_result_t ConvertFilter(
+            const IpFilter_t &filter,
+            std::shared_ptr<telux::data::IIpFilter> &sdkFilter) const;
+        void RemoveFilterKey(const std::string &key);
+
+        static bool IsValidMode(FilterMode_e mode);
+        static bool IsValidDataRestrictMode(const FilterModeInfo_t &mode);
+        static bool IsValidFilter(const IpFilter_t &filter);
+        static bool IsValidPortInfo(const PortInfo_t &portInfo);
+        static std::string BuildFilterKey(const IpFilter_t &filter);
+        static telux::data::DataRestrictMode ConvertDataRestrictMode(
+            const FilterModeInfo_t &mode);
+        static FilterModeInfo_t ConvertDataRestrictMode(
+            const telux::data::DataRestrictMode &mode);
+
+         std::mutex mutex_;
+         bool initialized_ = false;
+         std::atomic<bool> callbacksEnabled_ = {false};
+         std::map<SlotId, std::shared_ptr<telux::data::IDataFilterManager>> dataFilterManagersMap_;
+         std::vector<std::string> configuredFilterKeys_;
     };
 
     class TafPaTeluxDataConnection
