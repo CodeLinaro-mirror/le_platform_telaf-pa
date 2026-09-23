@@ -23,6 +23,7 @@ extern "C" {
 #define TAF_PROP_RADIO_BITMASK_RAT_TDSCDMA 0x8
 #define TAF_PROP_RADIO_BITMASK_RAT_LTE 0x10
 #define TAF_PROP_RADIO_BITMASK_RAT_NR5G 0x20
+#define TAF_PROP_RADIO_BITMASK_RAT_NB1_NTN 0x40
 typedef uint64_t taf_prop_radio_RatBitMask_t;
 
 #define TAF_PROP_RADIO_BITMASK_SO_5G_NSA 0x80000000000
@@ -50,7 +51,8 @@ typedef enum
     TAF_PROP_RADIO_RAT_UMTS = 3,
     TAF_PROP_RADIO_RAT_TDSCDMA = 4,
     TAF_PROP_RADIO_RAT_LTE = 5,
-    TAF_PROP_RADIO_RAT_NR5G = 6
+    TAF_PROP_RADIO_RAT_NR5G = 6,
+    TAF_PROP_RADIO_RAT_NB1_NTN = 7
 } taf_prop_radio_Rat_t;
 
 typedef enum
@@ -162,6 +164,8 @@ typedef struct
     taf_prop_radio_RatServiceStatus_t lteSvcStatus;
     uint8_t nr5gSvcStatusValid;
     taf_prop_radio_RatServiceStatus_t nr5gSvcStatus;
+    uint8_t nb1NtnSvcStatusValid;
+    taf_prop_radio_RatServiceStatus_t nb1NtnSvcStatus;
 } taf_prop_radio_RatSvcStatusIndication_t;
 
 typedef struct

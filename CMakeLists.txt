@@ -10,6 +10,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fvisibility=hidden")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/component/include)
 
 # Add default RPATH
 set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
@@ -37,6 +38,8 @@ set(MODULE_LIST
     component/taf_pa_therm
     component/taf_pa_keystore
     component/taf_pa_fscrypt
+    component/taf_pa_remotesim
+    component/taf_pa_sap
     # IMPORTANT: split_debug_symbols_strip_binaries must be the last module in this list.
     # This module extracts debug symbols from all installed binaries and strips them.
     # It must run after all other components have installed their files, otherwise
