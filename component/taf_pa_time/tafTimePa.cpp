@@ -132,7 +132,7 @@ void taf_TimeGnssListener::onGnssUtcTimeUpdate
  * GNSS UTC time initialization.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_gnss_Init(void)
+taf_pa_result_t taf_pa_gnss_Init(void)
 {
     auto &platformFactory = PlatformFactory::getInstance();
     bool statusUpdated = false;
@@ -158,24 +158,24 @@ pa_result_t taf_pa_gnss_Init(void)
 
         if (!success)
         {
-            PA_ERROR("Timeout waiting for Time Manager subsystem");
-            return PA_TIMEOUT;
+            TAF_PA_ERROR("Timeout waiting for Time Manager subsystem");
+            return TAF_PA_TIMEOUT;
         }
     }
 
     if (servicStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
     {
-        PA_INFO("Time manager is ready");
+        TAF_PA_INFO("Time manager is ready");
     }
     else
     {
-        PA_ERROR("Unable to initialize time manager");
-        return PA_UNAVAILABLE;
+        TAF_PA_ERROR("Unable to initialize time manager");
+        return TAF_PA_UNAVAILABLE;
     }
 
     SupportTimeMask.set(SupportedTimeType::GNSS_UTC_TIME);
     g_timePaInitialized.store(true, std::memory_order_release);
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -183,11 +183,11 @@ pa_result_t taf_pa_gnss_Init(void)
  * Register the GNSS time listener.
  *
  * @return
- *     - PA_OK -- Succeeded.
- *     - PA_UNAVAILABLE -- If any error occurs.
+ *     - TAF_PA_OK -- Succeeded.
+ *     - TAF_PA_UNAVAILABLE -- If any error occurs.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_RegGnssTimeListener(void)
+taf_pa_result_t taf_pa_RegGnssTimeListener(void)
 {
     if (gnssTimeListener == nullptr)
     {
@@ -195,14 +195,14 @@ pa_result_t taf_pa_RegGnssTimeListener(void)
         auto myStatus = timeManager->registerListener(gnssTimeListener, SupportTimeMask);
         if (myStatus != Status::SUCCESS)
         {
-            PA_ERROR("Failed to register time listener");
+            TAF_PA_ERROR("Failed to register time listener");
             gnssTimeListener = nullptr;
-            return PA_UNAVAILABLE;
+            return TAF_PA_UNAVAILABLE;
         }
-        PA_DEBUG("gnssTimeListener was successfully registered");
+        TAF_PA_DEBUG("gnssTimeListener was successfully registered");
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -210,7 +210,7 @@ pa_result_t taf_pa_RegGnssTimeListener(void)
  * De-Register the GNSS time listener.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_DeregGnssTimeListener(void)
+taf_pa_result_t taf_pa_DeregGnssTimeListener(void)
 {
     telux::common::Status status;
     if (timeManager && gnssTimeListener != nullptr)
@@ -218,14 +218,14 @@ pa_result_t taf_pa_DeregGnssTimeListener(void)
         status = timeManager->deregisterListener(gnssTimeListener, SupportTimeMask);
         if (status == telux::common::Status::SUCCESS)
         {
-            PA_DEBUG("GnssTimeListener was successfully deregistered");
+            TAF_PA_DEBUG("GnssTimeListener was successfully deregistered");
             gnssTimeListener = nullptr;
-            return PA_OK;
+            return TAF_PA_OK;
         }
-        PA_ERROR("Deregister the GnssTimeListener failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Deregister the GnssTimeListener failed");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -233,30 +233,30 @@ pa_result_t taf_pa_DeregGnssTimeListener(void)
  * Register GNSS UTC time update callback handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_time_RegGnssUtcTimeUpdateHandler
+taf_pa_result_t taf_pa_time_RegGnssUtcTimeUpdateHandler
 (
     taf_pa_time_GnssUtcTimeUpdateHandler_t handlerFunc
 )
 {
     if (handlerFunc == nullptr)
     {
-        PA_ERROR("Parameter is NULL");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Parameter is NULL");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     std::lock_guard<std::mutex> lock(timeHandlerMutex);
     if (GnssUtcTimeUpdateHandlerPtr != nullptr)
     {
-        PA_ERROR("GNSS UTC time update handler already registered.");
-        return PA_FAULT;
+        TAF_PA_ERROR("GNSS UTC time update handler already registered.");
+        return TAF_PA_FAULT;
     }
 
     GnssUtcTimeUpdateHandlerPtr = handlerFunc;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 
-pa_result_t IsPhoneSubSystemReady()
+taf_pa_result_t IsPhoneSubSystemReady()
 {
     if (phoneManager == nullptr)
     {
@@ -266,15 +266,15 @@ pa_result_t IsPhoneSubSystemReady()
         phoneManager = phoneFactory.getPhoneManager();
         if (!phoneManager)
         {
-            PA_ERROR("Failed to get Phone Manager instance");
-            return PA_UNAVAILABLE;
+            TAF_PA_ERROR("Failed to get Phone Manager instance");
+            return TAF_PA_UNAVAILABLE;
         }
 
         telux::common::ServiceStatus phoneManagerStatus = phoneManager->getServiceStatus();
 
         if (phoneManagerStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE)
         {
-            PA_INFO("Phone Manager subsystem is not ready, waiting for it to be ready...");
+            TAF_PA_INFO("Phone Manager subsystem is not ready, waiting for it to be ready...");
 
             // Use promise/future with timeout
             auto phoneMgrPromPtr =
@@ -283,7 +283,7 @@ pa_result_t IsPhoneSubSystemReady()
             phoneManager = phoneFactory.getPhoneManager(
                 [phoneMgrPromPtr](telux::common::ServiceStatus status)
                 {
-                    PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
+                    TAF_PA_INFO("Getting status:%d from phone manager", static_cast<int>(status));
                     try {
                         if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE) {
                             phoneMgrPromPtr->set_value(
@@ -293,16 +293,16 @@ pa_result_t IsPhoneSubSystemReady()
                                 telux::common::ServiceStatus::SERVICE_FAILED);
                         }
                     } catch (const std::exception &e) {
-                        PA_ERROR("Exception setting phone manager promise: %s", e.what());
+                        TAF_PA_ERROR("Exception setting phone manager promise: %s", e.what());
                     } catch (...) {
-                        PA_ERROR("Unknown error setting phone manager promise");
+                        TAF_PA_ERROR("Unknown error setting phone manager promise");
                     }
                 });
 
             if (!phoneManager)
             {
-                PA_ERROR("Failed to get Phone Manager instance with init callback");
-                return PA_UNAVAILABLE;
+                TAF_PA_ERROR("Failed to get Phone Manager instance with init callback");
+                return TAF_PA_UNAVAILABLE;
             }
 
             std::future<telux::common::ServiceStatus> initFuture =
@@ -312,8 +312,8 @@ pa_result_t IsPhoneSubSystemReady()
 
             if (std::future_status::timeout == waitStatus)
             {
-                PA_ERROR("Timeout waiting for Phone Manager subsystem");
-                return PA_TIMEOUT;
+                TAF_PA_ERROR("Timeout waiting for Phone Manager subsystem");
+                return TAF_PA_TIMEOUT;
             }
             else
             {
@@ -321,22 +321,22 @@ pa_result_t IsPhoneSubSystemReady()
             }
         }
 
-        PA_INFO("Phone Manager status: %d", static_cast<int>(phoneManagerStatus));
+        TAF_PA_INFO("Phone Manager status: %d", static_cast<int>(phoneManagerStatus));
 
         if (telux::common::ServiceStatus::SERVICE_AVAILABLE == phoneManagerStatus)
         {
-            PA_INFO("Telephony subsystem is ready");
-            return PA_OK;
+            TAF_PA_INFO("Telephony subsystem is ready");
+            return TAF_PA_OK;
         }
         else
         {
-            PA_ERROR("Telephony subsystem is not ready. Status: %d",
+            TAF_PA_ERROR("Telephony subsystem is not ready. Status: %d",
                      static_cast<int>(phoneManagerStatus));
-            return PA_UNAVAILABLE;
+            return TAF_PA_UNAVAILABLE;
         }
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -344,21 +344,21 @@ pa_result_t IsPhoneSubSystemReady()
  * Initialize the network time.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_network_Init
+taf_pa_result_t taf_pa_network_Init
 (
     int slotId
 )
 {
 
     if (slotId < 1 || slotId > NETWORK_SLOT_NUM_MAX) {
-        PA_ERROR("Invalid network slot id %d", slotId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid network slot id %d", slotId);
+        return TAF_PA_BAD_PARAMETER;
     }
 
-    if (IsPhoneSubSystemReady() != PA_OK)
+    if (IsPhoneSubSystemReady() != TAF_PA_OK)
     {
-        PA_ERROR("Telephony manager is not ready");
-        return PA_UNAVAILABLE;
+        TAF_PA_ERROR("Telephony manager is not ready");
+        return TAF_PA_UNAVAILABLE;
     }
 
     if (servingSystemManagers[slotId] == nullptr)
@@ -388,24 +388,24 @@ pa_result_t taf_pa_network_Init
 
             if (!success)
             {
-                PA_ERROR("Timeout waiting for Serving System Manager for slot %d", slotId);
-                return PA_TIMEOUT;
+                TAF_PA_ERROR("Timeout waiting for Serving System Manager for slot %d", slotId);
+                return TAF_PA_TIMEOUT;
             }
         }
 
         if (serviceStatus == telux::common::ServiceStatus::SERVICE_AVAILABLE)
         {
-            PA_INFO("Serving subsystem is ready");
-            return PA_OK;
+            TAF_PA_INFO("Serving subsystem is ready");
+            return TAF_PA_OK;
         }
         else
         {
-            PA_ERROR("Serving manager system is not ready");
-            return PA_FAULT;
+            TAF_PA_ERROR("Serving manager system is not ready");
+            return TAF_PA_FAULT;
         }
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -413,30 +413,30 @@ pa_result_t taf_pa_network_Init
  * Register network time Listener.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_time_RegNetworkTimeListener
+taf_pa_result_t taf_pa_time_RegNetworkTimeListener
 (
     int slotId
 )
 {
-    PA_DEBUG("Tring to register servSysListeners for slotId %d", slotId);
+    TAF_PA_DEBUG("Tring to register servSysListeners for slotId %d", slotId);
     telux::common::Status status;
     if ((slotId > NETWORK_SLOT_NUM_MAX)|| slotId < 1 || (servingSystemManagers[slotId] == nullptr))
     {
-        PA_ERROR("Invalid network ID or NULL handler.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid network ID or NULL handler.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto servSysListener = std::make_shared<taf_TimeServingSystemListener>(slotId);
     status = servingSystemManagers[slotId]->registerListener(servSysListener);
     if (status != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to register serving system listener for slot %d", slotId);
+        TAF_PA_ERROR("Failed to register serving system listener for slot %d", slotId);
         servSysListeners[slotId] = nullptr;
-        return PA_UNAVAILABLE;
+        return TAF_PA_UNAVAILABLE;
     }
     servSysListeners[slotId] = servSysListener;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -444,13 +444,13 @@ pa_result_t taf_pa_time_RegNetworkTimeListener
  * De-Register network time Listener.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_time_DeregNetworkTimeListener
+taf_pa_result_t taf_pa_time_DeregNetworkTimeListener
 (
     int slotId
 )
 {
     telux::common::Status status;
-    PA_DEBUG("Tring to deregister servSysListeners for slot %d", slotId);
+    TAF_PA_DEBUG("Tring to deregister servSysListeners for slot %d", slotId);
 
     if (servingSystemManagers[slotId] != nullptr
         && servSysListeners[slotId] != nullptr)
@@ -459,12 +459,12 @@ pa_result_t taf_pa_time_DeregNetworkTimeListener
         if (status == telux::common::Status::SUCCESS)
         {
             servSysListeners[slotId] = nullptr;
-            return PA_OK;
+            return TAF_PA_OK;
         }
-        PA_ERROR("Deregister the servSysListeners failed");
-        return PA_FAULT;
+        TAF_PA_ERROR("Deregister the servSysListeners failed");
+        return TAF_PA_FAULT;
     }
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -480,7 +480,7 @@ void NetworkDateInfoRespone
     telux::common::ErrorCode error    ///< [IN] Error code.
 )
 {
-    pa_result_t result = PA_FAULT;
+    taf_pa_result_t result = TAF_PA_FAULT;
     taf_time_NetTimeInfo_t dateInfo;
 
 
@@ -491,13 +491,13 @@ void NetworkDateInfoRespone
     }
     if (respHandler == nullptr)
     {
-        PA_ERROR("Date info pointer for slot %d is NULL", slotId);
+        TAF_PA_ERROR("Date info pointer for slot %d is NULL", slotId);
         return;
     }
 
     if (error == telux::common::ErrorCode::SUCCESS)
     {
-        PA_DEBUG("Respone success: Slot: %d, NITZ:%s", slotId, info.nitzTime.c_str());
+        TAF_PA_DEBUG("Respone success: Slot: %d, NITZ:%s", slotId, info.nitzTime.c_str());
 
         dateInfo.year = info.year;
         dateInfo.month = info.month;
@@ -510,7 +510,7 @@ void NetworkDateInfoRespone
         dateInfo.dstAdj = info.dstAdj;
         snprintf(dateInfo.nitzTime, sizeof(dateInfo.nitzTime), "%s" , info.nitzTime.c_str());
 
-        result = PA_OK;
+        result = TAF_PA_OK;
     }
     respHandler(dateInfo, slotId, result);
 }
@@ -525,14 +525,14 @@ void SyncPhoneTimeResponse
 {
     if (phoneManager == nullptr)
     {
-        PA_ERROR("Pointer phoneManager is nullptr");
+        TAF_PA_ERROR("Pointer phoneManager is nullptr");
         return;
     }
 
     int slotId = phoneManager->getSlotIdFromPhoneId(phoneId);
     if (slotId < 1 || slotId > NETWORK_SLOT_NUM_MAX)
     {
-        PA_ERROR("Invalid slotId %d derived from phoneId %d", slotId, phoneId);
+        TAF_PA_ERROR("Invalid slotId %d derived from phoneId %d", slotId, phoneId);
         return;
     }
     NetworkDateInfoRespone(slotId, info, error);
@@ -543,20 +543,20 @@ void SyncPhoneTimeResponse
  * Request network time.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_time_RequestNetworkTime
+taf_pa_result_t taf_pa_time_RequestNetworkTime
 (
     int slotId,
     taf_pa_time_NetworkInfoHandler_t handlerFunc
 )
 {
-    PA_DEBUG("Request network time for slot %d", slotId);
+    TAF_PA_DEBUG("Request network time for slot %d", slotId);
 
     if (slotId < 1 || slotId > NETWORK_SLOT_NUM_MAX
         || handlerFunc == nullptr
         || servingSystemManagers[slotId] == nullptr)
     {
-        PA_ERROR("Invalid parameter.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Invalid parameter.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     //Save the callback function for this 'slotid'
@@ -567,8 +567,8 @@ pa_result_t taf_pa_time_RequestNetworkTime
 
     if (servSysListeners[slotId] == nullptr)
     {
-        PA_ERROR("No active servSysListeners for slot %d", slotId);
-        return PA_UNAVAILABLE;
+        TAF_PA_ERROR("No active servSysListeners for slot %d", slotId);
+        return TAF_PA_UNAVAILABLE;
     }
 
     telux::common::Status ret;
@@ -584,17 +584,17 @@ pa_result_t taf_pa_time_RequestNetworkTime
     }
     else
     {
-        PA_ERROR("Unsupported slot ID %d", slotId);
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Unsupported slot ID %d", slotId);
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (ret != telux::common::Status::SUCCESS)
     {
-        PA_ERROR("Request time from slot %d failed, ret:%d",slotId, static_cast<int>(ret));
-        return PA_FAULT;
+        TAF_PA_ERROR("Request time from slot %d failed, ret:%d",slotId, static_cast<int>(ret));
+        return TAF_PA_FAULT;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -640,7 +640,7 @@ void taf_TimeServingSystemListener::onNetworkTimeChanged
         dateInfo.dstAdj = info.dstAdj;
         snprintf(dateInfo.nitzTime, sizeof(dateInfo.nitzTime), "%s" , info.nitzTime.c_str());
 
-        PA_DEBUG("SlotId %d, Phone %d, NITZ:%s", slotId, phone, info.nitzTime.c_str());
+        TAF_PA_DEBUG("SlotId %d, Phone %d, NITZ:%s", slotId, phone, info.nitzTime.c_str());
         changeHandler(dateInfo, slotId);
     }
 }
@@ -650,27 +650,27 @@ void taf_TimeServingSystemListener::onNetworkTimeChanged
  * Register network time change callback handler in PA layer
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_time_RegNetworkTimeChangeHandler
+taf_pa_result_t taf_pa_time_RegNetworkTimeChangeHandler
 (
     taf_pa_time_NetworkChangeHandler_t handlerFunc
 )
 {
     if (handlerFunc == nullptr)
     {
-        PA_ERROR("Parameter is NULL");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("Parameter is NULL");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     std::lock_guard<std::mutex> lock(timeHandlerMutex);
     if (NetworkChangeHandlerPtr != nullptr)
     {
-        PA_ERROR("Network time change handler already registered.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Network time change handler already registered.");
+        return TAF_PA_FAULT;
     }
 
     NetworkChangeHandlerPtr = handlerFunc;
-    PA_INFO("Network time change handler registered.");
-    return PA_OK;
+    TAF_PA_INFO("Network time change handler registered.");
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -678,22 +678,22 @@ pa_result_t taf_pa_time_RegNetworkTimeChangeHandler
  * Deinitialize the time PA layer.
  */
 //--------------------------------------------------------------------------------------------------
-pa_result_t taf_pa_time_Deinit(void)
+taf_pa_result_t taf_pa_time_Deinit(void)
 {
-    PA_INFO("Starting time PA layer deinitialization...");
+    TAF_PA_INFO("Starting time PA layer deinitialization...");
 
     // Step 0: Check if Init() was called successfully
     if (!g_timePaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() was successfully called");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() was successfully called");
+        return TAF_PA_FAULT;
     }
 
     // Step 1: Clear all handler function pointers so no further time-related
     // callbacks are dispatched after this point.  Hold timeHandlerMutex so the
     // clears are mutually exclusive with any in-flight SB callback that reads
     // the same pointers under the same mutex.
-    PA_INFO("Clearing GnssUtcTimeUpdateHandlerPtr, NetworkChangeHandlerPtr and "
+    TAF_PA_INFO("Clearing GnssUtcTimeUpdateHandlerPtr, NetworkChangeHandlerPtr and "
             "NetworkRespHandlerPtrs");
     {
         std::lock_guard<std::mutex> lock(timeHandlerMutex);
@@ -707,14 +707,14 @@ pa_result_t taf_pa_time_Deinit(void)
 
     // Step 2: Deregister the GNSS time listener from the time manager so the SDK
     // stops delivering GNSS UTC time events.
-    PA_INFO("Deregistering GNSS time listener");
+    TAF_PA_INFO("Deregistering GNSS time listener");
     taf_pa_DeregGnssTimeListener();
 
     // Step 3: Deregister all per-slot network time listeners from their serving
     // system managers. Start from index 0 to match the reset loop in Step 4,
     // ensuring every entry that is reset has first been deregistered.
     // taf_pa_time_DeregNetworkTimeListener() safely handles nullptr managers.
-    PA_INFO("Deregistering all network time listeners");
+    TAF_PA_INFO("Deregistering all network time listeners");
     for (int i = 0; i <= NETWORK_SLOT_NUM_MAX; i++)
     {
         taf_pa_time_DeregNetworkTimeListener(i);
@@ -722,7 +722,7 @@ pa_result_t taf_pa_time_Deinit(void)
 
     // Step 4: Reset all serving system manager shared pointers so the underlying
     // SDK objects are released once no other owners remain.
-    PA_INFO("Resetting servingSystemManagers");
+    TAF_PA_INFO("Resetting servingSystemManagers");
     for (int i = 0; i <= NETWORK_SLOT_NUM_MAX; i++)
     {
         servingSystemManagers[i].reset();
@@ -730,17 +730,17 @@ pa_result_t taf_pa_time_Deinit(void)
 
     // Step 5: Reset the time manager shared pointer so the underlying SDK object
     // is released once no other owners remain.
-    PA_INFO("Resetting timeManager");
+    TAF_PA_INFO("Resetting timeManager");
     timeManager.reset();
 
     // Step 6: Reset the phone manager shared pointer.
-    PA_INFO("Resetting phoneManager");
+    TAF_PA_INFO("Resetting phoneManager");
     phoneManager.reset();
 
     // Step 7: Reset the initialization flag
-    PA_INFO("Resetting initialization flag");
+    TAF_PA_INFO("Resetting initialization flag");
     g_timePaInitialized.store(false, std::memory_order_release);
 
-    PA_INFO("Time PA layer deinitialization complete.");
-    return PA_OK;
+    TAF_PA_INFO("Time PA layer deinitialization complete.");
+    return TAF_PA_OK;
 }

@@ -21,6 +21,7 @@ echo ">>> Running CMake"
 cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DDLT_LOGGING="${DLT_LOGGING_ARG}"
 
 make -j$(nproc)

@@ -38,15 +38,15 @@ namespace NtnPa {
         }                                                                 \
         catch (const future_error& e)                                     \
         {                                                                 \
-            PA_ERROR("Future error in %s callback: %s", #name, e.what()); \
+            TAF_PA_ERROR("Future error in %s callback: %s", #name, e.what()); \
         }                                                                 \
         catch (const exception& e)                                        \
         {                                                                 \
-            PA_ERROR("Exception in %s callback: %s", #name, e.what());    \
+            TAF_PA_ERROR("Exception in %s callback: %s", #name, e.what());    \
         }                                                                 \
         catch (...)                                                       \
         {                                                                 \
-            PA_ERROR("Unknown error in %s callback.", #name);             \
+            TAF_PA_ERROR("Unknown error in %s callback.", #name);             \
         }                                                                 \
     };
 
@@ -57,7 +57,7 @@ namespace NtnPa {
     common::ServiceStatus name##ServiceStatus;                                   \
     if (future_status::timeout == name##Status)                                  \
     {                                                                            \
-        PA_CRIT("Timeout for %s.", #name);                                       \
+        TAF_PA_CRIT("Timeout for %s.", #name);                                       \
         manager = nullptr;                                                       \
     }                                                                            \
     else                                                                         \
@@ -65,11 +65,11 @@ namespace NtnPa {
         name##ServiceStatus = name##Future.get();                                \
         if (name##ServiceStatus != common::ServiceStatus::SERVICE_AVAILABLE)     \
         {                                                                        \
-            PA_CRIT("%s is not available.", #name);                              \
+            TAF_PA_CRIT("%s is not available.", #name);                              \
             manager = nullptr;                                                   \
         }                                                                        \
         else                                                                     \
-            PA_INFO("%s is available.", #name);                                  \
+            TAF_PA_INFO("%s is available.", #name);                                  \
     }
 
 typedef struct
@@ -88,9 +88,9 @@ class BaseCallback
 {
     public:
         sem_t semaphore;
-        pa_result_t result;
+        taf_pa_result_t result;
 
-        BaseCallback(void) : result(0)
+        BaseCallback(void) : result(TAF_PA_OK)
         {
             sem_init(&semaphore, 0, 0);
         }
@@ -167,7 +167,7 @@ PlatformAdaptor& PlatformAdaptor::GetInstance(void)
 void NtnListener::onSignalStrengthChange(satcom::SignalStrength signalStrength)
 {
     auto& pa = PlatformAdaptor::GetInstance();
-    PA_INFO("onSignalStrengthChange is triggered");
+    TAF_PA_INFO("onSignalStrengthChange is triggered");
     taf_pa_ntn_SignalStrengthChangeHdlrFunc_t handlerFunc =
         (taf_pa_ntn_SignalStrengthChangeHdlrFunc_t)pa.indicators.signalStrengthChange.handlerFuncPtr;
 
@@ -181,7 +181,7 @@ void NtnListener::onSignalStrengthChange(satcom::SignalStrength signalStrength)
 
 void NtnListener::onNtnStateChange(satcom::NtnState newState)
 {
-    PA_INFO("onNtnStateChange is triggered");
+    TAF_PA_INFO("onNtnStateChange is triggered");
     auto& pa = PlatformAdaptor::GetInstance();
     taf_pa_ntn_NtnStateChangeHdlrFunc_t handlerFunc =
         (taf_pa_ntn_NtnStateChangeHdlrFunc_t)pa.indicators.ntnStateChange.handlerFuncPtr;
@@ -190,14 +190,14 @@ void NtnListener::onNtnStateChange(satcom::NtnState newState)
     {
         taf_pa_ntn_NtnStateChangeIndication_t indication;
         indication.ntnState = static_cast<taf_pa_ntn_State_t>(newState);
-        PA_INFO("onNtnStateChange->handlerFunc");
+        TAF_PA_INFO("onNtnStateChange->handlerFunc");
         handlerFunc(indication, pa.indicators.ntnStateChange.contextPtr);
     }
 }
 
 void NtnListener::onDataAck(telux::common::ErrorCode err, satcom::TransactionId id)
 {
-    PA_INFO("onDataAck is triggered");
+    TAF_PA_INFO("onDataAck is triggered");
     auto& pa = PlatformAdaptor::GetInstance();
     taf_pa_ntn_DataAckHdlrFunc_t handlerFunc =
         (taf_pa_ntn_DataAckHdlrFunc_t)pa.indicators.dataAck.handlerFuncPtr;
@@ -205,16 +205,16 @@ void NtnListener::onDataAck(telux::common::ErrorCode err, satcom::TransactionId 
     if (handlerFunc != nullptr)
     {
         taf_pa_ntn_DataAckIndication_t indication;
-        indication.errorCode = (err == telux::common::ErrorCode::SUCCESS) ? PA_OK : PA_FAULT;
+        indication.errorCode = (err == telux::common::ErrorCode::SUCCESS) ? TAF_PA_OK : TAF_PA_FAULT;
         indication.transactionId = id;
-        PA_INFO("onDataAck->handlerFunc, transactionId: %lu, errorCode: %d", id, indication.errorCode);
+        TAF_PA_INFO("onDataAck->handlerFunc, transactionId: %lu, errorCode: %d", id, indication.errorCode);
         handlerFunc(indication, pa.indicators.dataAck.contextPtr);
     }
 }
 
 void NtnListener::onIncomingData(std::unique_ptr<uint8_t[]> data, uint32_t size)
 {
-    PA_INFO("onIncomingData is triggered, size: %u", size);
+    TAF_PA_INFO("onIncomingData is triggered, size: %u", size);
     auto& pa = PlatformAdaptor::GetInstance();
     taf_pa_ntn_IncomingDataHdlrFunc_t handlerFunc =
         (taf_pa_ntn_IncomingDataHdlrFunc_t)pa.indicators.incomingData.handlerFuncPtr;
@@ -224,14 +224,14 @@ void NtnListener::onIncomingData(std::unique_ptr<uint8_t[]> data, uint32_t size)
         taf_pa_ntn_IncomingDataIndication_t indication;
         indication.data = data.get();
         indication.size = size;
-        PA_INFO("onIncomingData->handlerFunc");
+        TAF_PA_INFO("onIncomingData->handlerFunc");
         handlerFunc(indication, pa.indicators.incomingData.contextPtr);
     }
 }
 
 void NtnListener::onCapabilitiesChange(satcom::NtnCapabilities capabilities)
 {
-    PA_INFO("onCapabilitiesChange is triggered");
+    TAF_PA_INFO("onCapabilitiesChange is triggered");
     auto& pa = PlatformAdaptor::GetInstance();
     taf_pa_ntn_CapabilitiesChangeHdlrFunc_t handlerFunc =
         (taf_pa_ntn_CapabilitiesChangeHdlrFunc_t)pa.indicators.capabilitiesChange.handlerFuncPtr;
@@ -240,14 +240,14 @@ void NtnListener::onCapabilitiesChange(satcom::NtnCapabilities capabilities)
     {
         taf_pa_ntn_CapabilitiesChangeIndication_t indication;
         indication.capabilities.maxDataSize = capabilities.maxDataSize;
-        PA_INFO("onCapabilitiesChange->handlerFunc, maxDataSize: %ld", capabilities.maxDataSize);
+        TAF_PA_INFO("onCapabilitiesChange->handlerFunc, maxDataSize: %ld", capabilities.maxDataSize);
         handlerFunc(indication, pa.indicators.capabilitiesChange.contextPtr);
     }
 }
 
 void NtnListener::onServiceStatusChange(telux::common::ServiceStatus status)
 {
-    PA_INFO("onServiceStatusChange is triggered");
+    TAF_PA_INFO("onServiceStatusChange is triggered");
     auto& pa = PlatformAdaptor::GetInstance();
     taf_pa_ntn_ServiceStatusChangeHdlrFunc_t handlerFunc =
         (taf_pa_ntn_ServiceStatusChangeHdlrFunc_t)pa.indicators.serviceStatusChange.handlerFuncPtr;
@@ -270,14 +270,14 @@ void NtnListener::onServiceStatusChange(telux::common::ServiceStatus status)
                 indication.status = TAF_PA_NTN_SERVICE_STATUS_UNKNOWN;
                 break;
         }
-        PA_INFO("onServiceStatusChange->handlerFunc, status: %d", indication.status);
+        TAF_PA_INFO("onServiceStatusChange->handlerFunc, status: %d", indication.status);
         handlerFunc(indication, pa.indicators.serviceStatusChange.contextPtr);
     }
 }
 
 void NtnListener::onCellularCoverageAvailable(bool isCellularCoverageAvailable)
 {
-    PA_INFO("onCellularCoverageAvailable is triggered: %d", isCellularCoverageAvailable);
+    TAF_PA_INFO("onCellularCoverageAvailable is triggered: %d", isCellularCoverageAvailable);
     auto& pa = PlatformAdaptor::GetInstance();
     taf_pa_ntn_CellularCoverageAvailableHdlrFunc_t handlerFunc =
         (taf_pa_ntn_CellularCoverageAvailableHdlrFunc_t)pa.indicators.cellularCoverageAvailable.handlerFuncPtr;
@@ -286,14 +286,14 @@ void NtnListener::onCellularCoverageAvailable(bool isCellularCoverageAvailable)
     {
         taf_pa_ntn_CellularCoverageAvailableIndication_t indication;
         indication.isCellularCoverageAvailable = isCellularCoverageAvailable;
-        PA_INFO("onCellularCoverageAvailable->handlerFunc");
+        TAF_PA_INFO("onCellularCoverageAvailable->handlerFunc");
         handlerFunc(indication, pa.indicators.cellularCoverageAvailable.contextPtr);
     }
 }
 
 void NtnListener::onLocationFixRequest(satcom::LocationFixRequestReason reqReason)
 {
-    PA_INFO("onLocationFixRequest is triggered, reason: %d", static_cast<int>(reqReason));
+    TAF_PA_INFO("onLocationFixRequest is triggered, reason: %d", static_cast<int>(reqReason));
     auto& pa = PlatformAdaptor::GetInstance();
     taf_pa_ntn_LocationFixRequestHdlrFunc_t handlerFunc =
         (taf_pa_ntn_LocationFixRequestHdlrFunc_t)pa.indicators.locationFixRequest.handlerFuncPtr;
@@ -302,14 +302,14 @@ void NtnListener::onLocationFixRequest(satcom::LocationFixRequestReason reqReaso
     {
         taf_pa_ntn_LocationFixRequestIndication_t indication;
         indication.reason = static_cast<taf_pa_ntn_LocationFixRequestReason_t>(reqReason);
-        PA_INFO("onLocationFixRequest->handlerFunc");
+        TAF_PA_INFO("onLocationFixRequest->handlerFunc");
         handlerFunc(indication, pa.indicators.locationFixRequest.contextPtr);
     }
 }
 
 void NtnListener::onNtnBandUpdate(uint32_t bandValue)
 {
-    PA_INFO("onNtnBandUpdate is triggered, bandValue: %u", bandValue);
+    TAF_PA_INFO("onNtnBandUpdate is triggered, bandValue: %u", bandValue);
     auto& pa = PlatformAdaptor::GetInstance();
     taf_pa_ntn_NtnBandUpdateHdlrFunc_t handlerFunc =
         (taf_pa_ntn_NtnBandUpdateHdlrFunc_t)pa.indicators.ntnBandUpdate.handlerFuncPtr;
@@ -318,7 +318,7 @@ void NtnListener::onNtnBandUpdate(uint32_t bandValue)
     {
         taf_pa_ntn_NtnBandUpdateIndication_t indication;
         indication.bandValue = bandValue;
-        PA_INFO("onNtnBandUpdate->handlerFunc");
+        TAF_PA_INFO("onNtnBandUpdate->handlerFunc");
         handlerFunc(indication, pa.indicators.ntnBandUpdate.contextPtr);
     }
 }
@@ -346,7 +346,7 @@ class Utility
                 {
                     if (instance >= NTN_MAX_INSTANCE)
                     {
-                        PA_ERROR("InstanceToPhone: invalid instance %u (max %d)",
+                        TAF_PA_ERROR("InstanceToPhone: invalid instance %u (max %d)",
                                  instance, NTN_MAX_INSTANCE);
                         return -1;
                     }
@@ -357,7 +357,7 @@ class Utility
 
 } // namespace NtnPa
 
-pa_result_t taf_pa_ntn_Init()
+taf_pa_result_t taf_pa_ntn_Init()
 {
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     auto& satcomFactory = satcom::SatcomFactory::getInstance();
@@ -371,7 +371,7 @@ pa_result_t taf_pa_ntn_Init()
     pa.listeners.ntnListener = make_shared<NtnPa::NtnListener>();
 
     // Register listener
-    PA_INFO("Registering NTN listener");
+    TAF_PA_INFO("Registering NTN listener");
     if (pa.managers.ntnManager != nullptr &&
         pa.listeners.ntnListener != nullptr &&
         pa.managers.ntnManager->getServiceStatus() == common::ServiceStatus::SERVICE_AVAILABLE)
@@ -379,16 +379,16 @@ pa_result_t taf_pa_ntn_Init()
         common::Status status = pa.managers.ntnManager->registerListener(pa.listeners.ntnListener);
         if (status != common::Status::SUCCESS)
         {
-            PA_WARN("Failed to register NTN listener during initialization");
+            TAF_PA_WARN("Failed to register NTN listener during initialization");
         }
     }
     else
     {
-        PA_WARN("Skipping NTN listener registration - manager not available");
+        TAF_PA_WARN("Skipping NTN listener registration - manager not available");
     }
 
     // Initialize subscription manager for ICCID retrieval in EnableNtn
-    PA_INFO("Initializing subscription manager for ICCID retrieval");
+    TAF_PA_INFO("Initializing subscription manager for ICCID retrieval");
     {
         auto& phoneFactory = tel::PhoneFactory::getInstance();
         pa.managers.subMgr = phoneFactory.getSubscriptionManager();
@@ -396,32 +396,32 @@ pa_result_t taf_pa_ntn_Init()
         {
             if (pa.managers.subMgr->getServiceStatus() != common::ServiceStatus::SERVICE_AVAILABLE)
             {
-                PA_WARN("Subscription manager service not yet available during NTN init");
+                TAF_PA_WARN("Subscription manager service not yet available during NTN init");
             }
             else
             {
-                PA_INFO("Subscription manager initialized successfully");
+                TAF_PA_INFO("Subscription manager initialized successfully");
             }
         }
         else
         {
-            PA_WARN("Failed to get subscription manager during NTN init - ICCID fetch may fail");
+            TAF_PA_WARN("Failed to get subscription manager during NTN init - ICCID fetch may fail");
         }
     }
 
-    PA_INFO("NTN platform adaptor initialization is done.");
+    TAF_PA_INFO("NTN platform adaptor initialization is done.");
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_Deinit()
+taf_pa_result_t taf_pa_ntn_Deinit()
 {
-    PA_INFO("Starting NTN platform adaptor deinitialization...");
+    TAF_PA_INFO("Starting NTN platform adaptor deinitialization...");
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     // Clear all indicator handler function pointers and context pointers
-    PA_INFO("Clearing all indicator handlers and contexts");
+    TAF_PA_INFO("Clearing all indicator handlers and contexts");
     pa.indicators.signalStrengthChange.handlerFuncPtr = nullptr;
     pa.indicators.signalStrengthChange.contextPtr = nullptr;
     pa.indicators.ntnStateChange.handlerFuncPtr = nullptr;
@@ -442,7 +442,7 @@ pa_result_t taf_pa_ntn_Deinit()
     pa.indicators.ntnBandUpdate.contextPtr = nullptr;
 
     // Deregister listener
-    PA_INFO("Deregistering NTN listener");
+    TAF_PA_INFO("Deregistering NTN listener");
     if (pa.managers.ntnManager != nullptr &&
         pa.listeners.ntnListener != nullptr &&
         pa.managers.ntnManager->getServiceStatus() == common::ServiceStatus::SERVICE_AVAILABLE)
@@ -451,47 +451,47 @@ pa_result_t taf_pa_ntn_Deinit()
     }
     else
     {
-        PA_WARN("Skipping NTN listener deregister - manager not available");
+        TAF_PA_WARN("Skipping NTN listener deregister - manager not available");
     }
 
     // Reset listener shared pointer
-    PA_INFO("Resetting listener shared pointer");
+    TAF_PA_INFO("Resetting listener shared pointer");
     pa.listeners.ntnListener.reset();
 
     // Reset manager shared pointer
-    PA_INFO("Resetting manager shared pointer");
+    TAF_PA_INFO("Resetting manager shared pointer");
     pa.managers.ntnManager.reset();
 
     // Reset request callback object
-    PA_INFO("Resetting request callback");
+    TAF_PA_INFO("Resetting request callback");
     pa.callbacks.request.reset();
 
     // Reset subscription manager shared pointer
-    PA_INFO("Resetting subscription manager shared pointer");
+    TAF_PA_INFO("Resetting subscription manager shared pointer");
     pa.managers.subMgr.reset();
 
-    PA_INFO("NTN platform adaptor deinitialization complete.");
-    return PA_OK;
+    TAF_PA_INFO("NTN platform adaptor deinitialization complete.");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_IsNtnSupported
+taf_pa_result_t taf_pa_ntn_IsNtnSupported
 (
     uint32_t instance,
     bool* isSupportedPtr
 )
 {
-    PA_INFO("taf_pa_ntn_IsNtnSupported");
+    TAF_PA_INFO("taf_pa_ntn_IsNtnSupported");
     if (isSupportedPtr == nullptr)
     {
-        PA_ERROR("isSupportedPtr is nullptr.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("isSupportedPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     bool isSupported = false;
@@ -499,29 +499,29 @@ pa_result_t taf_pa_ntn_IsNtnSupported
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to check NTN support: %s",
+        TAF_PA_ERROR("Failed to check NTN support: %s",
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     *isSupportedPtr = isSupported;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_EnableNtn
+taf_pa_result_t taf_pa_ntn_EnableNtn
 (
     uint32_t instance,
     bool enable,
     bool isEmergency
 )
 {
-    PA_INFO("taf_pa_ntn_EnableNtn instance=%u", instance);
+    TAF_PA_INFO("taf_pa_ntn_EnableNtn instance=%u", instance);
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     // Fetch ICCID from telux::tel::ISubscription::getIccId() using
@@ -532,7 +532,7 @@ pa_result_t taf_pa_ntn_EnableNtn
         int phoneId = NtnPa::Utility::Convert::InstanceToPhone(instance);
         if (phoneId < 0)
         {
-            PA_WARN("taf_pa_ntn_EnableNtn: invalid phoneId %u, proceeding with empty ICCID",
+            TAF_PA_WARN("taf_pa_ntn_EnableNtn: invalid phoneId %u, proceeding with empty ICCID",
                     phoneId);
         }
         else if (pa.managers.subMgr != nullptr &&
@@ -546,23 +546,23 @@ pa_result_t taf_pa_ntn_EnableNtn
                 if (!fetchedIccid.empty())
                 {
                     iccidStr = fetchedIccid;
-                    PA_INFO("taf_pa_ntn_EnableNtn: ICCID fetched from subscription for "
+                    TAF_PA_INFO("taf_pa_ntn_EnableNtn: ICCID fetched from subscription for "
                             "slot %u: %s", phoneId, iccidStr.c_str());
                 }
                 else
                 {
-                    PA_WARN("taf_pa_ntn_EnableNtn: getIccId() returned empty string for slot %u",
+                    TAF_PA_WARN("taf_pa_ntn_EnableNtn: getIccId() returned empty string for slot %u",
                             phoneId);
                 }
             }
             else
             {
-                PA_WARN("taf_pa_ntn_EnableNtn: subscription is null for slot %u", instance);
+                TAF_PA_WARN("taf_pa_ntn_EnableNtn: subscription is null for slot %u", instance);
             }
         }
         else
         {
-            PA_WARN("taf_pa_ntn_EnableNtn: subscription manager not available for slot %u",
+            TAF_PA_WARN("taf_pa_ntn_EnableNtn: subscription manager not available for slot %u",
                     phoneId);
         }
     }
@@ -571,32 +571,32 @@ pa_result_t taf_pa_ntn_EnableNtn
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to enable/disable NTN: %s",
+        TAF_PA_ERROR("Failed to enable/disable NTN: %s",
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_GetNtnCapabilities
+taf_pa_result_t taf_pa_ntn_GetNtnCapabilities
 (
     uint32_t instance,
     taf_pa_ntn_NtnCapabilities_t* capabilitiesPtr
 )
 {
-    PA_INFO("taf_pa_ntn_GetNtnCapabilities");
+    TAF_PA_INFO("taf_pa_ntn_GetNtnCapabilities");
     if (capabilitiesPtr == nullptr)
     {
-        PA_ERROR("capabilitiesPtr is nullptr.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("capabilitiesPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     satcom::NtnCapabilities capabilities;
@@ -604,34 +604,34 @@ pa_result_t taf_pa_ntn_GetNtnCapabilities
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to get NTN capabilities: %s",
+        TAF_PA_ERROR("Failed to get NTN capabilities: %s",
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     capabilitiesPtr->maxDataSize = capabilities.maxDataSize;
-    PA_INFO("taf_pa_ntn_GetNtnCapabilities capabilities.maxDataSize:%d",capabilities.maxDataSize);
-    return PA_OK;
+    TAF_PA_INFO("taf_pa_ntn_GetNtnCapabilities capabilities.maxDataSize:%d",capabilities.maxDataSize);
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_GetSignalStrength
+taf_pa_result_t taf_pa_ntn_GetSignalStrength
 (
     uint32_t instance,
     taf_pa_ntn_SignalStrength_t* signalStrengthPtr
 )
 {
-    PA_INFO("taf_pa_ntn_GetSignalStrength");
+    TAF_PA_INFO("taf_pa_ntn_GetSignalStrength");
     if (signalStrengthPtr == nullptr)
     {
-        PA_ERROR("signalStrengthPtr is nullptr.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("signalStrengthPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     satcom::SignalStrength signalStrength;
@@ -639,43 +639,43 @@ pa_result_t taf_pa_ntn_GetSignalStrength
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to get signal strength: %s", 
+        TAF_PA_ERROR("Failed to get signal strength: %s", 
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
     *signalStrengthPtr = static_cast<taf_pa_ntn_SignalStrength_t>(signalStrength);
-    PA_INFO("taf_pa_ntn_GetSignalStrength *signalStrengthPtr:%d",static_cast<int>(signalStrength));
-    return PA_OK;
+    TAF_PA_INFO("taf_pa_ntn_GetSignalStrength *signalStrengthPtr:%d",static_cast<int>(signalStrength));
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_GetNtnState
+taf_pa_result_t taf_pa_ntn_GetNtnState
 (
     uint32_t instance,
     taf_pa_ntn_State_t* statePtr
 )
 {
-    PA_INFO("taf_pa_ntn_GetNtnState");
+    TAF_PA_INFO("taf_pa_ntn_GetNtnState");
     if (statePtr == nullptr)
     {
-        PA_ERROR("statePtr is nullptr.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("statePtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     satcom::NtnState state = pa.managers.ntnManager->getNtnState();
     *statePtr = static_cast<taf_pa_ntn_State_t>(state);
-    PA_INFO("taf_pa_ntn_GetNtnState *statePtr:%d",static_cast<taf_pa_ntn_State_t>(state));
-    return PA_OK;
+    TAF_PA_INFO("taf_pa_ntn_GetNtnState *statePtr:%d",static_cast<taf_pa_ntn_State_t>(state));
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddSignalStrengthChangeHandler
+taf_pa_result_t taf_pa_ntn_AddSignalStrengthChangeHandler
 (
     uint32_t instance,
     taf_pa_ntn_SignalStrengthChangeHdlrFunc_t handlerFuncPtr,
@@ -683,7 +683,7 @@ pa_result_t taf_pa_ntn_AddSignalStrengthChangeHandler
     taf_pa_ntn_SignalStrengthChangeHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddSignalStrengthChangeHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddSignalStrengthChangeHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.signalStrengthChange.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -694,25 +694,25 @@ pa_result_t taf_pa_ntn_AddSignalStrengthChangeHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveSignalStrengthChangeHandler
+taf_pa_result_t taf_pa_ntn_RemoveSignalStrengthChangeHandler
 (
     uint32_t instance,
     taf_pa_ntn_SignalStrengthChangeHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveSignalStrengthChangeHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveSignalStrengthChangeHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.signalStrengthChange.handlerFuncPtr = nullptr;
     pa.indicators.signalStrengthChange.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddNtnStateChangeHandler
+taf_pa_result_t taf_pa_ntn_AddNtnStateChangeHandler
 (
     uint32_t instance,
     taf_pa_ntn_NtnStateChangeHdlrFunc_t handlerFuncPtr,
@@ -720,7 +720,7 @@ pa_result_t taf_pa_ntn_AddNtnStateChangeHandler
     taf_pa_ntn_NtnStateChangeHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddNtnStateChangeHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddNtnStateChangeHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.ntnStateChange.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -731,25 +731,25 @@ pa_result_t taf_pa_ntn_AddNtnStateChangeHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveNtnStateChangeHandler
+taf_pa_result_t taf_pa_ntn_RemoveNtnStateChangeHandler
 (
     uint32_t instance,
     taf_pa_ntn_NtnStateChangeHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveNtnStateChangeHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveNtnStateChangeHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.ntnStateChange.handlerFuncPtr = nullptr;
     pa.indicators.ntnStateChange.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddDataAckHandler
+taf_pa_result_t taf_pa_ntn_AddDataAckHandler
 (
     uint32_t instance,
     taf_pa_ntn_DataAckHdlrFunc_t handlerFuncPtr,
@@ -757,7 +757,7 @@ pa_result_t taf_pa_ntn_AddDataAckHandler
     taf_pa_ntn_DataAckHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddDataAckHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddDataAckHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.dataAck.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -768,25 +768,25 @@ pa_result_t taf_pa_ntn_AddDataAckHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveDataAckHandler
+taf_pa_result_t taf_pa_ntn_RemoveDataAckHandler
 (
     uint32_t instance,
     taf_pa_ntn_DataAckHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveDataAckHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveDataAckHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.dataAck.handlerFuncPtr = nullptr;
     pa.indicators.dataAck.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_SendData
+taf_pa_result_t taf_pa_ntn_SendData
 (
     uint32_t instance,
     uint8_t* data,
@@ -795,30 +795,30 @@ pa_result_t taf_pa_ntn_SendData
     uint64_t* transactionIdPtr
 )
 {
-    PA_INFO("taf_pa_ntn_SendData");
+    TAF_PA_INFO("taf_pa_ntn_SendData");
     if (data == nullptr)
     {
-        PA_ERROR("data is nullptr.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("data is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (transactionIdPtr == nullptr)
     {
-        PA_ERROR("transactionIdPtr is nullptr.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("transactionIdPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (size == 0)
     {
-        PA_ERROR("size is 0.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("size is 0.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     // Call the TelSDK sendData API
@@ -828,69 +828,69 @@ pa_result_t taf_pa_ntn_SendData
 
     if (status != common::Status::SUCCESS)
     {
-        PA_ERROR("Failed to send data: status = %d", static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to send data: status = %d", static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
 
     *transactionIdPtr = static_cast<uint64_t>(transactionId);
-    PA_INFO("Data sent successfully. Transaction ID: %lu", transactionId);
+    TAF_PA_INFO("Data sent successfully. Transaction ID: %lu", transactionId);
 
-    return 0;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_EnableCellularScan
+taf_pa_result_t taf_pa_ntn_EnableCellularScan
 (
     uint32_t instance,
     bool enable
 )
 {
-    PA_INFO("taf_pa_ntn_EnableCellularScan");
+    TAF_PA_INFO("taf_pa_ntn_EnableCellularScan");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     common::ErrorCode error = pa.managers.ntnManager->enableCellularScan(enable);
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to enable/disable cellular scan: %s",
+        TAF_PA_ERROR("Failed to enable/disable cellular scan: %s",
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Cellular scan %s successfully", enable ? "enabled" : "disabled");
-    return PA_OK;
+    TAF_PA_INFO("Cellular scan %s successfully", enable ? "enabled" : "disabled");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_UpdateSystemSelectionSpecifiers
+taf_pa_result_t taf_pa_ntn_UpdateSystemSelectionSpecifiers
 (
     uint32_t instance,
     const taf_pa_ntn_SystemSelectionSpecifier_t* specifierPtr,
     uint32_t specifierCount
 )
 {
-    PA_INFO("taf_pa_ntn_UpdateSystemSelectionSpecifiers");
+    TAF_PA_INFO("taf_pa_ntn_UpdateSystemSelectionSpecifiers");
 
     if (specifierPtr == nullptr)
     {
-        PA_ERROR("specifierPtr is nullptr.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("specifierPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     if (specifierCount == 0)
     {
-        PA_ERROR("specifierCount is 0.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("specifierCount is 0.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     // Convert to TelSDK structure
@@ -902,8 +902,8 @@ pa_result_t taf_pa_ntn_UpdateSystemSelectionSpecifiers
 
         if (currentSpecifier->mcc[0] == '\0' || currentSpecifier->mnc[0] == '\0')
         {
-            PA_ERROR("mcc or mnc is empty for specifier %d.", i);
-            return PA_BAD_PARAMETER;
+            TAF_PA_ERROR("mcc or mnc is empty for specifier %d.", i);
+            return TAF_PA_BAD_PARAMETER;
         }
 
         satcom::SystemSelectionSpecifier spec;
@@ -928,7 +928,7 @@ pa_result_t taf_pa_ntn_UpdateSystemSelectionSpecifiers
 
         teluxSpecifiers.push_back(spec);
 
-        PA_INFO("Specifier[%d]: MCC=%s, MNC=%s, Bands=%d, EARFCNs=%d",
+        TAF_PA_INFO("Specifier[%d]: MCC=%s, MNC=%s, Bands=%d, EARFCNs=%d",
                 i, spec.mcc.c_str(), spec.mnc.c_str(),
                 spec.ntnBands.size(), spec.ntnEarfcns.size());
     }
@@ -938,59 +938,59 @@ pa_result_t taf_pa_ntn_UpdateSystemSelectionSpecifiers
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to update system selection specifiers: %s",
+        TAF_PA_ERROR("Failed to update system selection specifiers: %s",
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("System selection specifiers updated successfully");
-    return PA_OK;
+    TAF_PA_INFO("System selection specifiers updated successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AbortData
+taf_pa_result_t taf_pa_ntn_AbortData
 (
     uint32_t instance
 )
 {
-    PA_INFO("taf_pa_ntn_AbortData");
+    TAF_PA_INFO("taf_pa_ntn_AbortData");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     common::ErrorCode error = pa.managers.ntnManager->abortData();
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to abort data: %s",
+        TAF_PA_ERROR("Failed to abort data: %s",
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Data aborted successfully");
-    return PA_OK;
+    TAF_PA_INFO("Data aborted successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_SetLocationFix
+taf_pa_result_t taf_pa_ntn_SetLocationFix
 (
     uint32_t instance,
     const taf_pa_ntn_LocationFix_t* locationFixPtr
 )
 {
-    PA_INFO("taf_pa_ntn_SetLocationFix");
+    TAF_PA_INFO("taf_pa_ntn_SetLocationFix");
     if (locationFixPtr == nullptr)
     {
-        PA_ERROR("locationFixPtr is nullptr.");
-        return PA_BAD_PARAMETER;
+        TAF_PA_ERROR("locationFixPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     // Convert to TelSDK structure
@@ -1019,28 +1019,28 @@ pa_result_t taf_pa_ntn_SetLocationFix
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to set location fix: %s",
+        TAF_PA_ERROR("Failed to set location fix: %s",
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Location fix set successfully");
-    return PA_OK;
+    TAF_PA_INFO("Location fix set successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_LocationFixResponse
+taf_pa_result_t taf_pa_ntn_LocationFixResponse
 (
     uint32_t instance,
     taf_pa_ntn_LocationStatus_t status,
     uint64_t waitTime
 )
 {
-    PA_INFO("taf_pa_ntn_LocationFixResponse");
+    TAF_PA_INFO("taf_pa_ntn_LocationFixResponse");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
     if (pa.managers.ntnManager == nullptr)
     {
-        PA_ERROR("Invalid NTN manager.");
-        return PA_FAULT;
+        TAF_PA_ERROR("Invalid NTN manager.");
+        return TAF_PA_FAULT;
     }
 
     satcom::LocationStatus locationStatus = static_cast<satcom::LocationStatus>(status);
@@ -1048,16 +1048,16 @@ pa_result_t taf_pa_ntn_LocationFixResponse
 
     if (error != common::ErrorCode::SUCCESS)
     {
-        PA_ERROR("Failed to send location fix response: %s",
+        TAF_PA_ERROR("Failed to send location fix response: %s",
                  common::Utils::getErrorCodeAsString(error).c_str());
-        return PA_FAULT;
+        return TAF_PA_FAULT;
     }
 
-    PA_INFO("Location fix response sent successfully");
-    return PA_OK;
+    TAF_PA_INFO("Location fix response sent successfully");
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddIncomingDataHandler
+taf_pa_result_t taf_pa_ntn_AddIncomingDataHandler
 (
     uint32_t instance,
     taf_pa_ntn_IncomingDataHdlrFunc_t handlerFuncPtr,
@@ -1065,7 +1065,7 @@ pa_result_t taf_pa_ntn_AddIncomingDataHandler
     taf_pa_ntn_IncomingDataHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddIncomingDataHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddIncomingDataHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.incomingData.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -1076,25 +1076,25 @@ pa_result_t taf_pa_ntn_AddIncomingDataHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveIncomingDataHandler
+taf_pa_result_t taf_pa_ntn_RemoveIncomingDataHandler
 (
     uint32_t instance,
     taf_pa_ntn_IncomingDataHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveIncomingDataHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveIncomingDataHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.incomingData.handlerFuncPtr = nullptr;
     pa.indicators.incomingData.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddCapabilitiesChangeHandler
+taf_pa_result_t taf_pa_ntn_AddCapabilitiesChangeHandler
 (
     uint32_t instance,
     taf_pa_ntn_CapabilitiesChangeHdlrFunc_t handlerFuncPtr,
@@ -1102,7 +1102,7 @@ pa_result_t taf_pa_ntn_AddCapabilitiesChangeHandler
     taf_pa_ntn_CapabilitiesChangeHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddCapabilitiesChangeHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddCapabilitiesChangeHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.capabilitiesChange.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -1113,25 +1113,25 @@ pa_result_t taf_pa_ntn_AddCapabilitiesChangeHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveCapabilitiesChangeHandler
+taf_pa_result_t taf_pa_ntn_RemoveCapabilitiesChangeHandler
 (
     uint32_t instance,
     taf_pa_ntn_CapabilitiesChangeHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveCapabilitiesChangeHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveCapabilitiesChangeHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.capabilitiesChange.handlerFuncPtr = nullptr;
     pa.indicators.capabilitiesChange.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddServiceStatusChangeHandler
+taf_pa_result_t taf_pa_ntn_AddServiceStatusChangeHandler
 (
     uint32_t instance,
     taf_pa_ntn_ServiceStatusChangeHdlrFunc_t handlerFuncPtr,
@@ -1139,7 +1139,7 @@ pa_result_t taf_pa_ntn_AddServiceStatusChangeHandler
     taf_pa_ntn_ServiceStatusChangeHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddServiceStatusChangeHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddServiceStatusChangeHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.serviceStatusChange.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -1150,25 +1150,25 @@ pa_result_t taf_pa_ntn_AddServiceStatusChangeHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveServiceStatusChangeHandler
+taf_pa_result_t taf_pa_ntn_RemoveServiceStatusChangeHandler
 (
     uint32_t instance,
     taf_pa_ntn_ServiceStatusChangeHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveServiceStatusChangeHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveServiceStatusChangeHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.serviceStatusChange.handlerFuncPtr = nullptr;
     pa.indicators.serviceStatusChange.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddCellularCoverageAvailableHandler
+taf_pa_result_t taf_pa_ntn_AddCellularCoverageAvailableHandler
 (
     uint32_t instance,
     taf_pa_ntn_CellularCoverageAvailableHdlrFunc_t handlerFuncPtr,
@@ -1176,7 +1176,7 @@ pa_result_t taf_pa_ntn_AddCellularCoverageAvailableHandler
     taf_pa_ntn_CellularCoverageAvailableHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddCellularCoverageAvailableHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddCellularCoverageAvailableHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.cellularCoverageAvailable.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -1187,25 +1187,25 @@ pa_result_t taf_pa_ntn_AddCellularCoverageAvailableHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveCellularCoverageAvailableHandler
+taf_pa_result_t taf_pa_ntn_RemoveCellularCoverageAvailableHandler
 (
     uint32_t instance,
     taf_pa_ntn_CellularCoverageAvailableHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveCellularCoverageAvailableHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveCellularCoverageAvailableHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.cellularCoverageAvailable.handlerFuncPtr = nullptr;
     pa.indicators.cellularCoverageAvailable.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddLocationFixRequestHandler
+taf_pa_result_t taf_pa_ntn_AddLocationFixRequestHandler
 (
     uint32_t instance,
     taf_pa_ntn_LocationFixRequestHdlrFunc_t handlerFuncPtr,
@@ -1213,7 +1213,7 @@ pa_result_t taf_pa_ntn_AddLocationFixRequestHandler
     taf_pa_ntn_LocationFixRequestHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddLocationFixRequestHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddLocationFixRequestHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.locationFixRequest.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -1224,25 +1224,25 @@ pa_result_t taf_pa_ntn_AddLocationFixRequestHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveLocationFixRequestHandler
+taf_pa_result_t taf_pa_ntn_RemoveLocationFixRequestHandler
 (
     uint32_t instance,
     taf_pa_ntn_LocationFixRequestHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveLocationFixRequestHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveLocationFixRequestHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.locationFixRequest.handlerFuncPtr = nullptr;
     pa.indicators.locationFixRequest.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_AddNtnBandUpdateHandler
+taf_pa_result_t taf_pa_ntn_AddNtnBandUpdateHandler
 (
     uint32_t instance,
     taf_pa_ntn_NtnBandUpdateHdlrFunc_t handlerFuncPtr,
@@ -1250,7 +1250,7 @@ pa_result_t taf_pa_ntn_AddNtnBandUpdateHandler
     taf_pa_ntn_NtnBandUpdateHandlerRef_t* handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_AddNtnBandUpdateHandler");
+    TAF_PA_INFO("taf_pa_ntn_AddNtnBandUpdateHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.ntnBandUpdate.handlerFuncPtr = (void*)handlerFuncPtr;
@@ -1261,20 +1261,20 @@ pa_result_t taf_pa_ntn_AddNtnBandUpdateHandler
         *handlerRefPtr = nullptr;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t taf_pa_ntn_RemoveNtnBandUpdateHandler
+taf_pa_result_t taf_pa_ntn_RemoveNtnBandUpdateHandler
 (
     uint32_t instance,
     taf_pa_ntn_NtnBandUpdateHandlerRef_t handlerRefPtr
 )
 {
-    PA_INFO("taf_pa_ntn_RemoveNtnBandUpdateHandler");
+    TAF_PA_INFO("taf_pa_ntn_RemoveNtnBandUpdateHandler");
     auto& pa = NtnPa::PlatformAdaptor::GetInstance();
 
     pa.indicators.ntnBandUpdate.handlerFuncPtr = nullptr;
     pa.indicators.ntnBandUpdate.contextPtr = nullptr;
 
-    return PA_OK;
+    return TAF_PA_OK;
 }

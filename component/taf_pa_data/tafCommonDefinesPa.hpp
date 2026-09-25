@@ -64,7 +64,7 @@ bool IS_VALUE_IN_RANGE(T value, T lowerBound, T upperBound)
         int result = pthread_setname_np(pthread_self(), name.c_str());                       \
         if ( 0 != result)                                                                    \
         {                                                                                    \
-          PA_WARN("pthread_setname_np(%s) failed with error code %d", name.c_str(), result); \
+          TAF_PA_WARN("pthread_setname_np(%s) failed with error code %d", name.c_str(), result); \
         }                                                                                    \
 } while (0);
 
@@ -83,12 +83,12 @@ bool IS_VALUE_IN_RANGE(T value, T lowerBound, T upperBound)
     }                                                           \
     catch (const std::exception &e)                             \
     {                                                           \
-        PA_WARN("Exception caught: %s", e.what());              \
+        TAF_PA_WARN("Exception caught: %s", e.what());              \
         return result;                                          \
     }                                                           \
     catch (...)                                                 \
     {                                                           \
-        PA_WARN("Unknown exception caught");                    \
+        TAF_PA_WARN("Unknown exception caught");                    \
         return result;                                          \
     }
 
@@ -106,12 +106,12 @@ bool IS_VALUE_IN_RANGE(T value, T lowerBound, T upperBound)
     }                                                   \
     catch (const std::exception &e)                     \
     {                                                   \
-        PA_WARN("Exception caught: %s", e.what());      \
+        TAF_PA_WARN("Exception caught: %s", e.what());      \
         return;                                         \
     }                                                   \
     catch (...)                                         \
     {                                                   \
-        PA_WARN("Unknown exception caught");            \
+        TAF_PA_WARN("Unknown exception caught");            \
         return;                                         \
     }
 

@@ -65,7 +65,7 @@ struct taf_pa_voicecall_CallInfo_t
 
 
 using taf_pa_voicecall_CallCb = std::function<void(
-    pa_result_t errorCode,
+    taf_pa_result_t errorCode,
     const taf_pa_voicecall_CallInfo_t& callInfo,
     std::any context
 )>;
@@ -76,49 +76,49 @@ typedef void (*taf_pa_voicecall_EventListener)(
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_voicecall_Init();
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_Init();
 
-PA_SHARED pa_result_t taf_pa_voicecall_Deinit();
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_Deinit();
 
-PA_SHARED pa_result_t taf_pa_voicecall_Make(
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_Make(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_voicecall_Stop(
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_Stop(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_voicecall_Hold(
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_Hold(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_voicecall_Resume(
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_Resume(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_voicecall_Answer(
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_Answer(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_voicecall_Swap(
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_Swap(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
 );
 
-PA_SHARED pa_result_t taf_pa_voicecall_RegisterEventListener(taf_pa_voicecall_EventListener listener, std::any context);
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_RegisterEventListener(taf_pa_voicecall_EventListener listener, std::any context);
 
-PA_SHARED pa_result_t taf_pa_voicecall_GetCallTermination(const taf_pa_voicecall_CallInfo_t& callInfo, taf_pa_voicecall_termination_t *termination);
+TAF_PA_SHARED taf_pa_result_t taf_pa_voicecall_GetCallTermination(const taf_pa_voicecall_CallInfo_t& callInfo, taf_pa_voicecall_termination_t *termination);
 
 }
 
