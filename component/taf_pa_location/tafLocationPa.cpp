@@ -155,6 +155,14 @@ public:
         telux::common::Status StopReports(taf_pa_location_GeneralCb callback, std::any context);
         uint32_t GetCapabilities();
 
+        // Null out the upper-layer event listener and its context under mtx_
+        // so that no in-flight SDK callbacks can invoke freed upper-layer memory
+        // after this point.
+        void ClearEventListener() {
+            std::lock_guard<std::mutex> lock(mtx_);
+            eventListener_ = nullptr;
+            eventListenerContext_.reset();
+        }
         taf_pa_result_t RegisterEventListener(
             taf_pa_location_LocationId locationId,
             taf_pa_location_EventListener* listener,
@@ -882,7 +890,9 @@ telux::common::Status LocationPAController::PALocationClient::StartDetailedEngin
     auto paCtrl = LocationPAController::getInstance();
 
     //Sdk Callback
-    auto cb = [promisePtr,&paCtrl](telux::common::ErrorCode error) {
+    // Capture paCtrl by value (not reference) to avoid dangling reference if
+    // the callback fires after this stack frame has returned.
+    auto cb = [promisePtr, paCtrl](telux::common::ErrorCode error) {
         try{
             if(error == telux::common::ErrorCode::SUCCESS) {
                 promisePtr->set_value(TAF_PA_OK);
@@ -1001,6 +1011,10 @@ taf_pa_result_t tafpa::location::taf_pa_location_stopReports(taf_pa_location_Loc
     if(status != telux::common::Status::SUCCESS){
         TAF_PA_ERROR("Location engine start failed with status code %d",static_cast<int>(status));
         return TAF_PA_FAULT;
+    }
+    else
+    {
+        TAF_PA_INFO("taf_pa_location_stopReports success");
     }
     return TAF_PA_OK;
 }
@@ -2965,6 +2979,11 @@ taf_pa_result_t LocationPAController::deinitialize()
     // Step 1: Release all location clients. Each ReleaseLocationClient() call removes the
     // client from the map and calls CleanUp() which deregisters SDK listeners.
     TAF_PA_INFO("Releasing all location clients...");
+    // Step 1: For each active client: stop GNSS reports first, then release
+    // the client (which calls CleanUp() to deregister SDK listeners).
+    // StopReports is called here (deinit path only) rather than inside
+    // CleanUp() to avoid triggering it in other CleanUp() call scenarios.
+    TAF_PA_INFO("Releasing all location clients...");
     {
         // Collect IDs first to avoid iterator invalidation during erasure.
         std::vector<taf_pa_location_LocationId> clientIds;
@@ -2975,7 +2994,50 @@ taf_pa_result_t LocationPAController::deinitialize()
         }
         for (auto id : clientIds)
         {
+            // Step 1a: Stop active GNSS position/measurement reports before
+            // deregistering listeners so that no further report callbacks
+            // arrive during teardown.
+            auto clientPtr = GetClientPtr(id);
+            if (clientPtr)
+            {
+                // Step 1a: Null out the upper-layer event listener first so that
+                // no in-flight SDK callbacks can reach freed upper-layer memory
+                // during the teardown window that follows.
+                TAF_PA_INFO("Clearing event listener for client ID %llu", id);
+                clientPtr->ClearEventListener();
+
+                // Step 1b: Stop active GNSS position/measurement reports before
+                // deregistering listeners so that no further report callbacks
+                // arrive during teardown.
+                // NOTALLOWED (status 12) is returned when no session is active —
+                // this is benign and logged as INFO rather than WARN.
+                TAF_PA_INFO("Stopping reports for client ID %llu before release", id);
+                auto stopStatus = clientPtr->StopReports(nullptr, {});
+                if (stopStatus == telux::common::Status::SUCCESS)
+                {
+                    TAF_PA_INFO("StopReports completed successfully for client ID %llu", id);
+                }
+                else if (stopStatus == telux::common::Status::NOTALLOWED)
+                {
+                    TAF_PA_INFO("StopReports: no active session for client ID %llu "
+                            "(NOTALLOWED — benign, no session was running)", id);
+                }
+                else
+                {
+                    TAF_PA_WARN("StopReports returned unexpected status %d for client ID %llu",
+                            static_cast<int>(stopStatus), id);
+                }
+            }
+            // Step 1b: Release the client — calls CleanUp() which runs
+            // deRegisterListenerEx() and deRegisterForSystemInfoUpdates().
             ReleaseLocationClient(id);
+        }
+        // Safety net: ensure the map is empty even if ReleaseLocationClient
+        // failed for any entry (e.g. due to an exception).
+        if (!locationClients_.empty())
+        {
+            TAF_PA_WARN("locationClients_ not empty after release loop — force clearing");
+            locationClients_.clear();
         }
     }
 
