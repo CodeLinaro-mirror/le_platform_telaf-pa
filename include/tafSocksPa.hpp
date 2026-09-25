@@ -42,18 +42,18 @@ typedef enum
 }
 taf_pa_net_AuthMethod_t;
 
-typedef void (*taf_pa_socks_CallCb)(pa_result_t result,void *contextPtr);
+typedef void (*taf_pa_socks_CallCb)(taf_pa_result_t result,void *contextPtr);
 
-PA_SHARED pa_result_t taf_pa_socks_Init();
+TAF_PA_SHARED taf_pa_result_t taf_pa_socks_Init();
 
-PA_SHARED pa_result_t taf_pa_socks_Deinit();
+TAF_PA_SHARED taf_pa_result_t taf_pa_socks_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Set device mode
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_net_SetDeviceMode
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_SetDeviceMode
 (
     taf_pa_net_DeviceMode_t deviceMode
 );
@@ -63,7 +63,7 @@ PA_SHARED pa_result_t taf_pa_net_SetDeviceMode
  * Get device mode
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_net_GetDeviceMode
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_GetDeviceMode
 (
     taf_pa_net_DeviceMode_t* deviceModePtr
 );
@@ -73,7 +73,7 @@ PA_SHARED pa_result_t taf_pa_net_GetDeviceMode
  * Set SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_net_SetSocksAuthMethod
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_SetSocksAuthMethod
 (
     taf_pa_net_AuthMethod_t authMethod
 );
@@ -83,7 +83,7 @@ PA_SHARED pa_result_t taf_pa_net_SetSocksAuthMethod
  * Get SOCKS authentication method
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_net_GetSocksAuthMethod
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_GetSocksAuthMethod
 (
     taf_pa_net_AuthMethod_t* authMethodPtr
 );
@@ -93,7 +93,7 @@ PA_SHARED pa_result_t taf_pa_net_GetSocksAuthMethod
  * Sets SOCKS LAN interface
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_net_SetSocksLanInterface
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_SetSocksLanInterface
 (
     const char* ifName
 );
@@ -103,7 +103,7 @@ PA_SHARED pa_result_t taf_pa_net_SetSocksLanInterface
  * Gets SOCKS LAN interface
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_net_GetSocksLanInterface
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_GetSocksLanInterface
 (
     char* ifName,
     size_t ifNameSize
@@ -114,7 +114,7 @@ PA_SHARED pa_result_t taf_pa_net_GetSocksLanInterface
  * Adds username/profile association
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_net_AddSocksAssociation
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_AddSocksAssociation
 (
     const char* userName,
     uint32_t profileId
@@ -125,7 +125,7 @@ PA_SHARED pa_result_t taf_pa_net_AddSocksAssociation
  * Deletes username/profile association
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_net_RemoveSocksAssociation
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_RemoveSocksAssociation
 (
     const char* userName
 );
@@ -135,21 +135,21 @@ PA_SHARED pa_result_t taf_pa_net_RemoveSocksAssociation
  FUNCTION        EnableSocksCmdSync
 
 ======================================================================*/
-PA_SHARED pa_result_t taf_pa_net_EnableSocksCmdSync();
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_EnableSocksCmdSync();
 
 /*======================================================================
 
  FUNCTION        DisableSocksCmdSync
 
 ======================================================================*/
-PA_SHARED pa_result_t taf_pa_net_DisableSocksCmdSync();
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_DisableSocksCmdSync();
 
 /*======================================================================
 
  FUNCTION        EnableSocksCmdASync
 
 ======================================================================*/
-PA_SHARED pa_result_t taf_pa_net_EnableSocksCmdASync
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_EnableSocksCmdASync
 (
    taf_pa_socks_CallCb callback,void *contextPtr
 );
@@ -159,7 +159,7 @@ PA_SHARED pa_result_t taf_pa_net_EnableSocksCmdASync
  FUNCTION        DisableSocksCmdASync
 
 ======================================================================*/
-PA_SHARED pa_result_t taf_pa_net_DisableSocksCmdASync
+TAF_PA_SHARED taf_pa_result_t taf_pa_net_DisableSocksCmdASync
 (
    taf_pa_socks_CallCb callback,void *contextPtr
 );

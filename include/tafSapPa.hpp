@@ -40,7 +40,7 @@ typedef enum
 struct taf_pa_sap_ApduResponse_t
 {
     uint8_t id;
-    pa_result_t result;
+    taf_pa_result_t result;
     uint8_t sw1;
     uint8_t sw2;
     std::vector<int> data;
@@ -48,13 +48,13 @@ struct taf_pa_sap_ApduResponse_t
 
 struct taf_pa_sap_AtrResponse_t
 {
-    pa_result_t result;
+    taf_pa_result_t result;
     std::vector<int> atr;
 };
 
 struct taf_pa_sap_CardReaderResponse_t
 {
-    pa_result_t result;
+    taf_pa_result_t result;
     int id;
     bool isRemovable;
     bool isPresent;
@@ -64,7 +64,7 @@ struct taf_pa_sap_CardReaderResponse_t
 };
 
 // Per-call callback types (for API responses with context)
-using taf_pa_sap_ResponseCb = std::function<void(pa_result_t result, std::any context)>;
+using taf_pa_sap_ResponseCb = std::function<void(taf_pa_result_t result, std::any context)>;
 
 using taf_pa_sap_ApduResponseCb = 
     std::function<void(const std::shared_ptr<taf_pa_sap_ApduResponse_t>& response, std::any context)>;
@@ -76,7 +76,7 @@ using taf_pa_sap_CardReaderResponseCb =
     std::function<void(const std::shared_ptr<taf_pa_sap_CardReaderResponse_t>& response, std::any context)>;
 
 using taf_pa_sap_StateResponseCb =
-    std::function<void(taf_pa_sap_State_t sapState, pa_result_t result, std::any context)>;
+    std::function<void(taf_pa_sap_State_t sapState, taf_pa_result_t result, std::any context)>;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -85,22 +85,22 @@ using taf_pa_sap_StateResponseCb =
  * @param slotId The SIM slot ID to use
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_Init(int slotId);
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_Init(int slotId);
 
 //--------------------------------------------------------------------------------------------------
 /**
  * Deinitialize PA SAP
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_Deinit();
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_Deinit();
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -111,11 +111,11 @@ PA_SHARED pa_result_t taf_pa_sap_Deinit();
  * @param [in] context       Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_OpenConnection(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_OpenConnection(
     taf_pa_sap_Condition_t sapCondition,
     taf_pa_sap_ResponseCb callback,
     std::any context
@@ -129,11 +129,11 @@ PA_SHARED pa_result_t taf_pa_sap_OpenConnection(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_CloseConnection(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_CloseConnection(
     taf_pa_sap_ResponseCb callback,
     std::any context
 );
@@ -146,11 +146,11 @@ PA_SHARED pa_result_t taf_pa_sap_CloseConnection(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_RequestPowerOn(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_RequestPowerOn(
     taf_pa_sap_ResponseCb callback,
     std::any context
 );
@@ -163,11 +163,11 @@ PA_SHARED pa_result_t taf_pa_sap_RequestPowerOn(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_RequestPowerOff(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_RequestPowerOff(
     taf_pa_sap_ResponseCb callback,
     std::any context
 );
@@ -180,11 +180,11 @@ PA_SHARED pa_result_t taf_pa_sap_RequestPowerOff(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_RequestReset(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_RequestReset(
     taf_pa_sap_ResponseCb callback,
     std::any context
 );
@@ -205,11 +205,11 @@ PA_SHARED pa_result_t taf_pa_sap_RequestReset(
  * @param [in] context      Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_TransmitApdu(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_TransmitApdu(
     uint8_t apduId,
     uint8_t cla,
     uint8_t instruction,
@@ -230,11 +230,11 @@ PA_SHARED pa_result_t taf_pa_sap_TransmitApdu(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_RequestAtr(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_RequestAtr(
     taf_pa_sap_AtrResponseCb callback,
     std::any context
 );
@@ -247,11 +247,11 @@ PA_SHARED pa_result_t taf_pa_sap_RequestAtr(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_RequestCardReaderStatus(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_RequestCardReaderStatus(
     taf_pa_sap_CardReaderResponseCb callback,
     std::any context
 );
@@ -264,11 +264,11 @@ PA_SHARED pa_result_t taf_pa_sap_RequestCardReaderStatus(
  * @param [in] context   Context to pass back in callback
  *
  * @return
- *  - PA_OK on success
- *  - PA_FAULT on failure
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t taf_pa_sap_RequestState(
+TAF_PA_SHARED taf_pa_result_t taf_pa_sap_RequestState(
     taf_pa_sap_StateResponseCb callback,
     std::any context
 );

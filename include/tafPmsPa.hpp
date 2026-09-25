@@ -8,7 +8,6 @@
 
 #include "tafCommonPa.h"
 
-#include <stdint.h>
 #include <vector>
 #include <string>
 
@@ -107,45 +106,45 @@ typedef void (* SendEventFunc_t)
     taf_pa_pms_Event_t * ev
 );
 
-PA_SHARED pa_result_t taf_pa_pms_Init
+TAF_PA_SHARED taf_pa_result_t taf_pa_pms_Init
 (
     taf_pa_pms_Reference_t   *paRefPtr,
     SendEventFunc_t           fnSendEvent,
     uint32_t                  timeoutMs ///< Note: if we have 3 managers, the total is (3 * timeoutMs)
 );
 
-PA_SHARED pa_result_t taf_pa_pms_Deinit
+TAF_PA_SHARED taf_pa_result_t taf_pa_pms_Deinit
 (
     taf_pa_pms_Reference_t   *paRefPtr
 );
 
-PA_SHARED pa_result_t taf_pa_pms_SetPowerStateAsMaster
+TAF_PA_SHARED taf_pa_result_t taf_pa_pms_SetPowerStateAsMaster
 (
     taf_pa_pms_Reference_t    paRef,
     taf_pa_pms_PowerState_t   state,
     const char               *name
 );
 
-PA_SHARED pa_result_t taf_pa_pms_SendAckForStateUpdate
+TAF_PA_SHARED taf_pa_result_t taf_pa_pms_SendAckForStateUpdate
 (
     taf_pa_pms_Reference_t    paRef,
     taf_pa_pms_PowerState_t   state,
     taf_pa_pms_Ack_t          ack
 );
 
-PA_SHARED pa_result_t taf_pa_pms_GetAllMachineNames
+TAF_PA_SHARED taf_pa_result_t taf_pa_pms_GetAllMachineNames
 (
     taf_pa_pms_Reference_t    paRef,
     std::vector<std::string> &machineNames
 );
 
-PA_SHARED pa_result_t taf_pa_pms_SetModemWakeupFilter
+TAF_PA_SHARED taf_pa_result_t taf_pa_pms_SetModemWakeupFilter
 (
     taf_pa_pms_Reference_t    paRef,
     uint32_t                  wsBitmask
 );
 
-PA_SHARED pa_result_t taf_pa_pms_GetModemWakeupFilter
+TAF_PA_SHARED taf_pa_result_t taf_pa_pms_GetModemWakeupFilter
 (
     taf_pa_pms_Reference_t    paRef,
     uint32_t                 *wsBitmaskPtr

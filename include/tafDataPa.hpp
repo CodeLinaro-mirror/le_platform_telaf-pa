@@ -1303,13 +1303,13 @@ struct ThroughputInfo_t
  * Initialize the Telux data PA state.
 
  * @return
- *  - LE_OK              PA completely initialized
- *  - LE_UNAVAILABLE     PA not completely initialized. A part of the PA maybe usable. Check state.
- *  - LE_FAULT           PA is not usable due to fatal failure.
- *  - LE_NOT_IMPLEMENTED API is not implemented.
+ *  - TAF_PA_OK              PA completely initialized
+ *  - TAF_PA_UNAVAILABLE     PA not completely initialized. A part of the PA maybe usable. Check state.
+ *  - TAF_PA_FAULT           PA is not usable due to fatal failure.
+ *  - TAF_PA_NOT_IMPLEMENTED API is not implemented.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t Init
+TAF_PA_SHARED taf_pa_result_t Init
 (
     taf::pa::data::SubsystemState_e &state
         ///< [OUT] The Telux data PA initialization state.
@@ -1320,10 +1320,10 @@ PA_SHARED pa_result_t Init
  * Deinitialize the Telux data PA state.
  *
  * @return
- *  - LE_OK              PA completely initialized
+ *  - TAF_PA_OK              PA completely initialized
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t Deinit
+TAF_PA_SHARED taf_pa_result_t Deinit
 (
 
 );
@@ -1333,7 +1333,7 @@ PA_SHARED pa_result_t Deinit
  * Get the data PA subsystem state.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetSubsystemState
+TAF_PA_SHARED taf_pa_result_t GetSubsystemState
 (
     taf::pa::data::PhoneId_e phoneId,
     ///< [IN] The phone ID.
@@ -1348,7 +1348,7 @@ PA_SHARED pa_result_t GetSubsystemState
  * Get the phone Ids.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetPhoneIds
+TAF_PA_SHARED taf_pa_result_t GetPhoneIds
 (
     std::vector<PhoneId_e> &phoneIds
         ///< [OUT] The phone IDs.
@@ -1359,7 +1359,7 @@ PA_SHARED pa_result_t GetPhoneIds
  * Get the SIM slot count.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetSimSlotCount
+TAF_PA_SHARED taf_pa_result_t GetSimSlotCount
 (
     SlotCount_e &slotCount
         ///< [OUT] The number of SIM slots.
@@ -1370,7 +1370,7 @@ PA_SHARED pa_result_t GetSimSlotCount
  * Get the SIM slot count.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetPhoneIdFromSimSlotId
+TAF_PA_SHARED taf_pa_result_t GetPhoneIdFromSimSlotId
 (
     SlotId_e slotID,
         ///< [IN] The SIM slot ID.
@@ -1383,7 +1383,7 @@ PA_SHARED pa_result_t GetPhoneIdFromSimSlotId
  * Get the SIM slot count.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetSimSlotIdFromPhoneId
+TAF_PA_SHARED taf_pa_result_t GetSimSlotIdFromPhoneId
 (
     PhoneId_e phoneID,
         ///< [IN] The phone ID.
@@ -1402,7 +1402,7 @@ using taf_pa_data_profile_GetAllAsyncCb =
     std::function<void
         (
             PhoneId_e                         phoneId,      ///< [IN] The phone id.
-            pa_result_t                       result,       ///< [IN] The result of the operation.
+            taf_pa_result_t                       result,       ///< [IN] The result of the operation.
             const std::vector<ProfileInfo_t>& profiles,     ///< [IN] The profile list.
             void                              *contextPtr   ///< [IN] The context pointer.
         )>;
@@ -1415,7 +1415,7 @@ using taf_pa_data_profile_GetAllAsyncCb =
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetProfilesAsync
+TAF_PA_SHARED taf_pa_result_t GetProfilesAsync
 (
     PhoneId_e phone,
     ///< [IN] The phone id.
@@ -1434,7 +1434,7 @@ PA_SHARED pa_result_t GetProfilesAsync
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetProfileInfo
+TAF_PA_SHARED taf_pa_result_t GetProfileInfo
 (
     PhoneId_e phoneId,
     ///< [IN] The phone id.
@@ -1450,7 +1450,7 @@ PA_SHARED pa_result_t GetProfileInfo
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t CreateProfile
+TAF_PA_SHARED taf_pa_result_t CreateProfile
 (
     PhoneId_e phone,
     ///< [IN] The phone id.
@@ -1467,7 +1467,7 @@ PA_SHARED pa_result_t CreateProfile
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t UpdateProfile
+TAF_PA_SHARED taf_pa_result_t UpdateProfile
 (
     PhoneId_e phone,
     ///< [IN] The phone id.
@@ -1483,7 +1483,7 @@ PA_SHARED pa_result_t UpdateProfile
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t DeleteProfile
+TAF_PA_SHARED taf_pa_result_t DeleteProfile
 (
     PhoneId_e phone,
     ///< [IN] The phone id.
@@ -1497,7 +1497,7 @@ PA_SHARED pa_result_t DeleteProfile
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetDefaultProfile
+TAF_PA_SHARED taf_pa_result_t GetDefaultProfile
 (
     taf::pa::data::PhoneId_e phoneId,
     ///< [IN] The profile information.
@@ -1511,7 +1511,7 @@ PA_SHARED pa_result_t GetDefaultProfile
  *
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t SetDefaultProfile
+TAF_PA_SHARED taf_pa_result_t SetDefaultProfile
 (
     taf::pa::data::PhoneId_e phoneId,
     ///< [IN] The profile information.
@@ -1538,7 +1538,7 @@ using taf_pa_data_CallEventsCb =
  * Register for data call events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t AddDataCallEventsCallback
+TAF_PA_SHARED taf_pa_result_t AddDataCallEventsCallback
 (
     taf_pa_data_CallEventsCb callBack,
         ///< [IN] The callback function.
@@ -1553,7 +1553,7 @@ PA_SHARED pa_result_t AddDataCallEventsCallback
  * Removed a previously registered data call events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RemoveDataCallEventsCallback
+TAF_PA_SHARED taf_pa_result_t RemoveDataCallEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
@@ -1564,10 +1564,10 @@ PA_SHARED pa_result_t RemoveDataCallEventsCallback
  * Start a data session. Events will be provided via taf_pa_data_CallEventsCb that is registered
  * via AddDataCallEventsCallback()
  *
- * @return LE_OK on success. Wait for callback for final status.
+ * @return TAF_PA_OK on success. Wait for callback for final status.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t StartDataSessionAsync
+TAF_PA_SHARED taf_pa_result_t StartDataSessionAsync
 (
     const DataCallStartStopParams_t& params
                 ///< [IN] The data call parameters.
@@ -1578,10 +1578,10 @@ PA_SHARED pa_result_t StartDataSessionAsync
  * Stop a data session. Events will be provided via taf_pa_data_CallEventsCb that is registered
  * via RegisterDataCallEventsCallback()
  *
- * @return LE_OK on success. Wait for callback for final status.
+ * @return TAF_PA_OK on success. Wait for callback for final status.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t StopDataSessionAsync
+TAF_PA_SHARED taf_pa_result_t StopDataSessionAsync
 (
     const DataCallStartStopParams_t &params
                 ///< [IN] The data call parameters.
@@ -1597,7 +1597,7 @@ PA_SHARED pa_result_t StopDataSessionAsync
 using taf_pa_data_RequestCallListCb =
     std::function<void
     (
-        pa_result_t                             result,   ///< [IN] The result of the operation.
+        taf_pa_result_t                             result,   ///< [IN] The result of the operation.
         const std::vector<DataCallEventInfo_t>& callList, ///< [IN] The data calls list.
         std::shared_ptr<void>                   context   ///< [IN] The app provided context pointer
     )>;
@@ -1606,10 +1606,10 @@ using taf_pa_data_RequestCallListCb =
 /**
  * Request list of all active data calls. Events will be provided via taf_pa_data_RequestCallListCb.
  *
- * @return LE_OK on success. Wait for callback for final status.
+ * @return TAF_PA_OK on success. Wait for callback for final status.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RequestDataCallsListAsync
+TAF_PA_SHARED taf_pa_result_t RequestDataCallsListAsync
 (
     PhoneId_e phoneId,
                 ///< [IN] The phone ID.
@@ -1624,7 +1624,7 @@ PA_SHARED pa_result_t RequestDataCallsListAsync
  * Get throttled APNs information.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetThrottledApnInfo
+TAF_PA_SHARED taf_pa_result_t GetThrottledApnInfo
 (
     const taf::pa::data::PhoneId_e phoneId,
         ///< [IN] The phone ID.
@@ -1636,10 +1636,10 @@ PA_SHARED pa_result_t GetThrottledApnInfo
 /**
  * Get roaming status.
  *
- * @return LE_OK on success.
+ * @return TAF_PA_OK on success.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetRoamingStatus
+TAF_PA_SHARED taf_pa_result_t GetRoamingStatus
 (
     const taf::pa::data::PhoneId_e phoneId,
     RoamingStatus_t &roamingStatus
@@ -1668,7 +1668,7 @@ using taf_pa_data_SubsystemStateChangeCb =
  * Register for subsystem state change events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t AddSubsystemStateChangeCallback
+TAF_PA_SHARED taf_pa_result_t AddSubsystemStateChangeCallback
 (
     taf_pa_data_SubsystemStateChangeCb callBack,
     ///< [IN] The callback function.
@@ -1683,7 +1683,7 @@ PA_SHARED pa_result_t AddSubsystemStateChangeCallback
  * Removed a previously registered subsystem state change callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RemoveSubsystemStateChangeCallback
+TAF_PA_SHARED taf_pa_result_t RemoveSubsystemStateChangeCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
@@ -1708,7 +1708,7 @@ using taf_pa_data_RoamingEventsCb =
  * Register roaming events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t AddRoamingEventsCallback
+TAF_PA_SHARED taf_pa_result_t AddRoamingEventsCallback
 (
     taf_pa_data_RoamingEventsCb callBack,
         ///< [IN] The callback function.
@@ -1723,7 +1723,7 @@ PA_SHARED pa_result_t AddRoamingEventsCallback
  * Removed a previously registered roaming events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RemoveRoamingEventsCallback
+TAF_PA_SHARED taf_pa_result_t RemoveRoamingEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
@@ -1748,7 +1748,7 @@ using taf_pa_data_ThrottledApnEventsCb =
  * Register throttled APN events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t AddThrottledApnEventsCallback
+TAF_PA_SHARED taf_pa_result_t AddThrottledApnEventsCallback
 (
     taf_pa_data_ThrottledApnEventsCb callBack,
         ///< [IN] The callback function.
@@ -1763,7 +1763,7 @@ PA_SHARED pa_result_t AddThrottledApnEventsCallback
  * Removed a previously registered throttled APN events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RemoveThrottledApnEventsCallback
+TAF_PA_SHARED taf_pa_result_t RemoveThrottledApnEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
@@ -1788,7 +1788,7 @@ using taf_pa_data_QosTftEventsCb =
  * Register QoS TFT events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t AddQosTftEventsCallback
+TAF_PA_SHARED taf_pa_result_t AddQosTftEventsCallback
 (
     taf_pa_data_QosTftEventsCb callBack,
         ///< [IN] The callback function.
@@ -1803,7 +1803,7 @@ PA_SHARED pa_result_t AddQosTftEventsCallback
  * Removed a previously registered QoS TFT events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RemoveQosTftEventsCallback
+TAF_PA_SHARED taf_pa_result_t RemoveQosTftEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
@@ -1828,7 +1828,7 @@ using taf_pa_data_HwAccelerationEventsCb =
  * Register HW acceleration change events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t AddHwAccelerationChangeEventsCallback
+TAF_PA_SHARED taf_pa_result_t AddHwAccelerationChangeEventsCallback
 (
     taf_pa_data_HwAccelerationEventsCb callBack,
         ///< [IN] The callback function.
@@ -1843,7 +1843,7 @@ PA_SHARED pa_result_t AddHwAccelerationChangeEventsCallback
  * Removed a previously registered HW acceleration change events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RemoveHwAccelerationChangeEventsCallback
+TAF_PA_SHARED taf_pa_result_t RemoveHwAccelerationChangeEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
@@ -1886,7 +1886,7 @@ using taf_pa_data_ThroughputEventsCb =
  * Register profile change events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t AddProfileEventsCallback
+TAF_PA_SHARED taf_pa_result_t AddProfileEventsCallback
 (
     taf_pa_data_ProfileEventsCb callBack,
         ///< [IN] The callback function.
@@ -1901,7 +1901,7 @@ PA_SHARED pa_result_t AddProfileEventsCallback
  * Removed a previously registered profile  events callback
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RemoveProfileEventsCallback
+TAF_PA_SHARED taf_pa_result_t RemoveProfileEventsCallback
 (
     uint16_t id
         ///< [IN] The ID of the registered callback.
@@ -1913,7 +1913,7 @@ PA_SHARED pa_result_t RemoveProfileEventsCallback
  * initialization.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RegisterSDKCallbacks
+TAF_PA_SHARED taf_pa_result_t RegisterSDKCallbacks
 (
 
 );
@@ -1923,7 +1923,7 @@ PA_SHARED pa_result_t RegisterSDKCallbacks
  * Deregister SDK callbacks. This is to support the service manage suspend/resume scenarios.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t DeregisterSDKCallbacks
+TAF_PA_SHARED taf_pa_result_t DeregisterSDKCallbacks
 (
 
 );
@@ -1944,14 +1944,14 @@ PA_SHARED pa_result_t DeregisterSDKCallbacks
  *                              Minimum: 50ms, 0 to disable.
  *
  * @return
- *  - PA_OK              Successfully set the interval
- *  - PA_BAD_PARAMETER   Invalid parameters
- *  - PA_FAULT           Failed to set the interval
- *  - PA_TIMEOUT         Operation timed out
- *  - PA_NOT_IMPLEMENTED API is not implemented
+ *  - TAF_PA_OK              Successfully set the interval
+ *  - TAF_PA_BAD_PARAMETER   Invalid parameters
+ *  - TAF_PA_FAULT           Failed to set the interval
+ *  - TAF_PA_TIMEOUT         Operation timed out
+ *  - TAF_PA_NOT_IMPLEMENTED API is not implemented
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t SetThroughputReportInterval
+TAF_PA_SHARED taf_pa_result_t SetThroughputReportInterval
 (
     PhoneId_e phoneId,
     uint32_t reportInterval
@@ -1968,14 +1968,14 @@ PA_SHARED pa_result_t SetThroughputReportInterval
  * @param [out] throughputInfoList   The list of throughput information for all active profiles.
  *
  * @return
- *  - PA_OK              Successfully retrieved throughput information
- *  - PA_BAD_PARAMETER   Invalid parameters
- *  - PA_FAULT           Failed to retrieve throughput information
- *  - PA_TIMEOUT         Operation timed out
- *  - PA_NOT_IMPLEMENTED API is not implemented
+ *  - TAF_PA_OK              Successfully retrieved throughput information
+ *  - TAF_PA_BAD_PARAMETER   Invalid parameters
+ *  - TAF_PA_FAULT           Failed to retrieve throughput information
+ *  - TAF_PA_TIMEOUT         Operation timed out
+ *  - TAF_PA_NOT_IMPLEMENTED API is not implemented
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetLastThroughputInfo
+TAF_PA_SHARED taf_pa_result_t GetLastThroughputInfo
 (
     PhoneId_e phoneId,
     std::vector<ThroughputInfo_t> &throughputInfoList
@@ -1993,17 +1993,17 @@ PA_SHARED pa_result_t GetLastThroughputInfo
  * @param [out] id         The unique ID assigned to this callback.
  *
  * @return
- *  - PA_OK              Successfully registered callback
- *  - PA_BAD_PARAMETER   Invalid parameters (e.g., null callback)
- *  - PA_FAULT           Failed to register with TelSDK
- *  - PA_NOT_IMPLEMENTED API is not implemented
+ *  - TAF_PA_OK              Successfully registered callback
+ *  - TAF_PA_BAD_PARAMETER   Invalid parameters (e.g., null callback)
+ *  - TAF_PA_FAULT           Failed to register with TelSDK
+ *  - TAF_PA_NOT_IMPLEMENTED API is not implemented
  *
  * @note When this is the first throughput callback:
  *       - Registers THROUGHPUT indication with TelSDK
  *       - Starts receiving periodic throughput events
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t AddThroughputEventsCallback
+TAF_PA_SHARED taf_pa_result_t AddThroughputEventsCallback
 (
     taf_pa_data_ThroughputEventsCb callBack,
     std::shared_ptr<void> context,
@@ -2019,17 +2019,17 @@ PA_SHARED pa_result_t AddThroughputEventsCallback
  * @param [in] id  The ID of the callback to remove.
  *
  * @return
- *  - PA_OK              Successfully removed callback
- *  - PA_NOT_FOUND       Callback with specified ID not found
- *  - PA_FAULT           Failed to deregister from TelSDK
- *  - PA_NOT_IMPLEMENTED API is not implemented
+ *  - TAF_PA_OK              Successfully removed callback
+ *  - TAF_PA_NOT_FOUND       Callback with specified ID not found
+ *  - TAF_PA_FAULT           Failed to deregister from TelSDK
+ *  - TAF_PA_NOT_IMPLEMENTED API is not implemented
  *
  * @note If this is the last throughput callback:
  *       - Deregisters THROUGHPUT indication from TelSDK
  *       - Stops receiving periodic throughput events
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t RemoveThroughputEventsCallback
+TAF_PA_SHARED taf_pa_result_t RemoveThroughputEventsCallback
 (
     uint16_t id
 );
@@ -2042,13 +2042,13 @@ PA_SHARED pa_result_t RemoveThroughputEventsCallback
  *
  * @param interfaceName The network interface name (e.g., "rmnet_data0").
  * @param mtu Output parameter for the MTU value in bytes.
- * @return PA_OK on success, error code otherwise.
- *         PA_BAD_PARAMETER if interfaceName is invalid or empty.
- *         PA_NOT_FOUND if the interface does not exist.
- *         PA_FAULT if MTU retrieval fails.
+ * @return TAF_PA_OK on success, error code otherwise.
+ *         TAF_PA_BAD_PARAMETER if interfaceName is invalid or empty.
+ *         TAF_PA_NOT_FOUND if the interface does not exist.
+ *         TAF_PA_FAULT if MTU retrieval fails.
  */
 //--------------------------------------------------------------------------------------------------
-PA_SHARED pa_result_t GetMtu
+TAF_PA_SHARED taf_pa_result_t GetMtu
 (
     const std::string& interfaceName,
     int32_t& mtu
