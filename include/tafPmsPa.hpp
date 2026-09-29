@@ -44,6 +44,7 @@ typedef enum
 taf_pa_pms_ServiceStatus_t;
 
 #define MAX_MACHINE_NAME 31
+#define MAX_MACHINE_NAME_BYTES (MAX_MACHINE_NAME + 1)
 #define PA_MAX_NAME_LEN MAX_MACHINE_NAME
 
 typedef enum
@@ -65,7 +66,7 @@ taf_pa_pms_PowerState_t;
 typedef struct
 {
     taf_pa_pms_PowerState_t state;
-    char                    machineName[MAX_MACHINE_NAME];
+    char                    machineName[MAX_MACHINE_NAME_BYTES];
 }
 taf_pa_pms_PowerUpdateEvent_t;
 
@@ -79,7 +80,7 @@ taf_pa_pms_MachineStatusEvent_t;
 typedef struct
 {
     taf_pa_pms_MachineStatusEvent_t machineEvent;
-    char                            machineName[MAX_MACHINE_NAME];
+    char                            machineName[MAX_MACHINE_NAME_BYTES];
 }
 taf_pa_pms_MachineUpdateEvent_t;
 
