@@ -1916,12 +1916,7 @@ taf_pa_result_t taf_pa_sim_GetIccid(taf_pa_sim_Id_t simId,
         TAF_PA_INFO("simPtr is nullptr");
         return TAF_PA_FAULT;
     }
-    if (simPtr->ICCID[0] != 0)
-    {
-        TAF_PA_INFO("simPtr->iccIdStr");
-        iccIdStr = simPtr->ICCID;
-        return TAF_PA_OK;
-    }
+
     if (!pa.subMgr)
     {
         TAF_PA_ERROR("Subscription manager is not initialized.");
@@ -1984,12 +1979,6 @@ taf_pa_result_t taf_pa_sim_GetSubscriberPhoneNumber(taf_pa_sim_Id_t simId,
     {
         TAF_PA_INFO("simPtr is nullptr");
         return TAF_PA_FAULT;
-    }
-    if (simPtr->phoneNumber[0] != 0)
-    {
-        TAF_PA_INFO("simPtr->iccIdStr");
-		phoneNumber = simPtr->phoneNumber;
-        return TAF_PA_OK;
     }
     if (!pa.subMgr)
     {
@@ -2057,12 +2046,6 @@ taf_pa_result_t taf_pa_sim_GetImsi(taf_pa_sim_Id_t simId,
     {
         TAF_PA_INFO("simPtr is nullptr");
         return TAF_PA_FAULT;
-    }
-    if (simPtr->IMSI[0] != 0)
-    {
-        TAF_PA_INFO("simPtr->IMSI");
-        imsi = simPtr->IMSI;
-        return TAF_PA_OK;
     }
     if (!pa.subMgr)
     {
