@@ -26,9 +26,13 @@
 // Aligned with the timeout used by taf_prop_mrc for every QMI call.
 #define SERVICE_TIMEOUT      30
 
-// FS_OPERATION_TIMEOUT: budget for each async IFsManager operation callback
-// (prepareForOta, otaCompleted, startAbSync).
-#define FS_OPERATION_TIMEOUT 30
+// ABSYNC_OPERATION_TIMEOUT: budget for the asynchronous startAbSync callback.
+#define ABSYNC_OPERATION_TIMEOUT 3600
+
+// OTA_OPERATION_TIMEOUT: budget for OTA preparation/completion callbacks.
+// OTA preparation includes partition integrity checks, which can take longer
+// than the generic FS operation timeout.
+#define OTA_OPERATION_TIMEOUT 3600
 
 using namespace std;
 using namespace telux::common;
@@ -116,13 +120,13 @@ class PlatformAdaptor
         //
         // Always acquired with try_lock(), never with a blocking lock: OTA and ABSync
         // drive one stateful FS/EFS backend so they must not interleave, but a caller
-        // must never queue behind another operation's FS_OPERATION_TIMEOUT wait -- that
-        // would stall it for up to 2 x FS_OPERATION_TIMEOUT. A request that arrives
+        // must never queue behind another operation's timeout wait -- that
+        // would stall it for up to two operation timeouts. A request that arrives
         // while another operation is in flight fails fast with PA_BUSY instead, so the
         // caller can retry or report "busy" immediately.
         //
         // Caveat: the no-interleave guarantee only holds while the SDK invokes the
-        // callback within FS_OPERATION_TIMEOUT. If it never does (e.g. a modem/backend
+        // callback within its operation timeout. If it never does (e.g. a modem/backend
         // hang -- already an abnormal condition), the wait times out, the lock is
         // released, and PA_FAULT is returned; a subsequent call can then start a new
         // operation while the abandoned one may still be in flight on the backend. Any
@@ -512,7 +516,7 @@ pa_result_t taf_pa_mrc_SetProcessStatus
 
                 // Check the synchronous dispatch status first: if the SDK rejected
                 // the call outright, the callback will never fire and waiting on
-                // the future would block for the full FS_OPERATION_TIMEOUT.
+                // the future would block for the full operation timeout.
                 if (paStatus != Status::SUCCESS)
                 {
                     PA_ERROR("Failed to dispatch OTA status %d, ret = %d.",
@@ -521,7 +525,7 @@ pa_result_t taf_pa_mrc_SetProcessStatus
                 }
 
                 auto otaFuture = promisePtr->get_future();
-                if (otaFuture.wait_for(chrono::seconds(FS_OPERATION_TIMEOUT))
+                if (otaFuture.wait_for(chrono::seconds(OTA_OPERATION_TIMEOUT))
                     == future_status::timeout)
                 {
                     PA_ERROR("Timeout waiting for OTA status %d callback.", status);
@@ -607,7 +611,7 @@ pa_result_t taf_pa_mrc_PerformABSync
 
         // Check the synchronous dispatch status first: if the SDK rejected
         // the call outright, the callback will never fire and waiting on
-        // the future would block for the full FS_OPERATION_TIMEOUT.
+        // the future would block for the full operation timeout.
         if (status != Status::SUCCESS)
         {
             PA_ERROR("Failed to dispatch ABSync, ret = %d.", (int)status);
@@ -615,7 +619,7 @@ pa_result_t taf_pa_mrc_PerformABSync
         }
 
         auto abFuture = promisePtr->get_future();
-        if (abFuture.wait_for(chrono::seconds(FS_OPERATION_TIMEOUT))
+        if (abFuture.wait_for(chrono::seconds(ABSYNC_OPERATION_TIMEOUT))
             == future_status::timeout)
         {
             PA_ERROR("Timeout waiting for ABSync callback.");
@@ -844,4 +848,3 @@ pa_result_t taf_pa_mrc_Deinit()
     PA_INFO("MRC platform adaptor deinitialization complete.");
     return 0;
 }
-
