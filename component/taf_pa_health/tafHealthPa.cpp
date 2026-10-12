@@ -11,7 +11,7 @@
 #include <sstream>
 #include <algorithm>
 #include <memory>
-#include <atomic>
+#include <utility>
 
 #include <telux/platform/PlatformFactory.hpp>
 #include <condition_variable>
@@ -35,7 +35,6 @@ static taf_pa_health_ModemStatusUpdateHandler_t ModemStatusUpdateHandlerPtr = nu
 static taf_pa_health_ModemOperatingModeUpdateHandler_t ModemOperationModeUpdateHandlerPtr = nullptr;
 static std::mutex healthHandlerMutex;
 std::shared_ptr<telux::platform::ISubsystemManager> subsystemMgr;
-static std::atomic<bool> g_health_initialized{false};
 
 class tafHmsListenerPA : public telux::platform::ISubsystemListener {
         public:
@@ -114,7 +113,6 @@ taf_pa_result_t taf_pa_health_PhoneInit(void)
             }
             TAF_PA_INFO("Phone Manager subsystem is ready.");
             modemStatus->phoneManager_ = tempManager;
-            g_health_initialized.store(true, std::memory_order_release);
         }
         else
         {
@@ -185,20 +183,27 @@ void tafHmsListenerPA:: onStateChange(telux::common::SubsystemInfo subsystemInfo
 taf_pa_result_t taf_pa_health_ModemNotificationInit(void)
 {
     telux::common::ServiceStatus serviceStatus;
-    std::promise<telux::common::ServiceStatus> p{};
+    auto prom = std::make_shared<std::promise<telux::common::ServiceStatus>>();
 
     auto &subsystemFact = telux::platform::SubsystemFactory::getInstance();
 
-    subsystemMgr = subsystemFact.getSubsystemManager(
-            [&p](telux::common::ServiceStatus srvStatus) {
-        p.set_value(srvStatus);
+    auto tempSubsystemMgr = subsystemFact.getSubsystemManager(
+            [prom](telux::common::ServiceStatus srvStatus) {
+        try
+        {
+            prom->set_value(srvStatus);
+        }
+        catch (const std::future_error &e)
+        {
+            TAF_PA_ERROR("Promise already satisfied: %s", e.what());
+        }
     });
-    if (!subsystemMgr) {
+    if (!tempSubsystemMgr) {
         TAF_PA_ERROR("Couldn't get the subsystemMgr");
         return TAF_PA_FAULT;
     }
 
-    auto future = p.get_future();
+    auto future = prom->get_future();
     if (future.wait_for(std::chrono::seconds(TAF_HMS_SUBSYSTEM_MANAGER_TIMEOUT))
             == std::future_status::ready)
     {
@@ -214,6 +219,7 @@ taf_pa_result_t taf_pa_health_ModemNotificationInit(void)
         TAF_PA_ERROR("Timeout waiting for serviceStatus callback");
         return TAF_PA_FAULT;
     }
+    subsystemMgr = std::move(tempSubsystemMgr);
     return TAF_PA_OK;
 }
 
@@ -305,6 +311,12 @@ taf_pa_result_t taf_pa_health_DeregModemListener(void)
 
 taf_pa_result_t taf_pa_health_RegModemListener(void)
 {
+    if (!subsystemMgr)
+    {
+        TAF_PA_ERROR("Subsystem manager not initialized");
+        return TAF_PA_FAULT;
+    }
+
     telux::common::ErrorCode ec;
     telux::common::SubsystemInfo subsysInfo{};
     std::vector<telux::common::SubsystemInfo> listOfSubsystems;
@@ -380,13 +392,6 @@ taf_pa_result_t taf_pa_health_Deinit(void)
 {
     TAF_PA_INFO("Starting health PA deinitialization...");
 
-    // Check if initialization was successful before proceeding with deinitialization
-    if (!g_health_initialized.load(std::memory_order_acquire))
-    {
-        TAF_PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
-        return TAF_PA_FAULT;
-    }
-
     // Step 1: Deregister modem listener from subsystem manager
     taf_pa_result_t result = taf_pa_health_DeregModemListener();
     if (result != TAF_PA_OK)
@@ -422,6 +427,5 @@ taf_pa_result_t taf_pa_health_Deinit(void)
     }
 
     TAF_PA_INFO("Health PA deinitialization complete.");
-    g_health_initialized.store(false, std::memory_order_release);
     return TAF_PA_OK;
 }
