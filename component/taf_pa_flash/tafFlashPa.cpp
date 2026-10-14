@@ -64,7 +64,7 @@ taf_pa_result_t taf_pa_flash_Init()
 
     taf_prop_result_t result = taf_prop_flash_Init();
     if (result == TAF_PROP_NOT_IMPLEMENTED)
-        TAF_PA_INFO("Flash proprietary platform adaptor is not implemented.");
+        TAF_PA_INFO("Flash prop platform adaptor is not implemented.");
 
     if (result == TAF_PROP_OK)
     {

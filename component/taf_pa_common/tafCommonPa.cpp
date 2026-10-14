@@ -15,6 +15,7 @@
 #include <syslog.h>
 #include <stdbool.h>
 #include <atomic>
+#include <mutex>
 #include <dlfcn.h>
 #include <dlt/dlt.h>
 
@@ -30,6 +31,9 @@ DltContext* DltCtxPtr = NULL;
 
 static taf_pa_common_LogLevel_t   gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
 static taf_pa_common_LogBackend_t gLogBackend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
+
+// Mutex to protect DltCtxPtr, gLogBackend, and gLogLevel from concurrent access
+static std::mutex gLogMutex;
 
 /* Function pointers resolved per-library so that both prop and noship
  * common libraries can be bound explicitly even though they export the
@@ -246,7 +250,10 @@ static taf_pa_common_LogLevel_t PropLevelToPaLevel(taf_prop_common_LogLevel_t le
 
 taf_pa_result_t taf_pa_common_LogSetlevel(taf_pa_common_LogLevel_t level)
 {
-    gLogLevel = level;
+    {
+        std::lock_guard<std::mutex> lock(gLogMutex);
+        gLogLevel = level;
+    }
 
     ResolveCommonLogApis();
 
@@ -280,23 +287,18 @@ taf_pa_result_t taf_pa_common_LogSetBackend(taf_pa_common_LogBackend_t backend)
     if (backend == TAF_PA_COMMON_LOG_BACKEND_AUTO)
         backend = DetectBackendFromEnv();
 
-    gLogBackend = backend;
+    {
+        std::lock_guard<std::mutex> lock(gLogMutex);
+        gLogBackend = backend;
+    }
     return TAF_PA_OK;
 }
 
-static inline taf_pa_common_LogBackend_t GetBackend(void)
-{
-    return gLogBackend;
-}
-
-static inline taf_pa_common_LogLevel_t GetLevel(void)
-{
-    return gLogLevel;
-}
-
+// Helper function to emit log without acquiring mutex.
+// PRECONDITION: Caller must already hold gLogMutex.
 static void EmitLog(taf_pa_common_LogLevel_t level, const char* msg)
 {
-    switch (GetBackend())
+    switch (gLogBackend)
     {
         case TAF_PA_COMMON_LOG_BACKEND_DLT:
             if (DltCtxPtr != NULL)
@@ -316,7 +318,8 @@ taf_pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
                               const char* file, const char* func, int line,
                               const char* fmt, ...)
 {
-    if (level < GetLevel())
+    std::lock_guard<std::mutex> lock(gLogMutex);
+    if (level < gLogLevel)
         return TAF_PA_OK;
 
     char buf[MAX_MSG_SIZE];
@@ -348,13 +351,14 @@ taf_pa_result_t taf_pa_common_LogMessage(taf_pa_common_LogLevel_t level,
 }
 
 static void taf_pa_common_LogVMessage(taf_pa_common_LogLevel_t level,
-                               const char* file,
-                               const char* func,
-                               int line,
-                               const char* fmt,
-                               va_list ap)
+                                const char* file,
+                                const char* func,
+                                int line,
+                                const char* fmt,
+                                va_list ap)
 {
-    if (level < GetLevel())
+    std::lock_guard<std::mutex> lock(gLogMutex);
+    if (level < gLogLevel)
         return;
 
     char buf[MAX_MSG_SIZE];
@@ -375,6 +379,7 @@ static void taf_pa_common_LogVMessage(taf_pa_common_LogLevel_t level,
 static void PaShared_SetLevel(taf_prop_common_LogLevel_t level)
 {
     /* Keep PA log level in sync, but DO NOT fan-out again from callback */
+    std::lock_guard<std::mutex> lock(gLogMutex);
     gLogLevel = PropLevelToPaLevel(level);
 }
 
@@ -414,13 +419,16 @@ taf_pa_result_t taf_pa_common_LogInit(
     if (backend == TAF_PA_COMMON_LOG_BACKEND_AUTO)
         backend = DetectBackendFromEnv();
 
-    gLogBackend = backend;
-    gLogLevel = initLogLevel;
-
-    // Initialize DLT context from the provided pointer
-    if (logCtxPtr != NULL)
     {
-        DltCtxPtr = (DltContext*)logCtxPtr;
+        std::lock_guard<std::mutex> lock(gLogMutex);
+        gLogBackend = backend;
+        gLogLevel = initLogLevel;
+
+        // Initialize DLT context from the provided pointer
+        if (logCtxPtr != NULL)
+        {
+            DltCtxPtr = (DltContext*)logCtxPtr;
+        }
     }
 
     /* Inject the SAME PA logging vtable into both common libraries explicitly. */
@@ -464,11 +472,14 @@ taf_pa_result_t taf_pa_common_LogDeinit(void)
     }
 
     // Clear DLT context pointer so no further DLT log attempts are made
-    DltCtxPtr = NULL;
+    {
+        std::lock_guard<std::mutex> lock(gLogMutex);
+        DltCtxPtr = NULL;
 
-    // Reset log backend and level to defaults
-    gLogBackend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
-    gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
+        // Reset log backend and level to defaults
+        gLogBackend = TAF_PA_COMMON_LOG_BACKEND_SYSLOG;
+        gLogLevel   = TAF_PA_COMMON_LOG_LEVEL_INFO;
+    }
 
     // Log before resetting the flag
     TAF_PA_INFO("Resetting Common PA initialization flag to false.");

@@ -299,7 +299,7 @@ taf_pa_result_t LocationPAController::MapStatus(telux::common::Status status){
             TAF_PA_DEBUG("Operation not allowed");
             return TAF_PA_NOT_PERMITTED;
         case telux::common::Status::NOTIMPLEMENTED:
-            TAF_PA_DEBUG("Feature not implemented");
+            TAF_PA_DEBUG("Feature not supported");
             return TAF_PA_NOT_IMPLEMENTED ;
         case telux::common::Status::CONNECTIONLOST:
             TAF_PA_DEBUG("Connection to Socket server lost");
@@ -447,7 +447,7 @@ void LocationPAController::PALocationClient::CleanUp()
 
 taf_pa_location_NavigationSolutionType_t LocationPAController::PALocationClient:: convertTeluxToNavigationSolutionType(telux::loc::NavigationSolution naviSolution)
 {
-    TAF_PA_INFO("convertTeluxToNavigationSolutionType naviSolution-> %lu",naviSolution.to_ulong());
+    TAF_PA_DEBUG("convertTeluxToNavigationSolutionType naviSolution-> %lu",naviSolution.to_ulong());
     taf_pa_location_NavigationSolutionType_t navSolution = (taf_pa_location_NavigationSolutionType_t) 0;
 
     // Check if naviSolution is empty/invalid
@@ -2907,7 +2907,6 @@ void LocationPAController::PALocationClient::onDetailedEngineLocationUpdate(cons
             LocationEngineInfodata->naviSolution = (taf_pa_location_NavigationSolutionType_t)convertTeluxToNavigationSolutionType(navSol);
             TAF_PA_DEBUG("LocationEngineInfodata->naviSolution :%lu",LocationEngineInfodata->naviSolution);
         } else {
-            TAF_PA_ERROR("Received invalid navigation solution from locationInfo, setting to 0");
             LocationEngineInfodata->naviSolution = (taf_pa_location_NavigationSolutionType_t)0;
         }
         TAF_PA_DEBUG("LocationEngineInfodata->naviSolution :%lu",LocationEngineInfodata->naviSolution);

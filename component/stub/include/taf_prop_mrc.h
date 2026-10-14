@@ -102,6 +102,13 @@ typedef struct
     taf_prop_mrc_EfsWriteClient_t   clientList[TAF_PROP_MRC_EFS_WRITE_TASKS];
 } taf_prop_mrc_EfsUsageStats_t;
 
+typedef struct
+{
+    uint32_t numFsCorrupt;
+    uint32_t numFsNotCorrupt;
+    uint32_t numFsRestore;
+} taf_prop_mrc_EfsCorruptionStats_t;
+
 typedef struct taf_prop_mrc_ProcessStatusHandler* taf_prop_mrc_ProcessStatusHandlerRef_t;
 
 typedef void (*taf_prop_mrc_ProcessStatusHdlrFunc_t)
@@ -180,6 +187,11 @@ TAF_PROP_SHARED taf_prop_result_t taf_prop_mrc_GetEfsUsageStats
 TAF_PROP_SHARED taf_prop_result_t taf_prop_mrc_AckSlotToggle
 (
     int32_t success
+);
+
+TAF_PROP_SHARED taf_prop_result_t taf_prop_mrc_GetEfsCorruptionStats
+(
+    taf_prop_mrc_EfsCorruptionStats_t* statsPtr
 );
 
 #ifdef __cplusplus

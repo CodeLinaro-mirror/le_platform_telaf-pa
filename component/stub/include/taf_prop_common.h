@@ -43,10 +43,10 @@ extern "C" {
  *   system-level failure. `strerror((int)*underlyingErrPtr)` can be used
  *   to obtain a human-readable description for debugging.
  *
- * ## Proprietary component failures (QMI, MRCD, QCMAP, …)
+ * ## Prop component failures (QMI, MRCD, QCMAP, …)
  *
- * When a proprietary subsystem API (e.g. QMI, MRCD, QCMAP) fails, the
- * implementation returns `TAF_PROP_FAULT`. The proprietary error codes from
+ * When a prop subsystem API (e.g. QMI, MRCD, QCMAP) fails, the
+ * implementation returns `TAF_PROP_FAULT`. The prop error codes from
  * these subsystems are intentionally NOT propagated to callers because they
  * are not part of the open-source interface and cannot be exposed to OSS
  * layers. `*underlyingErrPtr` is set to `TAF_PROP_UNDERLYING_ERR_NONE` in
@@ -80,8 +80,8 @@ typedef enum
     /**
      * General fault. Returned in two cases:
      *  1. A POSIX call failed with -EFAULT (-14).
-     *  2. A proprietary subsystem API (QMI, MRCD, QCMAP, NAD) failed.
-     *     Proprietary error codes are not propagated to callers because they
+     *  2. A prop subsystem API (QMI, MRCD, QCMAP, NAD) failed.
+     *     Prop error codes are not propagated to callers because they
      *     cannot be exposed to OSS layers; see internal logs for details.
      * In both cases *underlyingErrPtr is set to TAF_PROP_UNDERLYING_ERR_NONE.
      */
@@ -156,7 +156,7 @@ typedef enum
  *    `*underlyingErrPtr` is set to `TAF_PROP_UNDERLYING_ERR_NONE`
  *    (0xFFFFFFFFU) to indicate that no underlying error code is available to
  *    the caller.  This covers success (`TAF_PROP_OK`), all mapped POSIX error
- *    codes, and proprietary subsystem failures (QMI, MRCD, QCMAP, …) whose
+ *    codes, and prop subsystem failures (QMI, MRCD, QCMAP, …) whose
  *    error codes cannot be exposed to OSS layers.
  *
  *  - **NULL pointer:**

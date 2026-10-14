@@ -115,11 +115,11 @@ taf_pa_result_t taf_pa_net_Init()
 
     taf_prop_result_t result_ns = taf_prop_net_Init();
     if (result_ns == TAF_PROP_NOT_IMPLEMENTED)
-        TAF_PA_INFO("NET proprietary platform adaptor is not implemented.");
+        TAF_PA_INFO("NET prop platform adaptor is not implemented.");
     else if (result_ns == TAF_PROP_OK)
-        TAF_PA_INFO("NET proprietary platform adaptor initialization is done.");
+        TAF_PA_INFO("NET prop platform adaptor initialization is done.");
     else
-        TAF_PA_ERROR("NET proprietary platform adaptor initialization failed, ret: %d",
+        TAF_PA_ERROR("NET prop platform adaptor initialization failed, ret: %d",
                  static_cast<int>(result_ns));
 
     auto &pNetAdaptor = taf_NetAdaptor::getInstance();

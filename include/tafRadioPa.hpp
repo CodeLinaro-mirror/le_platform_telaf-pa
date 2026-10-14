@@ -24,12 +24,15 @@ extern "C" {
 #define TAF_PA_RADIO_PLMN_NETWORK_DESCRIPTION_MAX_BYTES 256
 #define TAF_PA_RADIO_LTE_BAND_GROUP_COUNT 4
 
+#define TAF_PA_STRENGTH_VALUE_UNKNOWN INVALID_SIGNAL_STRENGTH_VALUE
+
 #define TAF_PA_RADIO_BITMASK_RAT_GSM 0x1
 #define TAF_PA_RADIO_BITMASK_RAT_CDMA 0x2
 #define TAF_PA_RADIO_BITMASK_RAT_UMTS 0x4
 #define TAF_PA_RADIO_BITMASK_RAT_TDSCDMA 0x8
 #define TAF_PA_RADIO_BITMASK_RAT_LTE 0x10
 #define TAF_PA_RADIO_BITMASK_RAT_NR5G 0x20
+#define TAF_PA_RADIO_BITMASK_RAT_NB1_NTN 0x40
 typedef uint64_t taf_pa_radio_RatBitMask_t;
 
 #define TAF_PA_RADIO_BITMASK_SERVICE_DOMAIN_CS_ONLY 0x1
@@ -106,7 +109,8 @@ typedef enum
     TAF_PA_RADIO_RAT_UMTS = 3,
     TAF_PA_RADIO_RAT_TDSCDMA = 4,
     TAF_PA_RADIO_RAT_LTE = 5,
-    TAF_PA_RADIO_RAT_NR5G = 6
+    TAF_PA_RADIO_RAT_NR5G = 6,
+    TAF_PA_RADIO_RAT_NB1_NTN = 7
 } taf_pa_radio_Rat_t;
 
 typedef enum
@@ -163,7 +167,8 @@ typedef enum
     TAF_PA_RADIO_SIGNAL_METRIC_RSCP = 5,
     TAF_PA_RADIO_SIGNAL_METRIC_RSRP = 6,
     TAF_PA_RADIO_SIGNAL_METRIC_RSRQ = 7,
-    TAF_PA_RADIO_SIGNAL_METRIC_SNR = 8
+    TAF_PA_RADIO_SIGNAL_METRIC_SNR = 8,
+    TAF_PA_RADIO_SIGNAL_METRIC_SS = 9
 } taf_pa_radio_SignalMetric_t;
 
 typedef enum
@@ -226,6 +231,22 @@ typedef enum
     TAF_PA_RADIO_LTE_CS_CAPABILITY_LIMITED = 4,
     TAF_PA_RADIO_LTE_CS_CAPABILITY_BARRED = 5
 } taf_pa_radio_LteCsCapability_t;
+
+typedef enum
+{
+    TAF_PA_RADIO_SMS_DOMAIN_UNKNOWN = -1,
+    TAF_PA_RADIO_SMS_DOMAIN_NO_SMS = 0,
+    TAF_PA_RADIO_SMS_DOMAIN_SMS_ON_IMS = 1,
+    TAF_PA_RADIO_SMS_DOMAIN_SMS_ON_3GPP = 2
+} taf_pa_radio_SmsDomain_t;
+
+typedef enum
+{
+    TAF_PA_RADIO_NTN_SMS_STATUS_UNKNOWN = -1,
+    TAF_PA_RADIO_NTN_SMS_STATUS_NOT_AVAILABLE = 0,
+    TAF_PA_RADIO_NTN_SMS_STATUS_TEMP_FAILURE = 1,
+    TAF_PA_RADIO_NTN_SMS_STATUS_AVAILABLE = 2
+} taf_pa_radio_NtnSmsStatus_t;
 
 typedef enum
 {
@@ -391,6 +412,7 @@ typedef struct
 {
     int32_t rssi;
     int32_t ber;
+    int32_t ss;
 } taf_pa_radio_GsmSignalStrengthInfo_t;
 
 typedef struct
@@ -424,6 +446,7 @@ typedef struct
     int32_t rsrq;
     int32_t rsrp;
     int32_t snr;
+    int32_t ss;
 } taf_pa_radio_LteSignalStrengthInfo_t;
 
 typedef struct
@@ -431,7 +454,17 @@ typedef struct
     int32_t rsrq;
     int32_t rsrp;
     int32_t snr;
+    int32_t ss;
 } taf_pa_radio_Nr5gSignalStrengthInfo_t;
+
+typedef struct
+{
+    int32_t signalStrength;  // Signal strength [0, 31]
+    int32_t rsrp;            // Reference Signal Receive Power in dBm [-140, -44]
+    int32_t rsrq;            // Reference Signal Receive Quality in dB [-20, -3]
+    int32_t rssnr;           // Reference Signal SNR [-200, +300] (×0.1 for dB)
+    int32_t rssi;            // RSSI in dBm [-100, -25]
+} taf_pa_radio_Nb1NtnSignalStrengthInfo_t;
 
 typedef struct
 {
@@ -442,6 +475,7 @@ typedef struct
     taf_pa_radio_TdscdmaSignalStrengthInfo_t tdscdmaInfo;
     taf_pa_radio_LteSignalStrengthInfo_t lteInfo;
     taf_pa_radio_Nr5gSignalStrengthInfo_t nr5gInfo;
+    taf_pa_radio_Nb1NtnSignalStrengthInfo_t nb1NtnInfo;
 } taf_pa_radio_SignalStrengthInfo_t;
 
 typedef struct
@@ -538,6 +572,20 @@ typedef struct
 
 typedef struct
 {
+    uint8_t plmnIdValid;
+    taf_pa_radio_PlmnId_t plmnId;
+    uint32_t cid;
+    uint16_t tac;
+    uint32_t earfcn;
+    int32_t signalStrength;
+    int32_t rsrp;
+    int32_t rsrq;
+    int32_t rssnr;
+    int32_t rssi;
+} taf_pa_radio_Nb1NtnCellLocationInfo_t;
+
+typedef struct
+{
     taf_pa_radio_CellLocation_t location;
     taf_pa_radio_Rat_t rat;
     union
@@ -548,6 +596,7 @@ typedef struct
         taf_pa_radio_TdscdmaCellLocationInfo_t tdscdmaInfo;
         taf_pa_radio_LteCellLocationInfo_t lteInfo;
         taf_pa_radio_Nr5gCellLocationInfo_t nr5gInfo;
+        taf_pa_radio_Nb1NtnCellLocationInfo_t nb1NtnInfo;
     };
 } taf_pa_radio_CellLocationInfo_t;
 
@@ -679,6 +728,12 @@ typedef struct
     taf_pa_radio_LteCsCapability_t capability;
 } taf_pa_radio_LteCsCapabilityIndication_t;
 
+typedef struct
+{
+    taf_pa_radio_Rat_t rat;
+    taf_pa_radio_SmsDomain_t domain;
+    taf_pa_radio_NtnSmsStatus_t smsStatus;
+} taf_pa_radio_SmsCapabilityIndication_t;
 
 typedef struct
 {
@@ -759,6 +814,13 @@ typedef struct
 
 typedef struct
 {
+    taf_pa_radio_Rat_t rat;
+    taf_pa_radio_SmsDomain_t domain;
+    taf_pa_radio_NtnSmsStatus_t smsStatus;
+} taf_pa_radio_SmsCapability_t;
+
+typedef struct
+{
     uint8_t gsmSvcStatusValid;
     taf_pa_radio_RatServiceStatus_t gsmSvcStatus;
     uint8_t cdmaSvcStatusValid;
@@ -771,6 +833,8 @@ typedef struct
     taf_pa_radio_RatServiceStatus_t lteSvcStatus;
     uint8_t nr5gSvcStatusValid;
     taf_pa_radio_RatServiceStatus_t nr5gSvcStatus;
+    uint8_t nb1NtnSvcStatusValid;
+    taf_pa_radio_RatServiceStatus_t nb1NtnSvcStatus;
 } taf_pa_radio_RatSvcStatusIndication_t;
 
 typedef struct
@@ -807,6 +871,8 @@ typedef struct taf_pa_radio_OperatingModeChangeHandler* taf_pa_radio_OperatingMo
 typedef struct taf_pa_radio_ServiceDomainHandler* taf_pa_radio_ServiceDomainHandlerRef_t;
 
 typedef struct taf_pa_radio_LteCsCapabilityHandler* taf_pa_radio_LteCsCapabilityHandlerRef_t;
+
+typedef struct taf_pa_radio_SmsCapabilityHandler* taf_pa_radio_SmsCapabilityHandlerRef_t;
 
 typedef struct taf_pa_radio_ImsServiceInfoHandler* taf_pa_radio_ImsServiceInfoHandlerRef_t;
 
@@ -889,6 +955,13 @@ typedef void (*taf_pa_radio_LteCsCapabilityHdlrFunc_t)
 (
     uint32_t instance,
     taf_pa_radio_LteCsCapabilityIndication_t indication,
+    void* contextPtr
+);
+
+typedef void (*taf_pa_radio_SmsCapabilityHdlrFunc_t)
+(
+    uint32_t instance,
+    taf_pa_radio_SmsCapabilityIndication_t indication,
     void* contextPtr
 );
 
@@ -1316,6 +1389,21 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddNrIconChangeHandler
     taf_pa_radio_NrIconChangeHandlerRef_t* handlerRefPtr
 );
 
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_AddSmsCapabilityHandler
+(
+    uint32_t instance,
+    taf_pa_radio_SmsCapabilityHdlrFunc_t handlerFuncPtr,
+    void* contextPtr,
+    taf_pa_radio_SmsCapabilityHandlerRef_t* handlerRefPtr
+);
+
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_RemoveSmsCapabilityHandler
+(
+    uint32_t instance,
+    taf_pa_radio_SmsCapabilityHandlerRef_t handlerRefPtr
+);
+
+
 TAF_PA_SHARED taf_pa_result_t taf_pa_radio_RegisterIndication
 (
     uint32_t instance,
@@ -1409,6 +1497,12 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetSysInfoIndLimit
 (
     uint32_t instance,
     taf_pa_radio_SysInfoIndLimitMask_t *limitMaskPtr
+);
+
+TAF_PA_SHARED taf_pa_result_t taf_pa_radio_GetSmsCapability
+(
+    uint32_t instance,
+    taf_pa_radio_SmsCapability_t* capabilityPtr
 );
 
 #ifdef __cplusplus

@@ -573,6 +573,13 @@ using taf_pa_ecall_HlapTimerCb = std::function<void(
     std::any context
 )>;
 
+// ERA-GLONASS post-test registration timer callback type.
+using taf_pa_ecall_PostTestRegistrationTimerCb = std::function<void(
+    taf_pa_result_t errorCode,
+    uint32_t duration,
+    std::any context
+)>;
+
 // Get mode callback type.
 using taf_pa_ecall_GetModeCb = std::function<void(
     taf_pa_ecall_mode_t mode,
@@ -722,6 +729,15 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_ecall_MakeECall(
     std::any context
 );
 
+// Initiates an eCall with dial number and raw MSD PDU.
+TAF_PA_SHARED taf_pa_result_t taf_pa_ecall_MakeECall(
+    int phoneId,
+    const std::string& dialNumber,
+    const std::vector<uint8_t>& msdPdu,
+    taf_pa_ecall_MakeEcallCb callback,
+    std::any context
+);
+
 // Updates MSD data during an active eCall.
 TAF_PA_SHARED taf_pa_result_t taf_pa_ecall_UpdateMsd(
     uint8_t phoneId,
@@ -820,6 +836,21 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_ecall_Answer(
 // Registers event listener.
 TAF_PA_SHARED taf_pa_result_t taf_pa_ecall_RegisterListener(
     const taf_pa_ecall_event_listener_t* eventListener,
+    std::any context
+);
+
+// Updates ERA-GLONASS post-test registration timer.
+TAF_PA_SHARED taf_pa_result_t taf_pa_ecall_UpdateECallPostTestRegistrationTimer(
+    int phoneId,
+    uint32_t duration,
+    taf_pa_ecall_CommandCb callback,
+    std::any context
+);
+
+// Gets ERA-GLONASS post-test registration timer value.
+TAF_PA_SHARED taf_pa_result_t taf_pa_ecall_GetECallPostTestRegistrationTimer(
+    int phoneId,
+    taf_pa_ecall_PostTestRegistrationTimerCb callback,
     std::any context
 );
 

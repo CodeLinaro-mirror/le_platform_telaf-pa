@@ -329,6 +329,18 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_sim_RefreshOk
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * Check if NTN profile is active.
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t taf_pa_sim_IsNtnProfileActive
+(
+    taf_pa_sim_Id_t simId,
+    bool* isActive
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
  *  PA refresh complete.
  */
 //--------------------------------------------------------------------------------------------------
@@ -844,6 +856,29 @@ TAF_PA_SHARED TAF_PA_WEAK taf_pa_result_t taf_pa_sim_GetEID
     taf_pa_sim_Id_t simId,
     std::string&  eidStr
 );
+
+/**
+ * Get physical slot count.
+ *
+ * Returns the number of physical SIM slots present on the device, as reported by the
+ * IMultiSimListener::onSlotStatusChanged() callback (slotStatus map size).
+ * Unlike taf_pa_sim_getSlotCount() which returns active/logical slot count,
+ * this API returns the total number of physical hardware SIM slots.
+ *
+ * @param[out] count  Pointer to store the physical slot count.
+ *
+ * @return
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_FAULT on failure
+ *  - TAF_PA_NOT_IMPLEMENTED if not implemented
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED  TAF_PA_WEAK taf_pa_result_t taf_pa_sim_GetPhysicalSlotCount
+(
+    int* count
+);
+
 #ifdef __cplusplus
 }
 #endif

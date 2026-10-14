@@ -116,3 +116,13 @@ taf_prop_result_t taf_prop_mrc_SetTimerPeriod
 
     return TAF_PROP_NOT_IMPLEMENTED;
 }
+
+taf_prop_result_t taf_prop_mrc_GetEfsCorruptionStats
+(
+    taf_prop_mrc_EfsCorruptionStats_t* statsPtr
+)
+{
+    TAF_PROP_INFO("Function is not implemented in stub PA.");
+    (void)statsPtr;
+    return TAF_PROP_NOT_IMPLEMENTED;
+}
