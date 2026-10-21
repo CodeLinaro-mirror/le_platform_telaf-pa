@@ -617,7 +617,7 @@ taf_pa_result_t taf_pa_net_EnableSocksCmdASync(taf_pa_socks_CallCb callback,void
 {
 
     TAF_PA_INFO("Actual taf_pa_net_EnableSocksCmdASync implementation");
-    PA_UNUSED(contextPtr);
+    TAF_PA_UNUSED(contextPtr);
 
     auto &pSocksAdaptor = taf_SocksAdaptor::getInstance();
     auto socksMgr = pSocksAdaptor.getSocksManager();
@@ -659,7 +659,7 @@ taf_pa_result_t taf_pa_net_DisableSocksCmdASync(taf_pa_socks_CallCb callback,voi
 {
 
     TAF_PA_INFO("Actual taf_pa_net_DisableSocksCmdASync implementation");
-    PA_UNUSED(contextPtr);
+    TAF_PA_UNUSED(contextPtr);
 
     auto &pSocksAdaptor = taf_SocksAdaptor::getInstance();
     auto socksMgr = pSocksAdaptor.getSocksManager();

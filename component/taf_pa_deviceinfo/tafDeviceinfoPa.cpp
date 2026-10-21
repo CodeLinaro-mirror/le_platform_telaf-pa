@@ -11,6 +11,7 @@
 
 #include <telux/platform/PlatformFactory.hpp>
 #include "tafCommonPa.h"
+#include "tafInternalCommonPa.h"
 #include "tafDeviceinfoPa.hpp"
 #include "tafInternalCommonPa.h"
 

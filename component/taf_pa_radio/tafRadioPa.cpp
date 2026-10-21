@@ -19,6 +19,7 @@
 #include <telux/data/DataFactory.hpp>
 #include <telux/data/ServingSystemManager.hpp>
 
+#include "tafInternalCommonPa.h"
 #include "tafRadioPa.hpp"
 #include "tafInternalCommonPa.h"
 #include "taf_prop_radio.h"
@@ -707,6 +708,11 @@ class Listener
                 (
                     telux::common::ServiceStatus status
                 ) override;
+
+                void onSmsCapabilityChanged
+                (
+                    tel::SmsCapability smsCapability
+                ) override;
         };
 
         class ImsServingSystemListener :
@@ -836,6 +842,7 @@ typedef struct
     Handler_t imsPdpError;
     Handler_t cellInfoChange;
     Handler_t nrIconChange;
+    Handler_t smsCapability;
 } Indicator_t;
 
 typedef struct
@@ -1150,6 +1157,9 @@ taf_prop_radio_RatBitMask_t Utility::Convert::Rat
     if (bitmask & TAF_PA_RADIO_BITMASK_RAT_NR5G)
         result |= TAF_PROP_RADIO_BITMASK_RAT_NR5G;
 
+    if (bitmask & TAF_PA_RADIO_BITMASK_RAT_NB1_NTN)
+        result |= TAF_PROP_RADIO_BITMASK_RAT_NB1_NTN;
+
     return result;
 }
 
@@ -1177,6 +1187,9 @@ taf_pa_radio_RatBitMask_t Utility::Convert::TelRatPreferenceToRat
 
     if (bitmask[tel::PREF_NR5G])
         result |= TAF_PROP_RADIO_BITMASK_RAT_NR5G;
+
+    if (bitmask[tel::PREF_NB1_NTN])
+        result |= TAF_PROP_RADIO_BITMASK_RAT_NB1_NTN;
 
     return result;
 }
@@ -1220,6 +1233,9 @@ taf_pa_result_t Utility::Convert::Rat
                 capability.capabilities[(uint16_t)tel::RATCapability::NR5GSA])
                 bitmask |= TAF_PA_RADIO_BITMASK_RAT_NR5G;
 
+            if (capability.capabilities[(uint16_t)tel::RATCapability::NB1_NTN])
+                bitmask |= TAF_PA_RADIO_BITMASK_RAT_NB1_NTN;
+
             *bitmaskPtr = bitmask;
 
             return TAF_PA_OK;
@@ -1247,6 +1263,8 @@ tel::RatMask Utility::Convert::RatToTelRat
 
     if (bitmask & TAF_PA_RADIO_BITMASK_RAT_NR5G)
         result.set(tel::RatType::NR5G);
+
+    // Note: tel::RatType does not include NB1_NTN, handled via other telux enums
 
     return result;
 }
@@ -1279,6 +1297,9 @@ tel::RatPreference Utility::Convert::RatToTelRatPreference
     if (bitmask & TAF_PA_RADIO_BITMASK_RAT_NR5G)
         result.set(tel::PREF_NR5G);
 
+    if (bitmask & TAF_PA_RADIO_BITMASK_RAT_NB1_NTN)
+        result.set(tel::PREF_NB1_NTN);
+
     return result;
 }
 
@@ -1300,6 +1321,8 @@ taf_pa_radio_RatBitMask_t Utility::Convert::Rat
 
     if (bitmask[tel::RatType::NR5G])
         result |= TAF_PA_RADIO_BITMASK_RAT_NR5G;
+
+    // Note: tel::RatType does not include NB1_NTN, handled via other telux enums
 
     return result;
 }
@@ -1323,6 +1346,8 @@ taf_prop_radio_Rat_t Utility::Convert::Rat
             return TAF_PROP_RADIO_RAT_LTE;
         case TAF_PA_RADIO_RAT_NR5G:
             return TAF_PROP_RADIO_RAT_NR5G;
+        case TAF_PA_RADIO_RAT_NB1_NTN:
+            return TAF_PROP_RADIO_RAT_NB1_NTN;
         default:
             TAF_PA_DEBUG("Unknown RAT.");
     }
@@ -1349,6 +1374,8 @@ taf_pa_radio_Rat_t Utility::Convert::Rat
             return TAF_PA_RADIO_RAT_LTE;
         case TAF_PROP_RADIO_RAT_NR5G:
             return TAF_PA_RADIO_RAT_NR5G;
+        case TAF_PROP_RADIO_RAT_NB1_NTN:
+            return TAF_PA_RADIO_RAT_NB1_NTN;
         default:
             TAF_PA_DEBUG("Unknown RAT.");
     }
@@ -1388,6 +1415,8 @@ taf_pa_radio_Rat_t Utility::Convert::Rat
             return TAF_PA_RADIO_RAT_LTE;
         case tel::RadioTechnology::RADIO_TECH_NR5G:
             return TAF_PA_RADIO_RAT_NR5G;
+        case tel::RadioTechnology::RADIO_TECH_NB1_NTN:
+            return TAF_PA_RADIO_RAT_NB1_NTN;
         default:
             TAF_PA_DEBUG("Unknown RAT %d.", rat);
     }
@@ -1412,6 +1441,8 @@ tel::RadioTechnology Utility::Convert::RatToTelRat
             return tel::RadioTechnology::RADIO_TECH_LTE;
         case TAF_PA_RADIO_RAT_NR5G:
             return tel::RadioTechnology::RADIO_TECH_NR5G;
+        case TAF_PA_RADIO_RAT_NB1_NTN:
+            return tel::RadioTechnology::RADIO_TECH_NB1_NTN;
         default:
             TAF_PA_DEBUG("Unknown RAT %d.", rat);
     }
@@ -1628,6 +1659,11 @@ taf_pa_radio_SignalStrengthLevel_t Utility::Convert::SignalStrengthLevel
                 return Utility::Convert::SignalStrengthLevel(
                     strengthPtr->getNr5gSignalStrength()->getLevel());
             break;
+        case TAF_PA_RADIO_RAT_NB1_NTN:
+            if (strengthPtr->getNb1NtnSignalStrength() != nullptr)
+                return Utility::Convert::SignalStrengthLevel(
+                    strengthPtr->getNb1NtnSignalStrength()->getLevel());
+            break;
         default:
             TAF_PA_DEBUG("Unknown RAT %d.", rat);
     }
@@ -1723,6 +1759,18 @@ void Utility::Convert::SignalStrengthInfo
         infoPtr->nr5gInfo.rsrp = strengthPtr->getNr5gSignalStrength()->getDbm();
         infoPtr->nr5gInfo.snr = strengthPtr->getNr5gSignalStrength()->getReferenceSignalSnr();
         infoPtr->nr5gInfo.ss = strengthPtr->getNr5gSignalStrength()->getNr5gSignalStrength();
+    }
+
+    if (strengthPtr->getNb1NtnSignalStrength() != nullptr &&
+        strengthPtr->getNb1NtnSignalStrength()->getSignalStrength() != INVALID_SIGNAL_STRENGTH_VALUE)
+    {
+        infoPtr->bitmask |= TAF_PA_RADIO_BITMASK_RAT_NB1_NTN;
+        infoPtr->nb1NtnInfo.signalStrength =
+                                 strengthPtr->getNb1NtnSignalStrength()->getSignalStrength();
+        infoPtr->nb1NtnInfo.rsrp = strengthPtr->getNb1NtnSignalStrength()->getDbm();
+        infoPtr->nb1NtnInfo.rsrq = strengthPtr->getNb1NtnSignalStrength()->getRsrq();
+        infoPtr->nb1NtnInfo.rssnr = strengthPtr->getNb1NtnSignalStrength()->getRssnr();
+        infoPtr->nb1NtnInfo.rssi = strengthPtr->getNb1NtnSignalStrength()->getRssi();
     }
 }
 
@@ -3126,6 +3174,67 @@ void Utility::Convert::CellInfoList
                     }
                     break;
                 }
+                case tel::CellType::NB1_NTN:
+                {
+                    auto cellInfoPtr = static_pointer_cast<tel::Nb1NtnCellInfo>(infoPtr);
+                    if (cellInfoPtr != nullptr)
+                    {
+                        listInfoPtr->cellLocInfo[infoCount].rat = TAF_PA_RADIO_RAT_NB1_NTN;
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.cid =
+                            cellInfoPtr->getCellIdentity().getIdentity();
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.tac =
+                            cellInfoPtr->getCellIdentity().getTrackingAreaCode();
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.earfcn =
+                            cellInfoPtr->getCellIdentity().getEarfcn();
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.signalStrength =
+                            cellInfoPtr->getSignalStrengthInfo().getSignalStrength();
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.rsrp =
+                            cellInfoPtr->getSignalStrengthInfo().getDbm();
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.rsrq =
+                            cellInfoPtr->getSignalStrengthInfo().getRsrq();
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.rssnr =
+                            cellInfoPtr->getSignalStrengthInfo().getRssnr();
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.rssi =
+                            cellInfoPtr->getSignalStrengthInfo().getRssi();
+
+                        listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.plmnIdValid = 0;
+                        if (!cellInfoPtr->getCellIdentity().getMobileCountryCode().empty() &&
+                            !cellInfoPtr->getCellIdentity().getMobileNetworkCode().empty())
+                        {
+                            taf_pa_result_t result = Utility::Convert::StringToU16(
+                                cellInfoPtr->getCellIdentity().getMobileCountryCode(),
+                                &listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.plmnId.mcc);
+                            if (result != 0)
+                            {
+                                TAF_PA_ERROR("Failed to convert MCC %s.",
+                                    cellInfoPtr->getCellIdentity().getMobileCountryCode().c_str());
+                                listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.plmnIdValid = 0;
+                            }
+                            result = Utility::Convert::StringToU16(
+                                cellInfoPtr->getCellIdentity().getMobileNetworkCode(),
+                                &listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.plmnId.mnc);
+                            if (result != 0)
+                            {
+                                TAF_PA_ERROR("Failed to convert MNC %s.",
+                                    cellInfoPtr->getCellIdentity().getMobileNetworkCode().c_str());
+                                listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.plmnIdValid = 0;
+                            }
+                            listInfoPtr->cellLocInfo[infoCount].nb1NtnInfo.plmnIdValid = 1;
+                        }
+
+                        if (cellInfoPtr->isRegistered())
+                        {
+                            listInfoPtr->cellLocInfo[infoCount].location =
+                                TAF_PA_RADIO_CELL_LOCATION_SERVING;
+                        }
+                        else
+                            listInfoPtr->cellLocInfo[infoCount].location =
+                                TAF_PA_RADIO_CELL_LOCATION_NEIGHBOR;
+
+                        infoCount++;
+                    }
+                    break;
+                }
                 default:
                     break;
             }
@@ -3923,6 +4032,58 @@ void Listener::TelephonyServingSystemListener::onServiceStatusChange
     }
 }
 
+void Listener::TelephonyServingSystemListener::onSmsCapabilityChanged
+(
+    tel::SmsCapability smsCapability
+)
+{
+    auto& pa = PlatformAdaptor::GetInstance();
+
+    taf_pa_radio_SmsCapabilityHdlrFunc_t handlerFunc =
+        (taf_pa_radio_SmsCapabilityHdlrFunc_t)pa.indicators.smsCapability.handlerFuncPtr;
+    if (handlerFunc != nullptr)
+    {
+        taf_pa_radio_SmsCapabilityIndication_t indication;
+        indication.rat = Utility::Convert::Rat(smsCapability.rat);
+
+        // Convert SMS domain
+        switch (smsCapability.domain)
+        {
+            case tel::SmsDomain::NO_SMS:
+                indication.domain = TAF_PA_RADIO_SMS_DOMAIN_NO_SMS;
+                break;
+            case tel::SmsDomain::SMS_ON_IMS:
+                indication.domain = TAF_PA_RADIO_SMS_DOMAIN_SMS_ON_IMS;
+                break;
+            case tel::SmsDomain::SMS_ON_3GPP:
+                indication.domain = TAF_PA_RADIO_SMS_DOMAIN_SMS_ON_3GPP;
+                break;
+            default:
+                indication.domain = TAF_PA_RADIO_SMS_DOMAIN_UNKNOWN;
+                break;
+        }
+
+        // Convert NTN SMS status
+        switch (smsCapability.smsStatus)
+        {
+            case tel::NtnSmsStatus::NOT_AVAILABLE:
+                indication.smsStatus = TAF_PA_RADIO_NTN_SMS_STATUS_NOT_AVAILABLE;
+                break;
+            case tel::NtnSmsStatus::TEMP_FAILURE:
+                indication.smsStatus = TAF_PA_RADIO_NTN_SMS_STATUS_TEMP_FAILURE;
+                break;
+            case tel::NtnSmsStatus::AVAILABLE:
+                indication.smsStatus = TAF_PA_RADIO_NTN_SMS_STATUS_AVAILABLE;
+                break;
+            default:
+                indication.smsStatus = TAF_PA_RADIO_NTN_SMS_STATUS_UNKNOWN;
+                break;
+        }
+
+        handlerFunc(instance, indication, pa.indicators.smsCapability.contextPtr);
+    }
+}
+
 void Listener::PhoneListener::onVoiceServiceStateChanged
 (
     int phone,
@@ -4304,7 +4465,12 @@ static void RatSvcStatusHandler
             paIndication.nr5gSvcStatus = Utility::Convert::RatServiceStatus(
                 indication.nr5gSvcStatus);
 
-        handlerFunc(instance, paIndication, ctx);
+        paIndication.nb1NtnSvcStatusValid = indication.nb1NtnSvcStatusValid;
+        if (paIndication.nb1NtnSvcStatusValid)
+            paIndication.nb1NtnSvcStatus = Utility::Convert::RatServiceStatus(
+                indication.nb1NtnSvcStatus);
+
+        handlerFunc(instance, paIndication, pa.indicators.ratSvcStatus.contextPtr);
     }
 }
 
@@ -7130,6 +7296,37 @@ taf_prop_radio_DisableIndicationMode_t convertDisableIndicationModetoProp
 
 }
 
+taf_pa_result_t taf_pa_radio_AddSmsCapabilityHandler
+(
+    uint32_t instance,
+    taf_pa_radio_SmsCapabilityHdlrFunc_t handlerFuncPtr,
+    void* contextPtr,
+    taf_pa_radio_SmsCapabilityHandlerRef_t* handlerRefPtr
+)
+{
+    auto& pa = PlatformAdaptor::GetInstance();
+
+    pa.indicators.smsCapability.instance = instance;
+    pa.indicators.smsCapability.handlerFuncPtr = (void*)handlerFuncPtr;
+    pa.indicators.smsCapability.contextPtr = contextPtr;
+
+    return TAF_PA_OK;
+}
+
+taf_pa_result_t taf_pa_radio_RemoveSmsCapabilityHandler
+(
+    uint32_t instance,
+    taf_pa_radio_SmsCapabilityHandlerRef_t handlerRefPtr
+)
+{
+    auto& pa = PlatformAdaptor::GetInstance();
+
+    pa.indicators.smsCapability.handlerFuncPtr = nullptr;
+    pa.indicators.smsCapability.contextPtr = nullptr;
+
+    return TAF_PA_OK;
+}
+
 taf_pa_result_t taf_pa_radio_RegisterIndication
 (
     uint32_t instance,
@@ -7217,7 +7414,7 @@ taf_pa_result_t taf_pa_radio_PerformPciNetworkScan
     }
 
     auto& pa = PlatformAdaptor::GetInstance();
-
+    // The proprietary scan is synchronous, so only its response can be rejected after shutdown.
     uint64_t generation = pa.lifecycleGeneration.load(std::memory_order_acquire);
     if (pa.isShuttingDown.load(std::memory_order_acquire) ||
         !pa.gRadioPaInitialized.load(std::memory_order_acquire))
@@ -7587,6 +7784,80 @@ taf_pa_result_t taf_pa_radio_GetSysInfoIndLimit
 
     if (limitMaskPtr != nullptr)
         *limitMaskPtr = static_cast<taf_pa_radio_SysInfoIndLimitMask_t>(propLimitMask);
+
+    return TAF_PA_OK;
+}
+
+taf_pa_result_t taf_pa_radio_GetSmsCapability
+(
+    uint32_t instance,
+    taf_pa_radio_SmsCapability_t* capabilityPtr
+)
+{
+    if (capabilityPtr == nullptr)
+    {
+        TAF_PA_ERROR("capabilityPtr is nullptr.");
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    if (instance >= MAX_INSTANCE)
+    {
+        TAF_PA_ERROR("Invalid instance %d.", instance);
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    auto& pa = PlatformAdaptor::GetInstance();
+    if (pa.managers.telephonyServingSystems[instance] == nullptr)
+    {
+        TAF_PA_ERROR("Telephony serving system manager %d is nullptr.", instance);
+        return TAF_PA_FAULT;
+    }
+
+    tel::SmsCapability smsCapability;
+    auto result =
+         pa.managers.telephonyServingSystems[instance]->getSmsCapabilityOverNetwork(smsCapability);
+    if (result != common::Status::SUCCESS)
+    {
+        TAF_PA_ERROR("Failed to get SMS capability with telephony serving system mgr %d.", instance);
+        return TAF_PA_FAULT;
+    }
+
+    // Convert RAT
+    capabilityPtr->rat = Utility::Convert::Rat(smsCapability.rat);
+
+    // Convert SMS domain
+    switch (smsCapability.domain)
+    {
+        case tel::SmsDomain::NO_SMS:
+            capabilityPtr->domain = TAF_PA_RADIO_SMS_DOMAIN_NO_SMS;
+            break;
+        case tel::SmsDomain::SMS_ON_IMS:
+            capabilityPtr->domain = TAF_PA_RADIO_SMS_DOMAIN_SMS_ON_IMS;
+            break;
+        case tel::SmsDomain::SMS_ON_3GPP:
+            capabilityPtr->domain = TAF_PA_RADIO_SMS_DOMAIN_SMS_ON_3GPP;
+            break;
+        default:
+            capabilityPtr->domain = TAF_PA_RADIO_SMS_DOMAIN_UNKNOWN;
+            break;
+    }
+
+    // Convert NTN SMS status
+    switch (smsCapability.smsStatus)
+    {
+        case tel::NtnSmsStatus::NOT_AVAILABLE:
+            capabilityPtr->smsStatus = TAF_PA_RADIO_NTN_SMS_STATUS_NOT_AVAILABLE;
+            break;
+        case tel::NtnSmsStatus::TEMP_FAILURE:
+            capabilityPtr->smsStatus = TAF_PA_RADIO_NTN_SMS_STATUS_TEMP_FAILURE;
+            break;
+        case tel::NtnSmsStatus::AVAILABLE:
+            capabilityPtr->smsStatus = TAF_PA_RADIO_NTN_SMS_STATUS_AVAILABLE;
+            break;
+        default:
+            capabilityPtr->smsStatus = TAF_PA_RADIO_NTN_SMS_STATUS_UNKNOWN;
+            break;
+    }
 
     return TAF_PA_OK;
 }
