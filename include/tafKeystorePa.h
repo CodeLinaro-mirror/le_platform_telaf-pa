@@ -8,6 +8,10 @@
 
 #include "tafCommonPa.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Max number of shared applications for a key.
@@ -775,5 +779,9 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_ks_RegKeySharingHandler
 (
     taf_pa_ks_KeySharingHandler_t handlerFunc
 );
+
+#ifdef __cplusplus
+}
+#endif // extern "C"
 
 #endif // TAF_KEYSTORE_PA_H

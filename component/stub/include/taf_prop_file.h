@@ -19,6 +19,10 @@
 #include <sys/stat.h>
 #include "taf_prop_common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //--------------------------------------------------------------------------------------------------
 /**
  * RFS Error types
@@ -219,5 +223,9 @@ TAF_PROP_SHARED taf_prop_result_t taf_prop_file_Rename
     const char *destPath,
     uint32_t* underlyingErrPtr
 );
+
+#ifdef __cplusplus
+}
+#endif // extern "C"
 
 #endif // TAF_PROP_FILE_H

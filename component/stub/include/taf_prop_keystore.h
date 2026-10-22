@@ -18,6 +18,10 @@
 #include <stddef.h>
 #include "taf_prop_common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ===== Constants ===== */
 
 #define TAF_PROP_KS_MAX_SHARED_APPS    12
@@ -614,5 +618,9 @@ TAF_PROP_SHARED taf_prop_result_t taf_prop_ks_RegKeySharingHandler
 (
     taf_prop_ks_KeySharingHandler_t handlerFunc
 );
+
+#ifdef __cplusplus
+}
+#endif // extern C
 
 #endif // TAF_PROP_KEYSTORAGE_H

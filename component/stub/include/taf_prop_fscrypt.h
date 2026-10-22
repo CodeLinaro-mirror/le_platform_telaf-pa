@@ -18,6 +18,10 @@
 #include <stddef.h>
 #include "taf_prop_common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Opaque key-file reference — mirrors the definition in tafKeystorePa.h without
  * pulling in the full OSS PA header. The guard prevents redefinition if a
  * translation unit also includes tafKeystorePa.h directly. */
@@ -88,5 +92,9 @@ TAF_PROP_SHARED taf_prop_result_t taf_prop_fsc_Component_Init
 (
     void
 );
+
+#ifdef __cplusplus
+}
+#endif // extern C
 
 #endif // TAF_PROP_FSCRYPT_H

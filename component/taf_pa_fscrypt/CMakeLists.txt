@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(taf_pa_fscrypt LANGUAGES C)
+project(taf_pa_fscrypt LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(LIBRARY_VERSION "1.0.0")
 set(LIBRARY_SOVERSION "1")
@@ -10,7 +13,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/keyStore)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-add_library(${TARGET_NAME} SHARED tafFscryptPa.c)
+add_library(${TARGET_NAME} SHARED tafFscryptPa.cpp)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     VERSION ${LIBRARY_VERSION}
