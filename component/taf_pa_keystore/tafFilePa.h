@@ -6,7 +6,7 @@
 #ifndef TAF_PA_FILE_H
 #define TAF_PA_FILE_H
 
-#include "tafCommonPa.h"
+#include "taf_prop_common.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -106,11 +106,11 @@ typedef void (*taf_pa_file_ErrorHandler_t)
  *       synchronization if a second concurrent caller is ever added.
  *
  * @return
- *      TAF_PA_OK on success.
- *      TAF_PA_FAULT if the backup storage cannot be created.
+ *      TAF_PROP_OK on success.
+ *      TAF_PROP_FAULT if the backup storage cannot be created.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_file_Init
+taf_prop_result_t taf_pa_file_Init
 (
     bool enableBackup,                      ///< [IN] Enable the backup/restore feature.
     taf_pa_file_ErrorHandler_t handlerFunc  ///< [IN] Error handler, NULL to unregister.
@@ -125,13 +125,13 @@ taf_pa_result_t taf_pa_file_Init
  * in its own directory.
  *
  * @return
- *      TAF_PA_OK on success.
- *      TAF_PA_BAD_PARAMETER if the path is invalid or cannot be created.
- *      TAF_PA_BUSY if the path exists but is not a directory.
- *      TAF_PA_OVERFLOW if the path is too long.
+ *      TAF_PROP_OK on success.
+ *      TAF_PROP_BAD_PARAMETER if the path is invalid or cannot be created.
+ *      TAF_PROP_BUSY if the path exists but is not a directory.
+ *      TAF_PROP_OVERFLOW if the path is too long.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_file_SetBackupStorage
+taf_prop_result_t taf_pa_file_SetBackupStorage
 (
     const char* pathPtr       ///< [IN] Path to the backup storage directory.
 );
@@ -141,11 +141,11 @@ taf_pa_result_t taf_pa_file_SetBackupStorage
  * Set the backup storage capacity limits.
  *
  * @return
- *      TAF_PA_OK on success.
- *      TAF_PA_BAD_PARAMETER if one of the limits is zero.
+ *      TAF_PROP_OK on success.
+ *      TAF_PROP_BAD_PARAMETER if one of the limits is zero.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_file_SetBackupCapacity
+taf_prop_result_t taf_pa_file_SetBackupCapacity
 (
     uint32_t maxFileSizeBytes,  ///< [IN] Maximum size of a single backed up file, in bytes.
     uint16_t maxFileCount       ///< [IN] Maximum number of backed up files.
@@ -156,12 +156,12 @@ taf_pa_result_t taf_pa_file_SetBackupCapacity
  * Verify the integrity of a file against its stored checksum.
  *
  * @return
- *      TAF_PA_OK if the file content matches its stored checksum.
- *      TAF_PA_BAD_PARAMETER if the path is invalid.
- *      TAF_PA_FAULT if the file is corrupted or has no stored checksum.
+ *      TAF_PROP_OK if the file content matches its stored checksum.
+ *      TAF_PROP_BAD_PARAMETER if the path is invalid.
+ *      TAF_PROP_FAULT if the file is corrupted or has no stored checksum.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_file_Verify
+taf_prop_result_t taf_pa_file_Verify
 (
     const char* filePathPtr   ///< [IN] Path to the file to verify.
 );
@@ -171,15 +171,22 @@ taf_pa_result_t taf_pa_file_Verify
  * Open a file.
  *
  * @return
- *      File descriptor on success.
- *      -1 on failure, with errno set.
+ *      TAF_PROP_OK on success, with *fdPtr set to the opened file descriptor.
+ *      TAF_PROP_BAD_PARAMETER if filePathPtr or fdPtr is NULL.
+ *      TAF_PROP_SYSTEM_ERROR on system call failure (check *underlyingErrPtr).
+ *      Other TAF_PROP_* codes for mapped errors (e.g. TAF_PROP_NOT_FOUND).
+ *
+ * @param underlyingErrPtr [OUT] Optional. Receives the raw errno on TAF_PROP_SYSTEM_ERROR;
+ *                          set to TAF_PROP_UNDERLYING_ERR_NONE for all other return values.
  */
 //--------------------------------------------------------------------------------------------------
-int taf_pa_file_Open
+taf_prop_result_t taf_pa_file_Open
 (
-    const char *filePathPtr,  ///< [IN] Path to the file
-    int flags,                ///< [IN] File access flags (e.g. O_RDONLY, O_WRONLY)
-    mode_t mode               ///< [IN] Permission bits used when creating a new file
+    const char *filePathPtr,  ///< [IN]  Path to the file
+    int flags,                ///< [IN]  File access flags (e.g. O_RDONLY, O_WRONLY)
+    mode_t mode,              ///< [IN]  Permission bits used when creating a new file
+    int* fdPtr,               ///< [OUT] Receives the opened file descriptor on success
+    uint32_t* underlyingErrPtr///< [OUT] Optional raw errno on TAF_PROP_SYSTEM_ERROR
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -187,13 +194,17 @@ int taf_pa_file_Open
  * Close a file descriptor.
  *
  * @return
- *      0 on success.
- *      -1 on failure, with errno set.
+ *      TAF_PROP_OK on success.
+ *      TAF_PROP_SYSTEM_ERROR on system call failure (check *underlyingErrPtr).
+ *
+ * @param underlyingErrPtr [OUT] Optional. Receives the raw errno on TAF_PROP_SYSTEM_ERROR;
+ *                          set to TAF_PROP_UNDERLYING_ERR_NONE for all other return values.
  */
 //--------------------------------------------------------------------------------------------------
-int taf_pa_file_Close
+taf_prop_result_t taf_pa_file_Close
 (
-    int fd                    ///< [IN] File descriptor to close
+    int fd,                    ///< [IN]  File descriptor to close
+    uint32_t* underlyingErrPtr ///< [OUT] Optional raw errno on TAF_PROP_SYSTEM_ERROR
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -201,15 +212,21 @@ int taf_pa_file_Close
  * Read from a file descriptor.
  *
  * @return
- *      Number of bytes read on success.
- *      -1 on failure, with errno set.
+ *      TAF_PROP_OK on success, with *bytesReadPtr set to the number of bytes read.
+ *      TAF_PROP_BAD_PARAMETER if bufPtr or bytesReadPtr is NULL.
+ *      TAF_PROP_SYSTEM_ERROR on system call failure (check *underlyingErrPtr).
+ *
+ * @param underlyingErrPtr [OUT] Optional. Receives the raw errno on TAF_PROP_SYSTEM_ERROR;
+ *                          set to TAF_PROP_UNDERLYING_ERR_NONE for all other return values.
  */
 //--------------------------------------------------------------------------------------------------
-ssize_t taf_pa_file_Read
+taf_prop_result_t taf_pa_file_Read
 (
-    int fd,                   ///< [IN]  File descriptor to read from
-    uint8_t* bufPtr,          ///< [OUT] Buffer to store the read data
-    size_t size               ///< [IN]  Number of bytes to read
+    int fd,                    ///< [IN]  File descriptor to read from
+    uint8_t* bufPtr,           ///< [OUT] Buffer to store the read data
+    size_t size,               ///< [IN]  Number of bytes to read
+    size_t* bytesReadPtr,      ///< [OUT] Receives the number of bytes actually read
+    uint32_t* underlyingErrPtr ///< [OUT] Optional raw errno on TAF_PROP_SYSTEM_ERROR
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -217,15 +234,21 @@ ssize_t taf_pa_file_Read
  * Write to a file descriptor.
  *
  * @return
- *      Number of bytes written on success.
- *      -1 on failure, with errno set.
+ *      TAF_PROP_OK on success, with *bytesWrittenPtr set to the number of bytes written.
+ *      TAF_PROP_BAD_PARAMETER if bufPtr or bytesWrittenPtr is NULL.
+ *      TAF_PROP_SYSTEM_ERROR on system call failure (check *underlyingErrPtr).
+ *
+ * @param underlyingErrPtr [OUT] Optional. Receives the raw errno on TAF_PROP_SYSTEM_ERROR;
+ *                          set to TAF_PROP_UNDERLYING_ERR_NONE for all other return values.
  */
 //--------------------------------------------------------------------------------------------------
-ssize_t taf_pa_file_Write
+taf_prop_result_t taf_pa_file_Write
 (
-    int fd,                   ///< [IN] File descriptor to write to
-    const uint8_t* bufPtr,    ///< [IN] Buffer containing data to write
-    size_t size               ///< [IN] Number of bytes to write
+    int fd,                    ///< [IN]  File descriptor to write to
+    const uint8_t* bufPtr,     ///< [IN]  Buffer containing data to write
+    size_t size,               ///< [IN]  Number of bytes to write
+    size_t* bytesWrittenPtr,   ///< [OUT] Receives the number of bytes actually written
+    uint32_t* underlyingErrPtr ///< [OUT] Optional raw errno on TAF_PROP_SYSTEM_ERROR
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -233,13 +256,18 @@ ssize_t taf_pa_file_Write
  * Delete a file.
  *
  * @return
- *      0 on success.
- *      -1 on failure, with errno set.
+ *      TAF_PROP_OK on success.
+ *      TAF_PROP_BAD_PARAMETER if filePathPtr is NULL.
+ *      TAF_PROP_SYSTEM_ERROR on system call failure (check *underlyingErrPtr).
+ *
+ * @param underlyingErrPtr [OUT] Optional. Receives the raw errno on TAF_PROP_SYSTEM_ERROR;
+ *                          set to TAF_PROP_UNDERLYING_ERR_NONE for all other return values.
  */
 //--------------------------------------------------------------------------------------------------
-void taf_pa_file_Delete
+taf_prop_result_t taf_pa_file_Delete
 (
-    const char* filePathPtr   ///< [IN] Path to the file to delete
+    const char* filePathPtr,   ///< [IN]  Path to the file to delete
+    uint32_t* underlyingErrPtr ///< [OUT] Optional raw errno on TAF_PROP_SYSTEM_ERROR
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -248,14 +276,19 @@ void taf_pa_file_Delete
  * The destination file is created if it does not exist, or truncated if it does.
  *
  * @return
- *      0 on success.
- *      errno value on failure.
+ *      TAF_PROP_OK on success.
+ *      TAF_PROP_BAD_PARAMETER if sourcePath or destPath is NULL.
+ *      TAF_PROP_SYSTEM_ERROR on system call failure (check *underlyingErrPtr).
+ *
+ * @param underlyingErrPtr [OUT] Optional. Receives the raw errno on TAF_PROP_SYSTEM_ERROR;
+ *                          set to TAF_PROP_UNDERLYING_ERR_NONE for all other return values.
  */
 //--------------------------------------------------------------------------------------------------
-int taf_pa_file_Copy
+taf_prop_result_t taf_pa_file_Copy
 (
-    const char *sourcePath,   ///< [IN] Path to the source file
-    const char *destPath      ///< [IN] Path to the destination file
+    const char *sourcePath,    ///< [IN]  Path to the source file
+    const char *destPath,      ///< [IN]  Path to the destination file
+    uint32_t* underlyingErrPtr ///< [OUT] Optional raw errno on TAF_PROP_SYSTEM_ERROR
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -263,14 +296,19 @@ int taf_pa_file_Copy
  * Rename (or move) a file from sourcePath to destPath.
  *
  * @return
- *      0 on success.
- *      -1 on failure, with errno set.
+ *      TAF_PROP_OK on success.
+ *      TAF_PROP_BAD_PARAMETER if sourcePath or destPath is NULL.
+ *      TAF_PROP_SYSTEM_ERROR on system call failure (check *underlyingErrPtr).
+ *
+ * @param underlyingErrPtr [OUT] Optional. Receives the raw errno on TAF_PROP_SYSTEM_ERROR;
+ *                          set to TAF_PROP_UNDERLYING_ERR_NONE for all other return values.
  */
 //--------------------------------------------------------------------------------------------------
-int taf_pa_file_Rename
+taf_prop_result_t taf_pa_file_Rename
 (
-    const char *sourcePath,   ///< [IN] Path to the source file
-    const char *destPath      ///< [IN] Path to the destination file
+    const char *sourcePath,    ///< [IN]  Path to the source file
+    const char *destPath,      ///< [IN]  Path to the destination file
+    uint32_t* underlyingErrPtr ///< [OUT] Optional raw errno on TAF_PROP_SYSTEM_ERROR
 );
 
 #endif // TAF_PA_FILE_H

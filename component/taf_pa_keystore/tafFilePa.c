@@ -203,7 +203,7 @@ static uint32_t UpdateCRC32C
  * Compute the CRC32C of a file content.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t CalculateFileCRC32C
+static taf_prop_result_t CalculateFileCRC32C
 (
     const char* filePathPtr,
     char* crcStrPtr,
@@ -213,14 +213,14 @@ static taf_pa_result_t CalculateFileCRC32C
     if (!filePathPtr || !crcStrPtr || crcStrSize < TAF_PA_FILE_CRC_STR_SIZE)
     {
         TAF_PA_ERROR("Invalid parameter to compute file checksum");
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     int fd = open(filePathPtr, O_RDONLY);
     if (fd < 0)
     {
         TAF_PA_ERROR("Failed to open file %s to compute checksum, errno: %d", filePathPtr, errno);
-        return TAF_PA_NOT_FOUND;
+        return TAF_PROP_NOT_FOUND;
     }
 
     // Hint the kernel that the file will be read sequentially and in full, so it can read ahead
@@ -229,7 +229,7 @@ static taf_pa_result_t CalculateFileCRC32C
 
     uint32_t crc = 0xFFFFFFFFU;
     unsigned char buffer[TAF_PA_FILE_HASH_BUFFER_SIZE];
-    taf_pa_result_t result = TAF_PA_OK;
+    taf_prop_result_t result = TAF_PROP_OK;
 
     for (;;)
     {
@@ -246,7 +246,7 @@ static taf_pa_result_t CalculateFileCRC32C
                 continue;
             }
             TAF_PA_ERROR("Failed to read file %s to compute checksum, errno: %d", filePathPtr, errno);
-            result = TAF_PA_FAULT;
+            result = TAF_PROP_FAULT;
             break;
         }
 
@@ -255,14 +255,14 @@ static taf_pa_result_t CalculateFileCRC32C
 
     close(fd);
 
-    if (result != TAF_PA_OK)
+    if (result != TAF_PROP_OK)
     {
         return result;
     }
 
     snprintf(crcStrPtr, crcStrSize, "%08x", crc ^ 0xFFFFFFFFU);
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -273,7 +273,7 @@ static taf_pa_result_t CalculateFileCRC32C
  * taf_pa_file_Close() to checksum a file without reopening its path.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t CalculateFdCRC32C
+static taf_prop_result_t CalculateFdCRC32C
 (
     int fd,
     char* crcStrPtr,
@@ -283,7 +283,7 @@ static taf_pa_result_t CalculateFdCRC32C
     if ((fd < 0) || !crcStrPtr || crcStrSize < TAF_PA_FILE_CRC_STR_SIZE)
     {
         TAF_PA_ERROR("Invalid parameter to compute file descriptor checksum");
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
@@ -307,7 +307,7 @@ static taf_pa_result_t CalculateFdCRC32C
                 continue;
             }
             TAF_PA_ERROR("Failed to read fd %d to compute checksum, errno: %d", fd, errno);
-            return TAF_PA_FAULT;
+            return TAF_PROP_FAULT;
         }
 
         crc = UpdateCRC32C(crc, buffer, (size_t)bytesRead);
@@ -316,7 +316,7 @@ static taf_pa_result_t CalculateFdCRC32C
 
     snprintf(crcStrPtr, crcStrSize, "%08x", crc ^ 0xFFFFFFFFU);
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -324,7 +324,7 @@ static taf_pa_result_t CalculateFdCRC32C
  * Store a given CRC32C value into the file extended attribute.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t SetFileCRC32CToExtendedAttrValue
+static taf_prop_result_t SetFileCRC32CToExtendedAttrValue
 (
     const char* filePathPtr,
     const char* crcStrPtr
@@ -335,10 +335,10 @@ static taf_pa_result_t SetFileCRC32CToExtendedAttrValue
     {
         TAF_PA_ERROR("Failed to set checksum attribute, errno: %d", errno);
         ReportError(TAF_PA_FILE_ERR_SET_HASH, filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -346,7 +346,7 @@ static taf_pa_result_t SetFileCRC32CToExtendedAttrValue
  * Read the CRC32C stored in the file extended attribute.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t GetFileCRC32CFromExtendedAttr
+static taf_prop_result_t GetFileCRC32CFromExtendedAttr
 (
     const char* filePathPtr,
     char* crcStrPtr,
@@ -358,18 +358,18 @@ static taf_pa_result_t GetFileCRC32CFromExtendedAttr
     if (length <= 0)
     {
         TAF_PA_WARN("No checksum attribute found on %s, errno: %d", filePathPtr, errno);
-        return TAF_PA_NOT_FOUND;
+        return TAF_PROP_NOT_FOUND;
     }
 
     if ((size_t)length >= crcStrSize)
     {
         TAF_PA_ERROR("Checksum attribute of %s is too long", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     crcStrPtr[length] = '\0';
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -377,7 +377,7 @@ static taf_pa_result_t GetFileCRC32CFromExtendedAttr
  * Check the file content against the CRC32C stored in its extended attribute.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t ValidateFileCRC32CWithExtendedAttr
+static taf_prop_result_t ValidateFileCRC32CWithExtendedAttr
 (
     const char* filePathPtr
 )
@@ -388,26 +388,26 @@ static taf_pa_result_t ValidateFileCRC32CWithExtendedAttr
     // Propagate the exact status (e.g. TAF_PA_NOT_FOUND when the checksum attribute is simply
     // missing) instead of collapsing it to TAF_PA_FAULT, so callers can tell a never-tracked file
     // apart from an actually corrupted one.
-    taf_pa_result_t result = GetFileCRC32CFromExtendedAttr(filePathPtr, storedCrc, sizeof(storedCrc));
-    if (result != TAF_PA_OK)
+    taf_prop_result_t result = GetFileCRC32CFromExtendedAttr(filePathPtr, storedCrc, sizeof(storedCrc));
+    if (result != TAF_PROP_OK)
     {
         return result;
     }
 
-    if (CalculateFileCRC32C(filePathPtr, calculatedCrc, sizeof(calculatedCrc)) != TAF_PA_OK)
+    if (CalculateFileCRC32C(filePathPtr, calculatedCrc, sizeof(calculatedCrc)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to compute checksum of %s for integrity check", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     if (strncmp(storedCrc, calculatedCrc, TAF_PA_FILE_CRC_STR_SIZE - 1) != 0)
     {
         TAF_PA_WARN("Checksum mismatch for %s (stored: %s, calculated: %s)",
                 filePathPtr, storedCrc, calculatedCrc);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -415,7 +415,7 @@ static taf_pa_result_t ValidateFileCRC32CWithExtendedAttr
  * Create a directory and all its missing parents.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t CreateDirTree
+static taf_prop_result_t CreateDirTree
 (
     const char* pathPtr
 )
@@ -425,7 +425,7 @@ static taf_pa_result_t CreateDirTree
     if (!pathPtr || !pathPtr[0] || (strlen(pathPtr) >= sizeof(path)))
     {
         TAF_PA_ERROR("Invalid directory path parameter");
-        return TAF_PA_BAD_PARAMETER;
+        return TAF_PROP_BAD_PARAMETER;
     }
 
     snprintf(path, sizeof(path), "%s", pathPtr);
@@ -441,7 +441,7 @@ static taf_pa_result_t CreateDirTree
         if ((mkdir(path, 0700) != 0) && (errno != EEXIST))
         {
             TAF_PA_ERROR("Failed to create directory %s, errno: %d", path, errno);
-            return TAF_PA_FAULT;
+            return TAF_PROP_FAULT;
         }
         *cursorPtr = '/';
     }
@@ -449,10 +449,10 @@ static taf_pa_result_t CreateDirTree
     if ((mkdir(path, 0700) != 0) && (errno != EEXIST))
     {
         TAF_PA_ERROR("Failed to create directory %s, errno: %d", path, errno);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -551,7 +551,7 @@ static void CalculateFilePathSHA1
  * Build the backup path corresponding to a primary file path.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t GetBackupPath
+static taf_prop_result_t GetBackupPath
 (
     const char* filePathPtr,
     char* backupPathPtr,
@@ -565,7 +565,7 @@ static taf_pa_result_t GetBackupPath
     if (!pathHash[0])
     {
         TAF_PA_ERROR("Failed to calculate path hash for %s", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     int written = snprintf(backupPathPtr, backupPathSize, "%s%s%s",
@@ -573,10 +573,10 @@ static taf_pa_result_t GetBackupPath
     if ((written < 0) || ((size_t)written >= backupPathSize))
     {
         TAF_PA_ERROR("Backup path is too long");
-        return TAF_PA_OVERFLOW;
+        return TAF_PROP_OVERFLOW;
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -584,7 +584,7 @@ static taf_pa_result_t GetBackupPath
  * Flush a file content to the storage.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t PersistFile
+static taf_prop_result_t PersistFile
 (
     const char* filePathPtr
 )
@@ -593,7 +593,7 @@ static taf_pa_result_t PersistFile
     if (fd < 0)
     {
         TAF_PA_ERROR("Failed to open %s to persist it, errno: %d", filePathPtr, errno);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     int result = fsync(fd);
@@ -603,7 +603,7 @@ static taf_pa_result_t PersistFile
     }
     close(fd);
 
-    return (result == 0) ? TAF_PA_OK : TAF_PA_FAULT;
+    return (result == 0) ? TAF_PROP_OK : TAF_PROP_FAULT;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -611,7 +611,7 @@ static taf_pa_result_t PersistFile
  * Flush the directory entry of a file to the storage.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t PersistParentDir
+static taf_prop_result_t PersistParentDir
 (
     const char* filePathPtr
 )
@@ -622,13 +622,13 @@ static taf_pa_result_t PersistParentDir
     if ((written < 0) || ((size_t)written >= sizeof(dirPath)))
     {
         TAF_PA_ERROR("Path is too long while persisting parent directory: %s", filePathPtr);
-        return TAF_PA_OVERFLOW;
+        return TAF_PROP_OVERFLOW;
     }
 
     char* slashPtr = strrchr(dirPath, '/');
     if (!slashPtr)
     {
-        return TAF_PA_OK;
+        return TAF_PROP_OK;
     }
 
     if (slashPtr == dirPath)
@@ -644,7 +644,7 @@ static taf_pa_result_t PersistParentDir
     if (fd < 0)
     {
         TAF_PA_ERROR("Failed to open directory %s to persist it, errno: %d", dirPath, errno);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     int result = fsync(fd);
@@ -654,7 +654,7 @@ static taf_pa_result_t PersistParentDir
     }
     close(fd);
 
-    return (result == 0) ? TAF_PA_OK : TAF_PA_FAULT;
+    return (result == 0) ? TAF_PROP_OK : TAF_PROP_FAULT;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -665,7 +665,7 @@ static taf_pa_result_t PersistParentDir
  * applied successfully before the destination is published.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t CopySELinuxContext
+static taf_prop_result_t CopySELinuxContext
 (
     int sourceFd,
     int targetFd,
@@ -680,19 +680,19 @@ static taf_pa_result_t CopySELinuxContext
     {
         if ((errno == ENODATA) || (errno == ENOTSUP) || (errno == ERANGE))
         {
-            return TAF_PA_OK;
+            return TAF_PROP_OK;
         }
 
         TAF_PA_ERROR("Failed to read SELinux context of %s, errno: %d", sourcePathPtr, errno);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    taf_pa_result_t result = TAF_PA_OK;
+    taf_prop_result_t result = TAF_PROP_OK;
     if (fsetfilecon(targetFd, secContextPtr) < 0)
     {
         TAF_PA_ERROR("Failed to set SELinux context on %s from %s, errno: %d",
                  targetPathPtr, sourcePathPtr, errno);
-        result = TAF_PA_FAULT;
+        result = TAF_PROP_FAULT;
     }
 
     freecon(secContextPtr);
@@ -706,7 +706,7 @@ static taf_pa_result_t CopySELinuxContext
  * Used as a fallback when sendfile() cannot be used on the involved file systems.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t CopyByReadWrite
+static taf_prop_result_t CopyByReadWrite
 (
     int inputFd,
     int outputFd,
@@ -720,7 +720,7 @@ static taf_pa_result_t CopyByReadWrite
         ssize_t bytesRead = read(inputFd, buffer, sizeof(buffer));
         if (bytesRead == 0)
         {
-            return TAF_PA_OK;
+            return TAF_PROP_OK;
         }
 
         if (bytesRead < 0)
@@ -730,7 +730,7 @@ static taf_pa_result_t CopyByReadWrite
                 continue;
             }
             TAF_PA_ERROR("Failed to read source file, errno: %d", errno);
-            return TAF_PA_FAULT;
+            return TAF_PROP_FAULT;
         }
 
         ssize_t written = 0;
@@ -744,7 +744,7 @@ static taf_pa_result_t CopyByReadWrite
                     continue;
                 }
                 TAF_PA_ERROR("Failed to write target file, errno: %d", errno);
-                return TAF_PA_FAULT;
+                return TAF_PROP_FAULT;
             }
             written += chunk;
             *copiedPtr += chunk;
@@ -764,7 +764,7 @@ static taf_pa_result_t CopyByReadWrite
  * crash would instead destroy the only remaining good copy the caller was trying to recover.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t CopyFileContent
+static taf_prop_result_t CopyFileContent
 (
     const char* sourcePath,
     const char* targetPath
@@ -775,14 +775,14 @@ static taf_pa_result_t CopyFileContent
     if ((tmpLen < 0) || ((size_t)tmpLen >= sizeof(tmpPath)))
     {
         TAF_PA_ERROR("Target path %s is too long to build a temporary copy path", targetPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     int inputFd = open(sourcePath, O_RDONLY);
     if (inputFd < 0)
     {
         TAF_PA_ERROR("Failed to open source file %s, errno: %d", sourcePath, errno);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     struct stat statBuffer;
@@ -790,7 +790,7 @@ static taf_pa_result_t CopyFileContent
     {
         TAF_PA_ERROR("Failed to stat source file %s, errno: %d", sourcePath, errno);
         close(inputFd);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     mode_t destinationMode = statBuffer.st_mode & ~(S_IXUSR | S_IXGRP | S_IXOTH);
@@ -799,14 +799,14 @@ static taf_pa_result_t CopyFileContent
     {
         TAF_PA_ERROR("Failed to open temporary file %s, errno: %d", tmpPath, errno);
         close(inputFd);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     // sendfile() may copy less than requested (it is not guaranteed to transfer everything in
     // one call), so loop until the whole source content has been transferred. Stopping after a
     // single call would silently produce a truncated copy, i.e. a restored/backed up file that
     // is not identical to the original one.
-    taf_pa_result_t result = TAF_PA_OK;
+    taf_prop_result_t result = TAF_PROP_OK;
     off_t offset = 0;
     off_t remaining = statBuffer.st_size;
     bool useReadWrite = false;
@@ -832,7 +832,7 @@ static taf_pa_result_t CopyFileContent
             }
 
             TAF_PA_ERROR("Failed to copy %s to %s, errno: %d", sourcePath, tmpPath, errno);
-            result = TAF_PA_FAULT;
+            result = TAF_PROP_FAULT;
             break;
         }
 
@@ -841,7 +841,7 @@ static taf_pa_result_t CopyFileContent
             // A source that shrinks during the copy must not be published as a successful backup
             // or restore. The caller can retry against a stable source later.
             TAF_PA_ERROR("Source file %s ended before its expected size", sourcePath);
-            result = TAF_PA_FAULT;
+            result = TAF_PROP_FAULT;
             break;
         }
 
@@ -854,7 +854,7 @@ static taf_pa_result_t CopyFileContent
         {
             TAF_PA_ERROR("Failed to rewind %s/%s for read/write copy, errno: %d",
                      sourcePath, tmpPath, errno);
-            result = TAF_PA_FAULT;
+            result = TAF_PROP_FAULT;
             goto cleanup;
         }
 
@@ -863,22 +863,22 @@ static taf_pa_result_t CopyFileContent
 
     // Make sure the target holds exactly the source content: the target may be an existing
     // (longer) file, and O_TRUNC alone is not enough if the copy loop stopped early.
-    if ((result == TAF_PA_OK) && (ftruncate(outputFd, offset) < 0) && (errno != EINVAL))
+    if ((result == TAF_PROP_OK) && (ftruncate(outputFd, offset) < 0) && (errno != EINVAL))
     {
         TAF_PA_ERROR("Failed to truncate %s to %jd bytes, errno: %d",
                  tmpPath, (intmax_t)offset, errno);
-        result = TAF_PA_FAULT;
+        result = TAF_PROP_FAULT;
     }
 
     // Flush the copied data before the descriptor is closed, so a later checksum computation
     // and the caller's persist step always see the complete content.
-    if ((result == TAF_PA_OK) && (fsync(outputFd) != 0))
+    if ((result == TAF_PROP_OK) && (fsync(outputFd) != 0))
     {
         TAF_PA_ERROR("Failed to flush %s, errno: %d", tmpPath, errno);
-        result = TAF_PA_FAULT;
+        result = TAF_PROP_FAULT;
     }
 
-    if (result == TAF_PA_OK)
+    if (result == TAF_PROP_OK)
     {
         result = CopySELinuxContext(inputFd, outputFd, sourcePath, tmpPath);
     }
@@ -887,15 +887,15 @@ cleanup:
     if (close(inputFd) != 0)
     {
         TAF_PA_ERROR("Failed to close source file %s, errno: %d", sourcePath, errno);
-        result = TAF_PA_FAULT;
+        result = TAF_PROP_FAULT;
     }
     if (close(outputFd) != 0)
     {
         TAF_PA_ERROR("Failed to close temporary file %s, errno: %d", tmpPath, errno);
-        result = TAF_PA_FAULT;
+        result = TAF_PROP_FAULT;
     }
 
-    if (result != TAF_PA_OK)
+    if (result != TAF_PROP_OK)
     {
         unlink(tmpPath);
         return result;
@@ -909,16 +909,16 @@ cleanup:
     {
         TAF_PA_ERROR("Failed to publish %s from %s, errno: %d", targetPath, tmpPath, errno);
         unlink(tmpPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    if (PersistParentDir(targetPath) != TAF_PA_OK)
+    if (PersistParentDir(targetPath) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to persist published file %s", targetPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -926,31 +926,31 @@ cleanup:
  * Copy a file and its SELinux context into the backup storage.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t BackUpFileAndSELinuxContext
+static taf_prop_result_t BackUpFileAndSELinuxContext
 (
     const char* sourcePath,
     const char* targetPath
 )
 {
-    if (CopyFileContent(sourcePath, targetPath) != TAF_PA_OK)
+    if (CopyFileContent(sourcePath, targetPath) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to copy %s to backup location %s", sourcePath, targetPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    if (PersistFile(targetPath) != TAF_PA_OK)
+    if (PersistFile(targetPath) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to persist backup file %s", targetPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    if (PersistParentDir(targetPath) != TAF_PA_OK)
+    if (PersistParentDir(targetPath) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to persist backup directory entry for %s", targetPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -974,7 +974,7 @@ static taf_pa_result_t BackUpFileAndSELinuxContext
  *       invokes these entry points concurrently, so this window cannot be hit in practice.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t BackupFileToStorage
+static taf_prop_result_t BackupFileToStorage
 (
     const char* filePathPtr,
     const char* knownPrimaryCrcPtr
@@ -985,7 +985,7 @@ static taf_pa_result_t BackupFileToStorage
     {
         TAF_PA_ERROR("File too big to be backed up");
         ReportError(TAF_PA_FILE_ERR_NO_MEMORY, filePathPtr);
-        return TAF_PA_NO_MEMORY;
+        return TAF_PROP_NO_MEMORY;
     }
 
     // The backup storage directory may have been removed after initialization (e.g. wiped
@@ -995,19 +995,19 @@ static taf_pa_result_t BackupFileToStorage
     if ((stat(BackupStorage, &storageStat) != 0) || !S_ISDIR(storageStat.st_mode))
     {
         TAF_PA_DEBUG("Backup storage directory missing, recreating: %s", BackupStorage);
-        if (CreateDirTree(BackupStorage) != TAF_PA_OK)
+        if (CreateDirTree(BackupStorage) != TAF_PROP_OK)
         {
             TAF_PA_ERROR("Failed to recreate backup storage directory");
             ReportError(TAF_PA_FILE_ERR_BACKUP, filePathPtr);
-            return TAF_PA_FAULT;
+            return TAF_PROP_FAULT;
         }
     }
 
     char backupPath[TAF_PA_FILE_MAX_BACKUP_FILENAME] = {0};
-    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PA_OK)
+    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to build backup path for %s", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     // The capacity limit only applies when a new backup entry has to be created.
@@ -1015,14 +1015,14 @@ static taf_pa_result_t BackupFileToStorage
     {
         TAF_PA_ERROR("Backup storage is full");
         ReportError(TAF_PA_FILE_ERR_NO_MEMORY, filePathPtr);
-        return TAF_PA_NO_MEMORY;
+        return TAF_PROP_NO_MEMORY;
     }
 
-    if (BackUpFileAndSELinuxContext(filePathPtr, backupPath) != TAF_PA_OK)
+    if (BackUpFileAndSELinuxContext(filePathPtr, backupPath) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to back up file");
         ReportError(TAF_PA_FILE_ERR_BACKUP, filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     // Checksum the bytes that were actually written into the backup, and cross-check them against
@@ -1031,10 +1031,10 @@ static taf_pa_result_t BackupFileToStorage
     // taf_pa_file_Close()): the backup would then carry a checksum that does not describe its own
     // content, and a later restore would reinstate content that differs from the original file.
     char backupCrc[TAF_PA_FILE_CRC_STR_SIZE] = {0};
-    if (CalculateFileCRC32C(backupPath, backupCrc, sizeof(backupCrc)) != TAF_PA_OK)
+    if (CalculateFileCRC32C(backupPath, backupCrc, sizeof(backupCrc)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to compute checksum of backup file %s", backupPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     char primaryCrc[TAF_PA_FILE_CRC_STR_SIZE] = {0};
@@ -1046,10 +1046,10 @@ static taf_pa_result_t BackupFileToStorage
         // mismatch would.
         snprintf(primaryCrc, sizeof(primaryCrc), "%s", knownPrimaryCrcPtr);
     }
-    else if (CalculateFileCRC32C(filePathPtr, primaryCrc, sizeof(primaryCrc)) != TAF_PA_OK)
+    else if (CalculateFileCRC32C(filePathPtr, primaryCrc, sizeof(primaryCrc)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to compute checksum of %s", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     if (strncmp(primaryCrc, backupCrc, TAF_PA_FILE_CRC_STR_SIZE - 1) != 0)
@@ -1060,26 +1060,26 @@ static taf_pa_result_t BackupFileToStorage
         {
             TAF_PA_ERROR("Failed to discard invalid backup %s, errno: %d", backupPath, errno);
         }
-        else if (PersistParentDir(backupPath) != TAF_PA_OK)
+        else if (PersistParentDir(backupPath) != TAF_PROP_OK)
         {
             TAF_PA_ERROR("Failed to persist discarded backup %s", backupPath);
         }
         ReportError(TAF_PA_FILE_ERR_BACKUP, filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     // Keep the primary's checksum in sync with its current content, so the primary and its
     // backup always advertise the same value.
-    if (SetFileCRC32CToExtendedAttrValue(filePathPtr, primaryCrc) != TAF_PA_OK)
+    if (SetFileCRC32CToExtendedAttrValue(filePathPtr, primaryCrc) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to store checksum of %s", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    if (SetFileCRC32CToExtendedAttrValue(backupPath, backupCrc) != TAF_PA_OK)
+    if (SetFileCRC32CToExtendedAttrValue(backupPath, backupCrc) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to store checksum on backup file %s", backupPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     return PersistFile(backupPath);
@@ -1090,7 +1090,7 @@ static taf_pa_result_t BackupFileToStorage
  * Refresh the backup copy of a file when it is missing, corrupted or out of date.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t RefreshBackupIfNeeded
+static taf_prop_result_t RefreshBackupIfNeeded
 (
     const char* filePathPtr,
     const char* primaryCrcPtr
@@ -1099,26 +1099,26 @@ static taf_pa_result_t RefreshBackupIfNeeded
     if (!primaryCrcPtr || !primaryCrcPtr[0])
     {
         TAF_PA_ERROR("Invalid primary checksum parameter for %s", filePathPtr);
-        return TAF_PA_BAD_PARAMETER;
+        return TAF_PROP_BAD_PARAMETER;
     }
 
     char backupPath[TAF_PA_FILE_MAX_BACKUP_FILENAME] = {0};
-    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PA_OK)
+    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to build backup path for %s", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     char backupCrc[TAF_PA_FILE_CRC_STR_SIZE] = {0};
-    if ((GetFileCRC32CFromExtendedAttr(backupPath, backupCrc, sizeof(backupCrc)) != TAF_PA_OK) ||
-        (ValidateFileCRC32CWithExtendedAttr(backupPath) != TAF_PA_OK) ||
+    if ((GetFileCRC32CFromExtendedAttr(backupPath, backupCrc, sizeof(backupCrc)) != TAF_PROP_OK) ||
+        (ValidateFileCRC32CWithExtendedAttr(backupPath) != TAF_PROP_OK) ||
         (strncmp(primaryCrcPtr, backupCrc, TAF_PA_FILE_CRC_STR_SIZE - 1) != 0))
     {
         TAF_PA_WARN("Backup of %s is missing, corrupted or out of date, refreshing it", filePathPtr);
         return BackupFileToStorage(filePathPtr, primaryCrcPtr);
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1126,16 +1126,16 @@ static taf_pa_result_t RefreshBackupIfNeeded
  * Restore a file from its backup copy.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t ReplaceFileWithBackup
+static taf_prop_result_t ReplaceFileWithBackup
 (
     const char* filePathPtr
 )
 {
     char backupPath[TAF_PA_FILE_MAX_BACKUP_FILENAME] = {0};
-    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PA_OK)
+    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to build backup path for %s", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     // Read the known-good checksum from the backup *before* restoring. The restored primary must
@@ -1143,63 +1143,63 @@ static taf_pa_result_t ReplaceFileWithBackup
     // would blindly "bless" whatever was written (e.g. a truncated or partially written copy),
     // making an invalid restore look successful.
     char backupCrc[TAF_PA_FILE_CRC_STR_SIZE] = {0};
-    if (GetFileCRC32CFromExtendedAttr(backupPath, backupCrc, sizeof(backupCrc)) != TAF_PA_OK)
+    if (GetFileCRC32CFromExtendedAttr(backupPath, backupCrc, sizeof(backupCrc)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to read checksum of backup file %s", backupPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    if (ValidateFileCRC32CWithExtendedAttr(backupPath) != TAF_PA_OK)
+    if (ValidateFileCRC32CWithExtendedAttr(backupPath) != TAF_PROP_OK)
     {
         TAF_PA_WARN("Backup file %s for %s is missing or corrupted, cannot restore",
                 backupPath, filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     TAF_PA_WARN("Restoring %s from its backup copy %s", filePathPtr, backupPath);
 
-    if (CopyFileContent(backupPath, filePathPtr) != TAF_PA_OK)
+    if (CopyFileContent(backupPath, filePathPtr) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to copy backup %s onto %s", backupPath, filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     // Verify that the restored content really matches the backup before advertising it as valid.
     char restoredCrc[TAF_PA_FILE_CRC_STR_SIZE] = {0};
-    if (CalculateFileCRC32C(filePathPtr, restoredCrc, sizeof(restoredCrc)) != TAF_PA_OK)
+    if (CalculateFileCRC32C(filePathPtr, restoredCrc, sizeof(restoredCrc)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to compute checksum of %s after restore", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     if (strncmp(backupCrc, restoredCrc, TAF_PA_FILE_CRC_STR_SIZE - 1) != 0)
     {
         TAF_PA_ERROR("Restored %s does not match its backup %s (backup: %s, restored: %s)",
                  filePathPtr, backupPath, backupCrc, restoredCrc);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     // Store the checksum inherited from the backup, so the primary and its backup stay
     // consistent and a later RefreshBackupIfNeeded() does not consider the backup stale.
-    if (SetFileCRC32CToExtendedAttrValue(filePathPtr, backupCrc) != TAF_PA_OK)
+    if (SetFileCRC32CToExtendedAttrValue(filePathPtr, backupCrc) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to update checksum of %s after restore", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    if (PersistFile(filePathPtr) != TAF_PA_OK)
+    if (PersistFile(filePathPtr) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to persist %s after restore", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    if (PersistParentDir(filePathPtr) != TAF_PA_OK)
+    if (PersistParentDir(filePathPtr) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to persist restored file directory entry for %s", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1221,12 +1221,12 @@ static bool HasValidBackup
 {
     char backupPath[TAF_PA_FILE_MAX_BACKUP_FILENAME] = {0};
 
-    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PA_OK)
+    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PROP_OK)
     {
         return false;
     }
 
-    return (ValidateFileCRC32CWithExtendedAttr(backupPath) == TAF_PA_OK);
+    return (ValidateFileCRC32CWithExtendedAttr(backupPath) == TAF_PROP_OK);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -1246,10 +1246,10 @@ static bool HasMatchingBackup
     char backupCrc[TAF_PA_FILE_CRC_STR_SIZE] = {0};
     char backupPath[TAF_PA_FILE_MAX_BACKUP_FILENAME] = {0};
 
-    if ((CalculateFileCRC32C(filePathPtr, fileCrc, sizeof(fileCrc)) != TAF_PA_OK) ||
-        (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PA_OK) ||
-        (GetFileCRC32CFromExtendedAttr(backupPath, backupCrc, sizeof(backupCrc)) != TAF_PA_OK) ||
-        (ValidateFileCRC32CWithExtendedAttr(backupPath) != TAF_PA_OK))
+    if ((CalculateFileCRC32C(filePathPtr, fileCrc, sizeof(fileCrc)) != TAF_PROP_OK) ||
+        (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PROP_OK) ||
+        (GetFileCRC32CFromExtendedAttr(backupPath, backupCrc, sizeof(backupCrc)) != TAF_PROP_OK) ||
+        (ValidateFileCRC32CWithExtendedAttr(backupPath) != TAF_PROP_OK))
     {
         return false;
     }
@@ -1262,37 +1262,37 @@ static bool HasMatchingBackup
  * Remove the backup copy of a file.
  */
 //--------------------------------------------------------------------------------------------------
-static taf_pa_result_t DeleteBackup
+static taf_prop_result_t DeleteBackup
 (
     const char* filePathPtr
 )
 {
     char backupPath[TAF_PA_FILE_MAX_BACKUP_FILENAME] = {0};
 
-    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PA_OK)
+    if (GetBackupPath(filePathPtr, backupPath, sizeof(backupPath)) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to build backup path for %s, cannot delete its backup", filePathPtr);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     if ((unlink(backupPath) != 0) && (errno != ENOENT))
     {
         TAF_PA_ERROR("Failed to delete backup file %s, errno: %d", backupPath, errno);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     // Persist the deletion so a stale backup cannot reappear after a crash and later be used for
     // restore under the same primary path.
-    if (PersistParentDir(backupPath) != TAF_PA_OK)
+    if (PersistParentDir(backupPath) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to persist deletion of backup file %s", backupPath);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
-taf_pa_result_t taf_pa_file_Init
+taf_prop_result_t taf_pa_file_Init
 (
     bool enableBackup,
     taf_pa_file_ErrorHandler_t handlerFunc
@@ -1311,25 +1311,25 @@ taf_pa_result_t taf_pa_file_Init
     if (!BackupEnabled || (Initialized && BackupStorage[0] != '\0'))
     {
         Initialized = true;
-        return TAF_PA_OK;
+        return TAF_PROP_OK;
     }
 
     // Generic default, see TAF_PA_FILE_BACKUP_STORAGE. Overridable through
     // taf_pa_file_SetBackupStorage().
-    if (CreateDirTree(TAF_PA_FILE_BACKUP_STORAGE) != TAF_PA_OK)
+    if (CreateDirTree(TAF_PA_FILE_BACKUP_STORAGE) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to create default backup storage directory %s",
                  TAF_PA_FILE_BACKUP_STORAGE);
-        return TAF_PA_FAULT;
+        return TAF_PROP_FAULT;
     }
 
     snprintf(BackupStorage, sizeof(BackupStorage), "%s", TAF_PA_FILE_BACKUP_STORAGE);
     Initialized = true;
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
-taf_pa_result_t taf_pa_file_SetBackupStorage
+taf_prop_result_t taf_pa_file_SetBackupStorage
 (
     const char* pathPtr
 )
@@ -1339,38 +1339,38 @@ taf_pa_result_t taf_pa_file_SetBackupStorage
     if (!pathPtr || !pathPtr[0])
     {
         TAF_PA_ERROR("Invalid backup storage path parameter");
-        return TAF_PA_BAD_PARAMETER;
+        return TAF_PROP_BAD_PARAMETER;
     }
 
     struct stat statBuffer;
     if (stat(pathPtr, &statBuffer) != 0)
     {
-        if (CreateDirTree(pathPtr) != TAF_PA_OK)
+        if (CreateDirTree(pathPtr) != TAF_PROP_OK)
         {
             TAF_PA_ERROR("Failed to create backup storage directory %s", pathPtr);
-            return TAF_PA_BAD_PARAMETER;
+            return TAF_PROP_BAD_PARAMETER;
         }
     }
     else if (!S_ISDIR(statBuffer.st_mode))
     {
         TAF_PA_ERROR("Backup storage path %s exists and is not a directory", pathPtr);
-        return TAF_PA_BUSY;
+        return TAF_PROP_BUSY;
     }
 
     size_t pathLen = strlen(pathPtr);
     if (pathLen + 2 > sizeof(BackupStorage))
     {
         TAF_PA_ERROR("Backup storage path is too long");
-        return TAF_PA_OVERFLOW;
+        return TAF_PROP_OVERFLOW;
     }
 
     snprintf(BackupStorage, sizeof(BackupStorage), "%s%s", pathPtr,
              (pathPtr[pathLen - 1] == '/') ? "" : "/");
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
-taf_pa_result_t taf_pa_file_SetBackupCapacity
+taf_prop_result_t taf_pa_file_SetBackupCapacity
 (
     uint32_t maxFileSizeBytes,
     uint16_t maxFileCount
@@ -1382,16 +1382,16 @@ taf_pa_result_t taf_pa_file_SetBackupCapacity
     {
         TAF_PA_ERROR("Invalid backup capacity parameter (maxFileSizeBytes: %u, maxFileCount: %u)",
                  maxFileSizeBytes, maxFileCount);
-        return TAF_PA_BAD_PARAMETER;
+        return TAF_PROP_BAD_PARAMETER;
     }
 
     MaxFileSize = maxFileSizeBytes;
     MaxFileCount = maxFileCount;
 
-    return TAF_PA_OK;
+    return TAF_PROP_OK;
 }
 
-taf_pa_result_t taf_pa_file_Verify
+taf_prop_result_t taf_pa_file_Verify
 (
     const char* filePathPtr
 )
@@ -1401,11 +1401,11 @@ taf_pa_result_t taf_pa_file_Verify
     if (!filePathPtr)
     {
         TAF_PA_ERROR("Invalid file path parameter");
-        return TAF_PA_BAD_PARAMETER;
+        return TAF_PROP_BAD_PARAMETER;
     }
 
-    taf_pa_result_t result = ValidateFileCRC32CWithExtendedAttr(filePathPtr);
-    if (result != TAF_PA_OK)
+    taf_prop_result_t result = ValidateFileCRC32CWithExtendedAttr(filePathPtr);
+    if (result != TAF_PROP_OK)
     {
         TAF_PA_WARN("File integrity check failed for %s", filePathPtr);
         ReportError(TAF_PA_FILE_ERR_CORRUPTED, filePathPtr);
@@ -1458,25 +1458,41 @@ static bool IsBackupExemptPath
     return false;
 }
 
-int taf_pa_file_Open
+taf_prop_result_t taf_pa_file_Open
 (
     const char *filePathPtr,
     int flags,
-    mode_t mode
+    mode_t mode,
+    int* fdPtr,
+    uint32_t* underlyingErrPtr
 )
 {
     TAF_PA_DEBUG("%s, filePathPtr: %s", __FUNCTION__, filePathPtr);
 
-    if (!filePathPtr)
+    if (underlyingErrPtr)
     {
-        TAF_PA_ERROR("Invalid file path parameter");
-        errno = EINVAL;
-        return -1;
+        *underlyingErrPtr = TAF_PROP_UNDERLYING_ERR_NONE;
+    }
+
+    if (!filePathPtr || !fdPtr)
+    {
+        TAF_PA_ERROR("Invalid file path or fd parameter");
+        return TAF_PROP_BAD_PARAMETER;
     }
 
     if (!BackupEnabled || IsBackupExemptPath(filePathPtr))
     {
-        return open(filePathPtr, flags, mode);
+        int fd = open(filePathPtr, flags, mode);
+        if (fd < 0)
+        {
+            if (underlyingErrPtr)
+            {
+                *underlyingErrPtr = (uint32_t)errno;
+            }
+            return TAF_PROP_SYSTEM_ERROR;
+        }
+        *fdPtr = fd;
+        return TAF_PROP_OK;
     }
 
     struct stat statBuffer;
@@ -1487,9 +1503,9 @@ int taf_pa_file_Open
 
     if (stat(filePathPtr, &statBuffer) == 0)
     {
-        taf_pa_result_t checkResult = ValidateFileCRC32CWithExtendedAttr(filePathPtr);
+        taf_prop_result_t checkResult = ValidateFileCRC32CWithExtendedAttr(filePathPtr);
 
-        if ((checkResult == TAF_PA_NOT_FOUND) && HasValidBackup(filePathPtr))
+        if ((checkResult == TAF_PROP_NOT_FOUND) && HasValidBackup(filePathPtr))
         {
             // The checksum attribute is missing, but a valid backup exists for this path: the
             // primary's inode was replaced (corruption, editor save, cp, etc.) and the attribute
@@ -1499,21 +1515,21 @@ int taf_pa_file_Open
                      "it will be restored from backup", filePathPtr);
             restore = true;
         }
-        else if (checkResult == TAF_PA_NOT_FOUND)
+        else if (checkResult == TAF_PROP_NOT_FOUND)
         {
             // The file exists but was never tracked before (no checksum/backup set yet).
             // This isn't corruption, so create its initial backup instead of attempting -
             // and failing - a restore.
             TAF_PA_DEBUG("No checksum tracked yet for %s, creating its initial backup",
                      filePathPtr);
-            if (BackupFileToStorage(filePathPtr, NULL) != TAF_PA_OK)
+            if (BackupFileToStorage(filePathPtr, NULL) != TAF_PROP_OK)
             {
                 TAF_PA_ERROR("Failed to create initial backup for %s", filePathPtr);
                 ReportError(TAF_PA_FILE_ERR_BACKUP, filePathPtr);
-                return -1;
+                return TAF_PROP_FAULT;
             }
         }
-        else if (checkResult != TAF_PA_OK)
+        else if (checkResult != TAF_PROP_OK)
         {
             TAF_PA_ERROR("File %s failed CRC validation, it will be restored from backup",
                      filePathPtr);
@@ -1525,7 +1541,11 @@ int taf_pa_file_Open
         if (errno != ENOENT)
         {
             TAF_PA_ERROR("Failed to stat %s, errno: %d", filePathPtr, errno);
-            return -1;
+            if (underlyingErrPtr)
+            {
+                *underlyingErrPtr = (uint32_t)errno;
+            }
+            return TAF_PROP_SYSTEM_ERROR;
         }
 
         // The primary file is gone. It must be restored from its backup even when the caller
@@ -1553,20 +1573,30 @@ int taf_pa_file_Open
 
     if (restore)
     {
-        if ((ReplaceFileWithBackup(filePathPtr) != TAF_PA_OK) ||
-            (ValidateFileCRC32CWithExtendedAttr(filePathPtr) != TAF_PA_OK))
+        if ((ReplaceFileWithBackup(filePathPtr) != TAF_PROP_OK) ||
+            (ValidateFileCRC32CWithExtendedAttr(filePathPtr) != TAF_PROP_OK))
         {
             if (restoreOptional)
             {
                 // No usable backup, but the caller allows the file to be created: proceed with
                 // a plain open() so a genuinely new file is not rejected.
                 TAF_PA_DEBUG("No usable backup for %s, creating it as a new file", filePathPtr);
-                return open(filePathPtr, flags, mode);
+                int fd = open(filePathPtr, flags, mode);
+                if (fd < 0)
+                {
+                    if (underlyingErrPtr)
+                    {
+                        *underlyingErrPtr = (uint32_t)errno;
+                    }
+                    return TAF_PROP_SYSTEM_ERROR;
+                }
+                *fdPtr = fd;
+                return TAF_PROP_OK;
             }
 
             TAF_PA_ERROR("Failed to restore file %s from backup", filePathPtr);
             ReportError(TAF_PA_FILE_ERR_RESTORE, filePathPtr);
-            return -1;
+            return TAF_PROP_FAULT;
         }
         TAF_PA_WARN("File %s successfully restored from backup", filePathPtr);
 
@@ -1576,35 +1606,68 @@ int taf_pa_file_Open
         //
         // O_CREAT is harmless now that the file exists again; O_EXCL/O_TRUNC never reach this
         // point (they skip the restore entirely).
-        return open(filePathPtr, flags, mode);
+        int fd = open(filePathPtr, flags, mode);
+        if (fd < 0)
+        {
+            if (underlyingErrPtr)
+            {
+                *underlyingErrPtr = (uint32_t)errno;
+            }
+            return TAF_PROP_SYSTEM_ERROR;
+        }
+        *fdPtr = fd;
+        return TAF_PROP_OK;
     }
 
     char primaryCrc[TAF_PA_FILE_CRC_STR_SIZE] = {0};
-    if (GetFileCRC32CFromExtendedAttr(filePathPtr, primaryCrc, sizeof(primaryCrc)) == TAF_PA_OK)
+    if (GetFileCRC32CFromExtendedAttr(filePathPtr, primaryCrc, sizeof(primaryCrc)) == TAF_PROP_OK)
     {
         RefreshBackupIfNeeded(filePathPtr, primaryCrc);
     }
 
-    return open(filePathPtr, flags, mode);
+    int fd = open(filePathPtr, flags, mode);
+    if (fd < 0)
+    {
+        if (underlyingErrPtr)
+        {
+            *underlyingErrPtr = (uint32_t)errno;
+        }
+        return TAF_PROP_SYSTEM_ERROR;
+    }
+    *fdPtr = fd;
+    return TAF_PROP_OK;
 }
 
-int taf_pa_file_Close
+taf_prop_result_t taf_pa_file_Close
 (
-    int fd
+    int fd,
+    uint32_t* underlyingErrPtr
 )
 {
     TAF_PA_DEBUG("%s", __FUNCTION__);
 
+    if (underlyingErrPtr)
+    {
+        *underlyingErrPtr = TAF_PROP_UNDERLYING_ERR_NONE;
+    }
+
     if (fd < 0)
     {
         TAF_PA_ERROR("Invalid file descriptor");
-        errno = EBADF;
-        return -1;
+        return TAF_PROP_BAD_PARAMETER;
     }
 
     if (!BackupEnabled)
     {
-        return close(fd);
+        if (close(fd) != 0)
+        {
+            if (underlyingErrPtr)
+            {
+                *underlyingErrPtr = (uint32_t)errno;
+            }
+            return TAF_PROP_SYSTEM_ERROR;
+        }
+        return TAF_PROP_OK;
     }
 
     char procPath[64] = {0};
@@ -1617,22 +1680,38 @@ int taf_pa_file_Close
     {
         TAF_PA_ERROR("Failed to resolve path of fd %d, errno: %d, closing without backup update",
                 fd, errno);
-        return close(fd);
+        if (close(fd) != 0)
+        {
+            if (underlyingErrPtr)
+            {
+                *underlyingErrPtr = (uint32_t)errno;
+            }
+            return TAF_PROP_SYSTEM_ERROR;
+        }
+        return TAF_PROP_OK;
     }
     actualPath[length] = '\0';
 
     if (IsBackupExemptPath(actualPath))
     {
-        return close(fd);
+        if (close(fd) != 0)
+        {
+            if (underlyingErrPtr)
+            {
+                *underlyingErrPtr = (uint32_t)errno;
+            }
+            return TAF_PROP_SYSTEM_ERROR;
+        }
+        return TAF_PROP_OK;
     }
 
-    int flags = fcntl(fd, F_GETFL);
-    bool writable = (flags != -1) &&
-                    (((flags & O_ACCMODE) == O_WRONLY) || ((flags & O_ACCMODE) == O_RDWR));
+    int fdFlags = fcntl(fd, F_GETFL);
+    bool writable = (fdFlags != -1) &&
+                    (((fdFlags & O_ACCMODE) == O_WRONLY) || ((fdFlags & O_ACCMODE) == O_RDWR));
     // pread() (used by CalculateFdCRC32C()) needs read access on the descriptor itself: an
     // O_WRONLY fd fails it with EBADF even though the file it points to is perfectly readable.
-    bool readable = (flags != -1) &&
-                     (((flags & O_ACCMODE) == O_RDONLY) || ((flags & O_ACCMODE) == O_RDWR));
+    bool readable = (fdFlags != -1) &&
+                     (((fdFlags & O_ACCMODE) == O_RDONLY) || ((fdFlags & O_ACCMODE) == O_RDWR));
 
     // Checksum the content through the still-open descriptor before closing it, instead of
     // closing first and reopening actualPath: this avoids an extra open() and the small window
@@ -1644,7 +1723,7 @@ int taf_pa_file_Close
     // taf_pa_file_Init() in tafFilePa.h), so no other thread/caller can touch actualPath in
     // between.
     char crcStr[TAF_PA_FILE_CRC_STR_SIZE] = {0};
-    taf_pa_result_t crcResult = TAF_PA_FAULT;
+    taf_prop_result_t crcResult = TAF_PROP_FAULT;
     if (writable && readable)
     {
         crcResult = CalculateFdCRC32C(fd, crcStr, sizeof(crcStr));
@@ -1653,19 +1732,23 @@ int taf_pa_file_Close
     if (close(fd) != 0)
     {
         TAF_PA_ERROR("Failed to close fd %d (%s), errno: %d", fd, actualPath, errno);
-        return -1;
+        if (underlyingErrPtr)
+        {
+            *underlyingErrPtr = (uint32_t)errno;
+        }
+        return TAF_PROP_SYSTEM_ERROR;
     }
 
     if (!writable)
     {
         // Report the invalid state, but defer restoration
         // until the next open and keep close() successful.
-        if (ValidateFileCRC32CWithExtendedAttr(actualPath) != TAF_PA_OK)
+        if (ValidateFileCRC32CWithExtendedAttr(actualPath) != TAF_PROP_OK)
         {
             TAF_PA_WARN("File integrity check failed on close for %s", actualPath);
             ReportError(TAF_PA_FILE_ERR_CORRUPTED, actualPath);
         }
-        return 0;
+        return TAF_PROP_OK;
     }
 
     if (!readable)
@@ -1674,225 +1757,315 @@ int taf_pa_file_Close
         crcResult = CalculateFileCRC32C(actualPath, crcStr, sizeof(crcStr));
     }
 
-    if ((crcResult != TAF_PA_OK) ||
-        (SetFileCRC32CToExtendedAttrValue(actualPath, crcStr) != TAF_PA_OK) ||
-        (PersistFile(actualPath) != TAF_PA_OK))
+    if ((crcResult != TAF_PROP_OK) ||
+        (SetFileCRC32CToExtendedAttrValue(actualPath, crcStr) != TAF_PROP_OK) ||
+        (PersistFile(actualPath) != TAF_PROP_OK))
     {
         TAF_PA_ERROR("Failed to update file checksum on close for %s", actualPath);
         ReportError(TAF_PA_FILE_ERR_SET_HASH, actualPath);
-        // The fd is already closed; return 0 to avoid misleading callers into a double-close.
-        return 0;
+        // The fd is already closed; return OK to avoid misleading callers into a double-close.
+        return TAF_PROP_OK;
     }
 
-    if (RefreshBackupIfNeeded(actualPath, crcStr) != TAF_PA_OK)
+    if (RefreshBackupIfNeeded(actualPath, crcStr) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to refresh file backup on close for %s", actualPath);
         ReportError(TAF_PA_FILE_ERR_BACKUP, actualPath);
-        return 0;
+        return TAF_PROP_OK;
     }
 
-    return 0;
+    return TAF_PROP_OK;
 }
 
-ssize_t taf_pa_file_Read
+taf_prop_result_t taf_pa_file_Read
 (
     int fd,
     uint8_t* bufPtr,
-    size_t sizePtr
+    size_t size,
+    size_t* bytesReadPtr,
+    uint32_t* underlyingErrPtr
 )
 {
     TAF_PA_DEBUG("%s", __FUNCTION__);
-    return read(fd, bufPtr, sizePtr);
+
+    if (underlyingErrPtr)
+    {
+        *underlyingErrPtr = TAF_PROP_UNDERLYING_ERR_NONE;
+    }
+
+    if (!bufPtr || !bytesReadPtr)
+    {
+        TAF_PA_ERROR("Invalid buffer or bytesRead parameter");
+        return TAF_PROP_BAD_PARAMETER;
+    }
+
+    ssize_t bytesRead = read(fd, bufPtr, size);
+    if (bytesRead < 0)
+    {
+        if (underlyingErrPtr)
+        {
+            *underlyingErrPtr = (uint32_t)errno;
+        }
+        return TAF_PROP_SYSTEM_ERROR;
+    }
+
+    *bytesReadPtr = (size_t)bytesRead;
+    return TAF_PROP_OK;
 }
 
-ssize_t taf_pa_file_Write
+taf_prop_result_t taf_pa_file_Write
 (
     int fd,
     const uint8_t* bufPtr,
-    size_t size
+    size_t size,
+    size_t* bytesWrittenPtr,
+    uint32_t* underlyingErrPtr
 )
 {
     TAF_PA_DEBUG("%s", __FUNCTION__);
 
-    return write(fd, bufPtr, size);
+    if (underlyingErrPtr)
+    {
+        *underlyingErrPtr = TAF_PROP_UNDERLYING_ERR_NONE;
+    }
+
+    if (!bufPtr || !bytesWrittenPtr)
+    {
+        TAF_PA_ERROR("Invalid buffer or bytesWritten parameter");
+        return TAF_PROP_BAD_PARAMETER;
+    }
+
+    ssize_t bytesWritten = write(fd, bufPtr, size);
+    if (bytesWritten < 0)
+    {
+        if (underlyingErrPtr)
+        {
+            *underlyingErrPtr = (uint32_t)errno;
+        }
+        return TAF_PROP_SYSTEM_ERROR;
+    }
+
+    *bytesWrittenPtr = (size_t)bytesWritten;
+    return TAF_PROP_OK;
 }
 
-void taf_pa_file_Delete
+taf_prop_result_t taf_pa_file_Delete
 (
-    const char* filePathPtr
+    const char* filePathPtr,
+    uint32_t* underlyingErrPtr
 )
 {
     TAF_PA_DEBUG("%s", __FUNCTION__);
     TAF_PA_DEBUG("filePathPtr: %s", filePathPtr);
 
+    if (underlyingErrPtr)
+    {
+        *underlyingErrPtr = TAF_PROP_UNDERLYING_ERR_NONE;
+    }
+
     if (!filePathPtr)
     {
         TAF_PA_ERROR("Invalid file path parameter");
-        return;
+        return TAF_PROP_BAD_PARAMETER;
     }
 
     if ((unlink(filePathPtr) != 0) && (errno != ENOENT))
     {
         TAF_PA_ERROR("Failed to delete file %s, errno: %d", filePathPtr, errno);
-        return;
+        if (underlyingErrPtr)
+        {
+            *underlyingErrPtr = (uint32_t)errno;
+        }
+        return TAF_PROP_SYSTEM_ERROR;
     }
 
     // Keep the recovery copy until the primary deletion is durable. If the directory fsync fails,
     // retain the backup so a subsequent restore still has a chance to recover the file.
-    if (PersistParentDir(filePathPtr) != TAF_PA_OK)
+    if (PersistParentDir(filePathPtr) != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to persist deletion of file %s", filePathPtr);
         ReportError(TAF_PA_FILE_ERR_BACKUP, filePathPtr);
-        return;
+        return TAF_PROP_FAULT;
     }
 
     if (BackupEnabled)
     {
-        if (DeleteBackup(filePathPtr) != TAF_PA_OK)
+        if (DeleteBackup(filePathPtr) != TAF_PROP_OK)
         {
             ReportError(TAF_PA_FILE_ERR_BACKUP, filePathPtr);
+            return TAF_PROP_FAULT;
         }
     }
+
+    return TAF_PROP_OK;
 }
 
-int taf_pa_file_Copy
+taf_prop_result_t taf_pa_file_Copy
 (
     const char *sourcePath,
-    const char *destPath
+    const char *destPath,
+    uint32_t* underlyingErrPtr
 )
 {
     int srcFd, destFd;
-    ssize_t bytesRead, bytesWritten;
     uint8_t buffer[RFS_COPY_BUFFER_SIZE];
 
-    // open source file
-    srcFd = taf_pa_file_Open(sourcePath, O_RDONLY, 0);
-    if (srcFd < 0)
+    if (underlyingErrPtr)
     {
-        TAF_PA_ERROR("Failed to open source file %s, errno: %d", sourcePath, errno);
-        return errno;
+        *underlyingErrPtr = TAF_PROP_UNDERLYING_ERR_NONE;
+    }
+
+    if (!sourcePath || !destPath)
+    {
+        TAF_PA_ERROR("Invalid source or destination path parameter");
+        return TAF_PROP_BAD_PARAMETER;
+    }
+
+    // open source file
+    taf_prop_result_t result = taf_pa_file_Open(sourcePath, O_RDONLY, 0, &srcFd, underlyingErrPtr);
+    if (result != TAF_PROP_OK)
+    {
+        TAF_PA_ERROR("Failed to open source file %s", sourcePath);
+        return result;
     }
 
     // open destination file, if it doesn't exist, create it
-    destFd = taf_pa_file_Open(destPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (destFd < 0)
+    result = taf_pa_file_Open(destPath, O_WRONLY | O_CREAT | O_TRUNC, 0644, &destFd,
+                              underlyingErrPtr);
+    if (result != TAF_PROP_OK)
     {
-        TAF_PA_ERROR("Failed to open destination file %s, errno: %d", destPath, errno);
-        taf_pa_file_Close(srcFd);
-        return errno;
+        TAF_PA_ERROR("Failed to open destination file %s", destPath);
+        taf_pa_file_Close(srcFd, NULL);
+        return result;
     }
 
     struct stat sourceStat;
     if ((fstat(srcFd, &sourceStat) != 0) ||
         (fchmod(destFd, sourceStat.st_mode & 07777) != 0))
     {
-        int savedErrno = errno;
         TAF_PA_ERROR("Failed to preserve metadata while copying %s to %s, errno: %d",
-                 sourcePath, destPath, savedErrno);
-        taf_pa_file_Close(srcFd);
-        taf_pa_file_Close(destFd);
-        taf_pa_file_Delete(destPath);
-        return savedErrno ? savedErrno : EIO;
+                 sourcePath, destPath, errno);
+        if (underlyingErrPtr)
+        {
+            *underlyingErrPtr = (uint32_t)errno;
+        }
+        taf_pa_file_Close(srcFd, NULL);
+        taf_pa_file_Close(destFd, NULL);
+        taf_pa_file_Delete(destPath, NULL);
+        return TAF_PROP_SYSTEM_ERROR;
     }
 
     // read source file and write to destination file
-    while ((bytesRead = read(srcFd, buffer, RFS_COPY_BUFFER_SIZE)) > 0)
+    for (;;)
     {
-        bytesWritten = taf_pa_file_Write(destFd, buffer, bytesRead);
-        if (bytesWritten != bytesRead)
+        ssize_t bytesRead = read(srcFd, buffer, RFS_COPY_BUFFER_SIZE);
+        if (bytesRead == 0)
         {
-            int savedErrno = errno;
-            TAF_PA_ERROR("Failed to write to destination file %s, errno: %d", destPath, savedErrno);
-            taf_pa_file_Close(srcFd);
-            taf_pa_file_Close(destFd);
-            taf_pa_file_Delete(destPath);
-            return savedErrno;
+            break;
+        }
+
+        if (bytesRead < 0)
+        {
+            TAF_PA_ERROR("Failed to read from source file %s, errno: %d", sourcePath, errno);
+            if (underlyingErrPtr)
+            {
+                *underlyingErrPtr = (uint32_t)errno;
+            }
+            taf_pa_file_Close(srcFd, NULL);
+            taf_pa_file_Close(destFd, NULL);
+            taf_pa_file_Delete(destPath, NULL);
+            return TAF_PROP_SYSTEM_ERROR;
+        }
+
+        size_t bytesWritten = 0;
+        result = taf_pa_file_Write(destFd, buffer, (size_t)bytesRead, &bytesWritten,
+                                   underlyingErrPtr);
+        if ((result != TAF_PROP_OK) || (bytesWritten != (size_t)bytesRead))
+        {
+            TAF_PA_ERROR("Failed to write to destination file %s", destPath);
+            taf_pa_file_Close(srcFd, NULL);
+            taf_pa_file_Close(destFd, NULL);
+            taf_pa_file_Delete(destPath, NULL);
+            return (result != TAF_PROP_OK) ? result : TAF_PROP_SYSTEM_ERROR;
         }
     }
 
-    // error check for taf_pa_file_Read returned value
-    if (bytesRead < 0)
+    if (CopySELinuxContext(srcFd, destFd, sourcePath, destPath) != TAF_PROP_OK)
     {
-        int savedErrno = errno;
-        TAF_PA_ERROR("Failed to read from source file %s, errno: %d", sourcePath, savedErrno);
-        taf_pa_file_Close(srcFd);
-        taf_pa_file_Close(destFd);
-        taf_pa_file_Delete(destPath);
-        return savedErrno;
+        taf_pa_file_Close(srcFd, NULL);
+        taf_pa_file_Close(destFd, NULL);
+        taf_pa_file_Delete(destPath, NULL);
+        return TAF_PROP_FAULT;
     }
 
-    if (CopySELinuxContext(srcFd, destFd, sourcePath, destPath) != TAF_PA_OK)
+    result = taf_pa_file_Close(srcFd, underlyingErrPtr);
+    if (result != TAF_PROP_OK)
     {
-        taf_pa_file_Close(srcFd);
-        taf_pa_file_Close(destFd);
-        taf_pa_file_Delete(destPath);
-        return EACCES;
-    }
-
-    if (taf_pa_file_Close(srcFd) != 0)
-    {
-        int savedErrno = errno;
-        taf_pa_file_Close(destFd);
-        taf_pa_file_Delete(destPath);
-        return savedErrno ? savedErrno : EIO;
+        taf_pa_file_Close(destFd, NULL);
+        taf_pa_file_Delete(destPath, NULL);
+        return result;
     }
 
     // Closing the destination updates its checksum and refreshes its backup copy.
-    if (taf_pa_file_Close(destFd) != 0)
+    result = taf_pa_file_Close(destFd, underlyingErrPtr);
+    if (result != TAF_PROP_OK)
     {
-        int savedErrno = errno;
-        TAF_PA_ERROR("Failed to close destination file %s, errno: %d", destPath, savedErrno);
-        return savedErrno ? savedErrno : EIO;
+        TAF_PA_ERROR("Failed to close destination file %s", destPath);
+        return result;
     }
 
     if (BackupEnabled && !HasMatchingBackup(destPath))
     {
         TAF_PA_ERROR("Destination %s was copied but has no valid backup", destPath);
-        errno = EIO;
-        return EIO;
+        return TAF_PROP_FAULT;
     }
 
-    return 0;
+    return TAF_PROP_OK;
 }
 
-int taf_pa_file_Rename
+taf_prop_result_t taf_pa_file_Rename
 (
     const char *sourcePath,
-    const char *destPath
+    const char *destPath,
+    uint32_t* underlyingErrPtr
 )
 {
     TAF_PA_DEBUG("%s", __FUNCTION__);
 
+    if (underlyingErrPtr)
+    {
+        *underlyingErrPtr = TAF_PROP_UNDERLYING_ERR_NONE;
+    }
+
     if (!sourcePath || !destPath)
     {
         TAF_PA_ERROR("Invalid source/destination path parameter");
-        errno = EINVAL;
-        return -1;
+        return TAF_PROP_BAD_PARAMETER;
     }
 
     if (rename(sourcePath, destPath) == 0)
     {
         if (BackupEnabled)
         {
-            taf_pa_result_t backupResult = TAF_PA_OK;
+            taf_prop_result_t backupResult = TAF_PROP_OK;
 
-            if (PersistParentDir(destPath) != TAF_PA_OK)
+            if (PersistParentDir(destPath) != TAF_PROP_OK)
             {
-                backupResult = TAF_PA_FAULT;
+                backupResult = TAF_PROP_FAULT;
             }
 
             // The source primary is gone after rename(), so its backup must be removed. Report a
             // failure if the cleanup cannot be made durable; otherwise an old source-path backup
             // remains available for a future file created at that path.
-            if (DeleteBackup(sourcePath) != TAF_PA_OK)
+            if (DeleteBackup(sourcePath) != TAF_PROP_OK)
             {
-                backupResult = TAF_PA_FAULT;
+                backupResult = TAF_PROP_FAULT;
             }
 
             char destCrc[TAF_PA_FILE_CRC_STR_SIZE] = {0};
-            if ((CalculateFileCRC32C(destPath, destCrc, sizeof(destCrc)) != TAF_PA_OK) ||
-                (SetFileCRC32CToExtendedAttrValue(destPath, destCrc) != TAF_PA_OK) ||
-                (BackupFileToStorage(destPath, destCrc) != TAF_PA_OK))
+            if ((CalculateFileCRC32C(destPath, destCrc, sizeof(destCrc)) != TAF_PROP_OK) ||
+                (SetFileCRC32CToExtendedAttrValue(destPath, destCrc) != TAF_PROP_OK) ||
+                (BackupFileToStorage(destPath, destCrc) != TAF_PROP_OK))
             {
                 // destPath's backup slot (GetBackupPath(destPath)) may still be holding whatever
                 // was backed up under that path before the rename, i.e. content that no longer
@@ -1902,33 +2075,31 @@ int taf_pa_file_Rename
                 // initial backup" path will recreate a correct one from the next open.
                 TAF_PA_ERROR("Failed to refresh backup of %s after rename, discarding its stale "
                          "backup", destPath);
-                if (DeleteBackup(destPath) != TAF_PA_OK)
+                if (DeleteBackup(destPath) != TAF_PROP_OK)
                 {
-                    backupResult = TAF_PA_FAULT;
+                    backupResult = TAF_PROP_FAULT;
                 }
-                backupResult = TAF_PA_FAULT;
+                backupResult = TAF_PROP_FAULT;
             }
 
-            if (backupResult != TAF_PA_OK)
+            if (backupResult != TAF_PROP_OK)
             {
-                errno = EIO;
-                return -1;
+                return TAF_PROP_FAULT;
             }
         }
-        return 0;
+        return TAF_PROP_OK;
     }
 
     if (errno == EXDEV)
     {
         TAF_PA_DEBUG("Rename of %s to %s crosses file systems, falling back to copy + delete",
                  sourcePath, destPath);
-        int result = taf_pa_file_Copy(sourcePath, destPath);
-        if (result != 0)
+        taf_prop_result_t result = taf_pa_file_Copy(sourcePath, destPath, underlyingErrPtr);
+        if (result != TAF_PROP_OK)
         {
-            TAF_PA_ERROR("Failed to copy %s to %s as a fallback for rename, errno: %d",
-                     sourcePath, destPath, result);
-            errno = result;
-            return -1;
+            TAF_PA_ERROR("Failed to copy %s to %s as a fallback for rename",
+                     sourcePath, destPath);
+            return result;
         }
 
         // Only delete the source (and its backup) after verifying the destination
@@ -1939,8 +2110,7 @@ int taf_pa_file_Rename
             {
                 TAF_PA_ERROR("Destination %s has no valid backup after cross-fs copy, "
                          "keeping source %s", destPath, sourcePath);
-                errno = EIO;
-                return -1;
+                return TAF_PROP_FAULT;
             }
         }
 
@@ -1948,26 +2118,31 @@ int taf_pa_file_Rename
         {
             TAF_PA_ERROR("Failed to delete source %s after cross-filesystem copy, errno: %d",
                      sourcePath, errno);
-            return -1;
+            if (underlyingErrPtr)
+            {
+                *underlyingErrPtr = (uint32_t)errno;
+            }
+            return TAF_PROP_SYSTEM_ERROR;
         }
 
-        if (PersistParentDir(sourcePath) != TAF_PA_OK)
+            if (PersistParentDir(sourcePath) != TAF_PROP_OK)
+    {
+        TAF_PA_ERROR("Failed to persist deletion of source %s", sourcePath);
+        return TAF_PROP_FAULT;
+    }
+
+        if (BackupEnabled && (DeleteBackup(sourcePath) != TAF_PROP_OK))
         {
-            TAF_PA_ERROR("Failed to persist deletion of source %s", sourcePath);
-            errno = EIO;
-            return -1;
+            return TAF_PROP_FAULT;
         }
 
-        if (BackupEnabled && (DeleteBackup(sourcePath) != TAF_PA_OK))
-        {
-            errno = EIO;
-            return -1;
-        }
-
-        return 0;
+        return TAF_PROP_OK;
     }
 
     TAF_PA_ERROR("Failed to rename %s to %s, errno: %d", sourcePath, destPath, errno);
-
-    return -1;
+    if (underlyingErrPtr)
+    {
+        *underlyingErrPtr = (uint32_t)errno;
+    }
+    return TAF_PROP_SYSTEM_ERROR;
 }

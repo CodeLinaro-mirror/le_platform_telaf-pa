@@ -51,13 +51,18 @@ typedef struct taf_prop_file_vtable
     size_t size;
 
     // RFS File Operations
-    int (*prop_open)(const char *filePathPtr, int flags, mode_t mode);
-    int (*prop_close)(int fd);
-    ssize_t (*prop_read)(int fd, uint8_t* bufPtr, size_t size);
-    ssize_t (*prop_write)(int fd, const uint8_t* bufPtr, size_t size);
-    void (*prop_delete)(const char* filePathPtr);
-    int (*prop_copy)(const char *sourcePath, const char *destPath);
-    int (*prop_rename)(const char *sourcePath, const char *destPath);
+    taf_prop_result_t (*prop_open)(const char *filePathPtr, int flags, mode_t mode,
+                                   int* fdPtr, uint32_t* underlyingErrPtr);
+    taf_prop_result_t (*prop_close)(int fd, uint32_t* underlyingErrPtr);
+    taf_prop_result_t (*prop_read)(int fd, uint8_t* bufPtr, size_t size,
+                                   size_t* bytesReadPtr, uint32_t* underlyingErrPtr);
+    taf_prop_result_t (*prop_write)(int fd, const uint8_t* bufPtr, size_t size,
+                                    size_t* bytesWrittenPtr, uint32_t* underlyingErrPtr);
+    taf_prop_result_t (*prop_delete)(const char* filePathPtr, uint32_t* underlyingErrPtr);
+    taf_prop_result_t (*prop_copy)(const char *sourcePath, const char *destPath,
+                                   uint32_t* underlyingErrPtr);
+    taf_prop_result_t (*prop_rename)(const char *sourcePath, const char *destPath,
+                                     uint32_t* underlyingErrPtr);
 } taf_prop_file_vtable_t;
 
 //--------------------------------------------------------------------------------------------------
