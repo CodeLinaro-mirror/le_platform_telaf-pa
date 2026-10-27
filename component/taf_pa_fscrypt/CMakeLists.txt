@@ -7,10 +7,11 @@ set(TARGET_NAME taf_pa_fscrypt)
 set(OUTPUT_NAME Component_${TARGET_NAME})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/keyStore)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-add_library(${TARGET_NAME} SHARED tafFscryptPa.c)
+add_library(${TARGET_NAME} SHARED tafFscryptPa.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../taf_pa_keystore/tafFilePa.c
+)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     VERSION ${LIBRARY_VERSION}
@@ -19,9 +20,13 @@ set_target_properties(${TARGET_NAME} PROPERTIES
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../taf_pa_keystore)
 
 target_link_libraries(${TARGET_NAME} PRIVATE taf_pa_common)
 target_link_libraries(${TARGET_NAME} PRIVATE taf_prop_fscrypt)
+# libcrypto is required by tafFilePa.c (SHA1 used to derive backup file names).
+target_link_libraries(${TARGET_NAME} PRIVATE crypto)
+target_link_libraries(${TARGET_NAME} PRIVATE selinux)
 
 install(TARGETS ${TARGET_NAME}
     LIBRARY DESTINATION lib
