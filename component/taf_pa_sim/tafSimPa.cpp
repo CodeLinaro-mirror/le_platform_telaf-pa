@@ -3897,3 +3897,20 @@ taf_pa_result_t taf_pa_sim_IsNtnProfileActive
     TAF_PA_INFO("NTN profile active status: %d", (int)*isActive);
     return TAF_PA_OK;
 }
+
+taf_pa_result_t taf_pa_sim_GetSelectedCard
+(
+    taf_pa_sim_Id_t* simIdPtr
+)
+{
+    TAF_PA_INFO("taf_pa_sim_GetSelectedCard");
+    if (simIdPtr == nullptr)
+    {
+        TAF_PA_ERROR("Invalid parameter: simIdPtr is null");
+        return TAF_PA_BAD_PARAMETER;
+    }
+    auto& pa = PlatformAdaptor::GetInstance();
+    *simIdPtr = pa.GetSelectedCard();
+    TAF_PA_INFO("taf_pa_sim_GetSelectedCard: simId = %d", (int)*simIdPtr);
+    return TAF_PA_OK;
+}
