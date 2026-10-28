@@ -27,7 +27,6 @@
 #include <set>
 #include <future>
 #include <atomic>
-#include <chrono>
 #include <shared_mutex>
 
 namespace taf
@@ -234,11 +233,15 @@ namespace data
 
         taf_pa_result_t PaStartDataSessionAsync
         (
-            const DataCallStartStopParams_t& params
+            const DataCallStartStopParams_t& params,
+            taf_pa_data_OperationCb callback,
+            std::shared_ptr<void> context
         );
         taf_pa_result_t PaStopDataSessionAsync
         (
-            const DataCallStartStopParams_t& params
+            const DataCallStartStopParams_t& params,
+            taf_pa_data_OperationCb callback,
+            std::shared_ptr<void> context
         );
         taf_pa_result_t PaRequestDataCallsListAsync
         (
@@ -420,18 +423,11 @@ namespace data
         // Mutex for protecting dataConnectionManagersSubsysStateMap_ (NB reads, SB writes).
         std::shared_mutex dataConnSubsysStateMapMtx_;
 
-        // Functions
-        // The callback fuction for TelSDK startDataCall()
-        static void startDataCallCallback
+        void invokeDataCallOperationCallback
         (
-            const std::shared_ptr<telux::data::IDataCall> &iCall,
-            telux::common::ErrorCode errorCode
-        );
-        // The callback fuction for TelSDK stoptDataCall()
-        static void stopDataCallCallback
-        (
-            const std::shared_ptr<telux::data::IDataCall> &iCall,
-            telux::common::ErrorCode errorCode
+            taf_pa_data_OperationCb callback,
+            std::shared_ptr<void> context,
+            const DataCallOperationResult_t &result
         );
 
         void initDataConnectionManagers();

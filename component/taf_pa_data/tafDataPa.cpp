@@ -17,6 +17,7 @@
 #include "tafDataTeluxDataProfilePa.hpp"
 #include "tafDataTeluxDataConnectionPa.hpp"
 #include <atomic>
+#include <utility>
 
 // Thread-safe initialization flag
 static std::atomic<bool> gDataPaInitialized(false);
@@ -481,32 +482,46 @@ taf_pa_result_t taf::pa::data::DeleteProfile
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Start a data session
+ * Start a data session with a request-specific operation result callback.
+ * The callback is invoked only if this API returns TAF_PA_OK. Its data-call snapshot is populated
+ * only when its final data-call status is CONNECTED. The context pointer is not interpreted by PA;
+ * it is present for callback API consistency and is passed back unchanged. This snapshot is not a
+ * state event; state changes are delivered independently through taf_pa_data_CallEventsCb, and OSS
+ * owns the 10 second start timer/event validation.
  */
 //--------------------------------------------------------------------------------------------------
 taf_pa_result_t taf::pa::data::StartDataSessionAsync
 (
-    const taf::pa::data::DataCallStartStopParams_t& params ///< [IN] The IP type.
+    const taf::pa::data::DataCallStartStopParams_t& params,
+    taf_pa_data_OperationCb callBack,
+    std::shared_ptr<void> context
 )
 {
     TAF_PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-    return teluxPaDataConn.PaStartDataSessionAsync(params);
+    return teluxPaDataConn.PaStartDataSessionAsync(params, std::move(callBack), context);
 }
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Stop a data session
+ * Stop a data session with a request-specific operation result callback.
+ * The callback is invoked only if this API returns TAF_PA_OK. Its data-call snapshot is populated
+ * only when its final data-call status is CONNECTED. The context pointer is not interpreted by PA;
+ * it is present for callback API consistency and is passed back unchanged. This snapshot is not a
+ * state event; state changes are delivered independently through taf_pa_data_CallEventsCb, and OSS
+ * owns the 10 second stop timer/event validation.
  */
 //--------------------------------------------------------------------------------------------------
 taf_pa_result_t taf::pa::data::StopDataSessionAsync
 (
-    const taf::pa::data::DataCallStartStopParams_t& params ///< [IN] The IP type.
+    const taf::pa::data::DataCallStartStopParams_t& params,
+    taf_pa_data_OperationCb callBack,
+    std::shared_ptr<void> context
 )
 {
     TAF_PA_DEBUG("PA implementation.");
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-    return teluxPaDataConn.PaStopDataSessionAsync(params);
+    return teluxPaDataConn.PaStopDataSessionAsync(params, std::move(callBack), context);
 }
 
 taf_pa_result_t taf::pa::data::RequestDataCallsListAsync
