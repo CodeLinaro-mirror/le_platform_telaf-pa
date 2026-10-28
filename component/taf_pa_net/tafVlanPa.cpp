@@ -1537,13 +1537,13 @@ taf_pa_result_t taf_pa_net_GetIPPassThroughConfig
     }
 
     gsize src_len = g_strlcpy(ipptConfigOut->macAddr, ipptConfigTel.devConfig.macAddr.c_str(),
-                              TAF_PA_NET_MAC_ADDR_MAX_LEN);
+                              TAF_PA_NET_MAC_ADDR_MAX_BYTES);
 
-    if (src_len >= TAF_PA_NET_MAC_ADDR_MAX_LEN)
+    if (src_len >= TAF_PA_NET_MAC_ADDR_MAX_BYTES)
     {
        TAF_PA_ERROR("MAC truncated: src_len=%d, buf_size=%d, value='%s'",
              static_cast<size_t>(src_len),
-             static_cast<unsigned>(TAF_PA_NET_MAC_ADDR_MAX_LEN),
+             static_cast<unsigned>(TAF_PA_NET_MAC_ADDR_MAX_BYTES),
              ipptConfigTel.devConfig.macAddr.c_str());
     }
 

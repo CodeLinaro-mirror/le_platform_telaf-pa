@@ -183,6 +183,7 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_net_SetIPPassThroughNatConfig
  */
 //--------------------------------------------------------------------------------------------------
 #define TAF_PA_NET_MAC_ADDR_MAX_LEN 17
+#define TAF_PA_NET_MAC_ADDR_MAX_BYTES (TAF_PA_NET_MAC_ADDR_MAX_LEN + 1)
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -217,7 +218,7 @@ typedef struct
 {
     taf_pa_vlan_ippt_operation_t operation;  ///< Operation (enable/disable)
     taf_pa_vlan_iface_type_t ifType;         ///< Interface type
-    char macAddr[TAF_PA_NET_MAC_ADDR_MAX_LEN+1];     ///< MAC address (format: XX:XX:XX:XX:XX:XX)
+    char macAddr[TAF_PA_NET_MAC_ADDR_MAX_BYTES];     ///< MAC address (format: XX:XX:XX:XX:XX:XX)
 } taf_pa_IpptConfigOut_t;
 
 TAF_PA_SHARED taf_pa_result_t taf_pa_net_SetIPPassThroughConfig
