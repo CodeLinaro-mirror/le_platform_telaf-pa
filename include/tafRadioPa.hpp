@@ -369,9 +369,8 @@ typedef enum
 typedef struct
 {
     taf_pa_radio_NetworkSelectionMode_t mode;
-    uint16_t mcc;
-    uint16_t mnc;
-    uint8_t mncIncludesPcsDigit;
+    char mcc[4];
+    char mnc[4];
 } taf_pa_radio_NetworkSelectionPreference_t;
 
 typedef struct
