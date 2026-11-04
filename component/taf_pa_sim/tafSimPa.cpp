@@ -2689,8 +2689,8 @@ taf_pa_result_t taf_pa_sim_GetState
     }
     else
     {
-        *state = TAF_PA_SIM_STATE_UNKNOWN;
-        TAF_PA_INFO("TAF_PA_SIM_STATE_UNKNOWN (card is null)");
+        *state = TAF_PA_SIM_ABSENT;
+        TAF_PA_INFO("TAF_PA_SIM_ABSENT (card is null)");
         return TAF_PA_OK;
     }
 }
