@@ -1966,8 +1966,17 @@ using taf_pa_data_RequestCallListCb =
 //--------------------------------------------------------------------------------------------------
 /**
  * Request list of all active data calls. Events will be provided via taf_pa_data_RequestCallListCb.
+ * Multiple requests may be pending concurrently. Each TelSDK response is delivered to the callback
+ * for its corresponding request; responses may arrive in any order, and callbacks for different
+ * requests may run concurrently on TelSDK callback threads. Callback implementations must be
+ * thread-safe and must not assume they run on the thread that issued the request.
  *
- * @return TAF_PA_OK on success. Wait for callback for final status.
+ * @return TAF_PA_OK if the request was accepted; wait for its callback for the final status. An
+ * immediate error return means the callback will not be invoked. PA does not impose an operation
+ * timeout; the caller is responsible for timeout handling. A caller-side timeout does not cancel
+ * the request, so its callback may still arrive later and should be ignored if no longer relevant.
+ * PA does not coordinate outstanding requests with Deinit; whether their callbacks arrive depends
+ * on TelSDK behavior.
  */
 //--------------------------------------------------------------------------------------------------
 TAF_PA_SHARED taf_pa_result_t RequestDataCallsListAsync

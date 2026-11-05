@@ -65,8 +65,9 @@ class Utils
         static telux::data::DataCallStatus ConvertCallStatus(DataCallStatus_e);
         static DataCallStatus_e            ConvertCallStatus(telux::data::DataCallStatus);
 
-        // Convert the Start/Stop IDataCall response, including available per-IP-family address
-        // details. Listener-only bearer, end-reason, and bit-rate fields remain separate.
+        // Convert a TelSDK IDataCall into a PA snapshot, including available per-IP-family address
+        // details. Used for Start/Stop results and call-list entries. Listener-only bearer,
+        // end-reason, and bit-rate fields remain separate.
         static taf_pa_result_t ParseDataCallInfo
         (
             const std::shared_ptr<telux::data::IDataCall> &iDataCall,

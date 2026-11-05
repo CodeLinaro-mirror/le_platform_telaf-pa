@@ -28,6 +28,10 @@
 #include <future>
 #include <atomic>
 #include <shared_mutex>
+#include <condition_variable>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
 
 namespace taf
 {
@@ -74,10 +78,19 @@ namespace data
         std::shared_ptr<void> context;
     };
 
-    struct RequestDataCallListCallbackEntry_t
+    // Callback state is owned by the TelSDK lambda for this individual request. Keeping it
+    // request-local replaces the former shared callback slot and allows concurrent requests to
+    // complete independently. This is not a registry used to coordinate requests with Deinit.
+    struct DataCallListRequestContext_t
     {
         taf_pa_data_RequestCallListCb callback;
         std::shared_ptr<void> context;
+        // The query is issued on the manager for this phone, and the stateless parser needs the
+        // phone ID to populate each returned call snapshot.
+        PhoneId_e phoneId = PhoneId_e::INVALID;
+        // Suppress duplicate TelSDK responses for this request only; this does not track its
+        // lifetime relative to Deinit.
+        std::atomic<bool> completed = {false};
     };
 
     // Class to handle TelSDK callbacks.
@@ -97,7 +110,7 @@ namespace data
         void onServiceStatusChange(telux::common::ServiceStatus status) override;
         void onThroughputInfoAvailable(
             const std::vector<telux::data::ThroughputInfo> &info) override;
-        void ParseIDataCall(
+        taf_pa_result_t ParseIDataCall(
             const std::shared_ptr<telux::data::IDataCall> &iCall,
             DataCallEventInfo_t &dataCallInfo);
 
@@ -361,8 +374,6 @@ namespace data
             std::vector<ThroughputInfo_t> &throughputInfoList
         );
 
-        void resetCallListClientEntry();
-
     private:
         // Variables
         SlotCount_e slotCount_ = SlotCount_e::ONE; // 1
@@ -399,20 +410,14 @@ namespace data
                                                                          dataConnectionManagersMap_;
         std::map<SlotId, std::shared_ptr<telux::data::IDataConnectionListener>>
                                                                         dataConnectionListenersMap_;
-        std::map<SlotId, std::shared_ptr<TafPaTeluxDataConnectionListener>>
-                                                              tafPaTeluxDataConnectionListenersMap_;
 
         // List data calls management.
         static void onRequestDataCallList
         (
+            const std::shared_ptr<DataCallListRequestContext_t> &request,
             const std::vector<std::shared_ptr<telux::data::IDataCall>> &dataCalls,
             telux::common::ErrorCode error
         );
-        std::atomic<bool> bRequestCallListInProgress_ = false;
-        RequestDataCallListCallbackEntry_t requestCallListClientEntry_ = {nullptr,nullptr};
-        // Mutex protecting requestCallListClientEntry_:
-        // ensures the entry write and the atomic flag set are atomic w.r.t. the SB read.
-        std::mutex requestCallListMutex_;
 
         // Used to track if connection listeners are registered or not.
         bool bDataConnectionListenersRegistered_[MAX_SLOT_NUM] = {false,false};

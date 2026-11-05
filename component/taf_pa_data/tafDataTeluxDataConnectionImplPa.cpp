@@ -16,9 +16,11 @@
 #include <arpa/inet.h>
 
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <exception>
 #include <sstream>
+#include <thread>
 #include <utility>
 
 using namespace taf::pa::data;
@@ -1956,11 +1958,9 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
             TAF_PA_INFO("dataConnMngr for slot %d: AVAILABLE", slotId);
             // Store the manager in the map with slot Id as index
             dataConnectionManagersMap_.emplace((SlotId)slotId, dataProfMngr);
-            // Initialize and store the callback objects for later registration.
-            tafPaTeluxDataConnectionListenersMap_.emplace((SlotId)slotId,
-                            std::make_shared<TafPaTeluxDataConnectionListener>((SlotId)slotId));
+            // Keep the listener alive for TelSDK state-change callbacks and later registration.
             dataConnectionListenersMap_[(SlotId)slotId] =
-                                        tafPaTeluxDataConnectionListenersMap_[(SlotId)slotId];
+                std::make_shared<TafPaTeluxDataConnectionListener>((SlotId)slotId);
             // Mark listener as not registered (under lock for consistency with
             // PaRegisterDataConnCallbacks / PaDeregisterDataConnCallbacks).
             {
@@ -2031,13 +2031,7 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionMan
 {
     TAF_PA_INFO("Starting data connection managers deinitialization...");
 
-    // Phase 1: Check for active operations
-    if (bRequestCallListInProgress_.load())
-    {
-        TAF_PA_WARN("Request call list operation in progress during deinit");
-        // Log warning but continue - the operation will be aborted when maps are cleared
-    }
-    // Phase 2: Deregister callbacks with error checking
+    // Deregister callbacks with error checking.
     taf_pa_result_t result = PaDeregisterDataConnCallbacks();
     if (TAF_PA_OK != result)
     {
@@ -2073,9 +2067,6 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionMan
     }
 
     // Clear listener and manager maps in proper order
-    TAF_PA_INFO("Clear tafPaTeluxDataConnectionListenersMap_");
-    tafPaTeluxDataConnectionListenersMap_.clear();
-
     TAF_PA_INFO("Clear dataConnectionListenersMap_");
     dataConnectionListenersMap_.clear();
 
@@ -2088,15 +2079,6 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionMan
         dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
         dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
     }
-
-    // Reset request call list state: release the stored context shared_ptr and
-    // clear the in-progress flag so a subsequent Init()/Deinit() cycle starts clean.
-    TAF_PA_INFO("Reset requestCallListClientEntry_ and bRequestCallListInProgress_");
-    {
-        std::lock_guard<std::mutex> lock(requestCallListMutex_);
-        requestCallListClientEntry_ = {nullptr, nullptr};
-    }
-    bRequestCallListInProgress_.store(false);
 
     TAF_PA_INFO("Data connection managers deinitialization complete");
     return TAF_PA_OK;
@@ -2571,82 +2553,104 @@ void taf::pa::data::TafPaTeluxDataConnection::invokeDataCallOperationCallback
 
 void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
 (
+    const std::shared_ptr<DataCallListRequestContext_t> &request,
     const std::vector<std::shared_ptr<telux::data::IDataCall>> &iDataCalls,
     telux::common::ErrorCode error
 )
 {
     SET_SDK_THREAD_NAME();
-
-    auto &teluxPaDataConn = TafPaTeluxDataConnection::GetInstance();
-    TAF_PA_ERROR_IF_RET_NIL(!teluxPaDataConn.bRequestCallListInProgress_.load(),
-                                        "No pending request call list. Ignoring the event.");
-
-    TAF_PA_INFO("Number of active calls: %zu", iDataCalls.size());
-
-    // read the entry under the mutex so we always see the fully-written
-    // callback/context pair that was stored atomically in PaRequestDataCallsListAsync.
-    std::vector<DataCallEventInfo_t> callList;
-    RequestDataCallListCallbackEntry_t entry;
+    if (!request)
     {
-        std::lock_guard<std::mutex> lock(teluxPaDataConn.requestCallListMutex_);
-        entry = teluxPaDataConn.requestCallListClientEntry_;
+        TAF_PA_ERROR("Ignoring data-call-list response without request context");
+        return;
     }
-    auto callback = entry.callback;
-    auto context  = entry.context;
-
-    // Verify callback is not null before proceeding
-    if (!callback)
+    // This completion guard belongs to this request alone. It prevents duplicate/concurrent
+    // TelSDK responses from invoking the same client callback more than once.
+    if (request->completed.exchange(true))
     {
-        TAF_PA_ERROR("Callback is NULL. Exit request call list processing.");
-        teluxPaDataConn.bRequestCallListInProgress_.store(false);
+        TAF_PA_INFO("Ignoring duplicate data-call-list response");
         return;
     }
 
+    TAF_PA_INFO("Data-call-list response contains %zu calls", iDataCalls.size());
+
+    taf_pa_result_t result = Utils::ConvertErrorCode(error);
+    std::vector<DataCallEventInfo_t> callList;
     if (telux::common::ErrorCode::SUCCESS != error)
     {
-        TAF_PA_ERROR("onRequestDataCallList failed with error code: %d", TO_INT(error));
-        // Call the callback with error
-        callback(TAF_PA_FAULT, callList, context);
-        // Mark call as completed.
-        teluxPaDataConn.bRequestCallListInProgress_.store(false);
+        TAF_PA_ERROR("onRequestDataCallList failed with TelSDK error code: %d", TO_INT(error));
+    }
+    else
+    {
+        // Return a complete snapshot or a failure, never a partial list if one entry is invalid.
+        try
+        {
+            result = TAF_PA_OK;
+            for (const auto &iDataCall : iDataCalls)
+            {
+                if (!iDataCall)
+                {
+                    TAF_PA_ERROR("TelSDK returned a null IDataCall in the call list");
+                    result = TAF_PA_FAULT;
+                    callList.clear();
+                    break;
+                }
+
+                const SlotId slotId = iDataCall->getSlotId();
+                TAF_PA_INFO("Slot ID: %d", TO_INT(slotId));
+                DataCallEventInfo_t eventInfo{};
+                const taf_pa_result_t parseResult =
+                    Utils::ParseDataCallInfo(iDataCall, request->phoneId, eventInfo);
+                if (TAF_PA_OK != parseResult)
+                {
+                    TAF_PA_ERROR("Failed to parse call-list entry for slot %d: %d",
+                                 TO_INT(slotId), parseResult);
+                    result = parseResult;
+                    callList.clear();
+                    break;
+                }
+                callList.push_back(std::move(eventInfo));
+            }
+        }
+        catch (const std::exception &exception)
+        {
+            TAF_PA_ERROR("Exception while parsing data-call list: %s", exception.what());
+            result = TAF_PA_FAULT;
+            callList.clear();
+        }
+        catch (...)
+        {
+            TAF_PA_ERROR("Unknown exception while parsing data-call list");
+            result = TAF_PA_FAULT;
+            callList.clear();
+        }
+    }
+
+    if (TAF_PA_OK != result)
+    {
+        callList.clear();
+    }
+
+    TAF_PA_INFO("Data-call-list request completed with result %d and %zu calls",
+                result, callList.size());
+    if (!request->callback)
+    {
+        TAF_PA_WARN("Cannot invoke an empty data-call-list callback");
         return;
     }
 
-    for (const auto& iDataCall : iDataCalls)
+    try
     {
-        LogDataCallInfo(iDataCall, __func__);
-
-        SlotId slotId = iDataCall->getSlotId();
-        TAF_PA_INFO("Slot ID: %d", TO_INT(slotId));
-        if (teluxPaDataConn.tafPaTeluxDataConnectionListenersMap_.find(slotId) ==
-                                    teluxPaDataConn.tafPaTeluxDataConnectionListenersMap_.end())
-        {
-            TAF_PA_ERROR("Connection connection listener not available for slot %d", TO_INT(slotId));
-            return;
-        }
-        DataCallEventInfo_t eventInfo;
-        teluxPaDataConn.tafPaTeluxDataConnectionListenersMap_[slotId]->ParseIDataCall(
-                                                                            iDataCall, eventInfo);
-        callList.push_back(eventInfo);
+        request->callback(result, callList, std::move(request->context));
     }
-
-    TAF_PA_INFO("Number of calls in list: %zu", callList.size());
-
-    // Send the data call info to the requesting client
-    callback(TAF_PA_OK, callList, context);
-
-    // Reset the callback entry info.
-    teluxPaDataConn.resetCallListClientEntry();
-    // Mark call as completed.
-    teluxPaDataConn.bRequestCallListInProgress_.store(false);
-    return;
-}
-
-void taf::pa::data::TafPaTeluxDataConnection::resetCallListClientEntry()
-{
-    // reset the entry under the mutex.
-    std::lock_guard<std::mutex> lock(requestCallListMutex_);
-    requestCallListClientEntry_ = {nullptr, nullptr};
+    catch (const std::exception &exception)
+    {
+        TAF_PA_ERROR("Exception in data-call-list callback: %s", exception.what());
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("Unknown exception in data-call-list callback");
+    }
 }
 
 taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
@@ -2663,79 +2667,76 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListA
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
 
-    // acquire the mutex, set the flag, and write the entry atomically
-    // so the SB callback (onRequestDataCallList) can never read a null/stale entry.
-    {
-        std::lock_guard<std::mutex> lock(requestCallListMutex_);
-        bool expected = false;
-        if (!bRequestCallListInProgress_.compare_exchange_strong(expected, true))
-        {
-            // Another thread already set the flag, return TAF_PA_BUSY
-            TAF_PA_ERROR("Request call list already in progress for phone id: %d", TO_INT(phoneId));
-            return TAF_PA_BUSY;
-        }
-        // Write the entry under the lock, before the flag is visible to the SB thread.
-        requestCallListClientEntry_ = {callback, context};
-    }
-
     taf::pa::data::SlotId_e slotIdPa;
-    telux::common::Status status;
-    SlotId slotId;
-
     taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIdPa);
     if (TAF_PA_OK != result)
     {
         TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
-        // Reset the entry and flag since we're returning early.
-        {
-            std::lock_guard<std::mutex> lock(requestCallListMutex_);
-            requestCallListClientEntry_ = {nullptr, nullptr};
-        }
-        bRequestCallListInProgress_.store(false);
         return result;
     }
     TAF_PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIdPa));
-    slotId = taf::pa::data::Utils::ConvertSlotId(slotIdPa);
+    const SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIdPa);
     if (INVALID_SLOT_ID == slotId)
     {
         TAF_PA_ERROR("Invalid Slot ID");
-        // Reset the entry and flag since we're returning early.
-        {
-            std::lock_guard<std::mutex> lock(requestCallListMutex_);
-            requestCallListClientEntry_ = {nullptr, nullptr};
-        }
-        bRequestCallListInProgress_.store(false);
         return TAF_PA_BAD_PARAMETER;
     }
 
-    // Check if the data connection manager is initialized.
-    if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
+    std::shared_ptr<DataCallListRequestContext_t> request;
+    try
     {
-        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        // Reset the entry and flag since we're returning early.
-        {
-            std::lock_guard<std::mutex> lock(requestCallListMutex_);
-            requestCallListClientEntry_ = {nullptr, nullptr};
-        }
-        bRequestCallListInProgress_.store(false);
+        request = std::make_shared<DataCallListRequestContext_t>();
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("Failed to allocate data-call-list request context: %s", error.what());
+        return TAF_PA_NO_MEMORY;
+    }
+
+    request->callback = std::move(callback);
+    request->context = std::move(context);
+    request->phoneId = phoneId;
+
+    const auto managerIt = dataConnectionManagersMap_.find(slotId);
+    if (managerIt == dataConnectionManagersMap_.end() || !managerIt->second)
+    {
+        TAF_PA_ERROR("Connection manager is not initialized for slot %d", TO_INT(slotId));
         return TAF_PA_FAULT;
     }
 
-    status = dataConnectionManagersMap_[slotId]->requestDataCallList(
-                            telux::data::OperationType::DATA_LOCAL, onRequestDataCallList);
+    telux::common::Status status = telux::common::Status::FAILED;
+    try
+    {
+        status = managerIt->second->requestDataCallList(
+            telux::data::OperationType::DATA_LOCAL,
+            // Keep this request's callback/context with its TelSDK response. This avoids a shared
+            // "current request" slot, so concurrent requests can complete independently and out
+            // of order.
+            [request](
+                const std::vector<std::shared_ptr<telux::data::IDataCall>> &dataCalls,
+                telux::common::ErrorCode error)
+            {
+                TafPaTeluxDataConnection::onRequestDataCallList(
+                    request, dataCalls, error);
+            });
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("requestDataCallList threw an exception: %s", error.what());
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("requestDataCallList threw an unknown exception");
+    }
+
     if (telux::common::Status::SUCCESS != status)
     {
-        TAF_PA_ERROR("requestDataCallList failed for phone id[%d]: %d",TO_INT(phoneId), TO_INT(status));
-        // Reset the entry and flag since we're returning early.
-        {
-            std::lock_guard<std::mutex> lock(requestCallListMutex_);
-            requestCallListClientEntry_ = {nullptr, nullptr};
-        }
-        bRequestCallListInProgress_.store(false);
+        TAF_PA_ERROR("requestDataCallList failed for phone id[%d]: %d",
+                     TO_INT(phoneId), TO_INT(status));
         return TAF_PA_FAULT;
     }
 
-    TAF_PA_INFO("requestDataCallList in progress for phone id %d", TO_INT(phoneId));
+    TAF_PA_INFO("requestDataCallList accepted for phone id %d", TO_INT(phoneId));
     return TAF_PA_OK;
 }
 

@@ -327,9 +327,9 @@ DataCallStatus_e Utils::ConvertCallStatus
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Convert the Start/Stop response exposed by a TelSDK IDataCall into a PA data-call snapshot,
- * including available IPv4/IPv6 address details. Listener-only bearer, end-reason, and bit-rate
- * information is filled separately by the state-event path.
+ * Convert a TelSDK IDataCall into a PA data-call snapshot, including available IPv4/IPv6 address
+ * details. This is used for Start/Stop responses and call-list entries. Listener-only bearer,
+ * end-reason, and bit-rate information is filled separately by the state-event path.
  *
  * @return TAF_PA_OK when the snapshot is populated, TAF_PA_BAD_PARAMETER for a null IDataCall, or
  *         TAF_PA_FAULT if a TelSDK getter throws while parsing.
