@@ -186,6 +186,7 @@ public:
         else if(status == ServiceStatus::SERVICE_AVAILABLE)
         {
             TAF_PA_INFO( "SDK [master-service] status : AVAILABLE" );
+            status_ = SVC_AVAILABLE;
         }
 
         static taf_pa_pms_Event_t ev = {
