@@ -4985,14 +4985,32 @@ taf_pa_result_t taf_pa_radio_SetNetworkSelectionPreference
     string mcc, mnc;
     switch (preferencePtr->mode)
     {
-        case TAF_PA_RADIO_NETWORK_SELECTION_MODE_MANUAL:
-            mcc = to_string(preferencePtr->mcc);
-            mnc = to_string(preferencePtr->mnc);
-            mode = tel::NetworkSelectionMode::MANUAL;
-            break;
+         case TAF_PA_RADIO_NETWORK_SELECTION_MODE_MANUAL:
+             if (preferencePtr->mcc[sizeof(preferencePtr->mcc) - 1] != '\0' ||
+                 preferencePtr->mnc[sizeof(preferencePtr->mnc) - 1] != '\0')
+             {
+                 TAF_PA_ERROR("MCC or MNC must be NUL-terminated.");
+                 return TAF_PA_BAD_PARAMETER;
+             }
+             mcc = std::string(preferencePtr->mcc);
+             mnc = std::string(preferencePtr->mnc);
+             if (!std::all_of(mcc.begin(), mcc.end(), [](char c)
+                 {
+                     return std::isdigit(static_cast<unsigned char>(c));
+                 }) ||
+                 !std::all_of(mnc.begin(), mnc.end(), [](char c)
+                 {
+                     return std::isdigit(static_cast<unsigned char>(c));
+                 }))
+             {
+                 TAF_PA_ERROR("Invalid MCC or MNC.");
+                 return TAF_PA_BAD_PARAMETER;
+             }
+             mode = tel::NetworkSelectionMode::MANUAL;
+             break;
         case TAF_PA_RADIO_NETWORK_SELECTION_MODE_AUTOMATIC:
-            mcc = to_string(0);
-            mnc = to_string(0);
+            mcc.clear();
+            mnc.clear();
             mode = tel::NetworkSelectionMode::AUTOMATIC;
             break;
         default:
@@ -5057,10 +5075,13 @@ taf_pa_result_t taf_pa_radio_GetNetworkSelectionPreference
     {
         request->NetworkModeInfoResponse(info, error);
     };
+
     auto result = networkSelectionManager->requestNetworkSelectionMode(callback);
     if (result != common::Status::SUCCESS)
     {
-        TAF_PA_ERROR("Failed to get network selection preference with network selection manager %d.",
+        TAF_PA_ERROR(
+            "Failed to get network selection preference with "
+            "network selection manager %d.",
             instance);
         return TAF_PA_FAULT;
     }
@@ -5071,34 +5092,62 @@ taf_pa_result_t taf_pa_radio_GetNetworkSelectionPreference
         return waitResult;
     }
 
-    taf_pa_result_t paResult = TAF_PA_OK;
     switch (request->networkModeInfo.mode)
     {
         case tel::NetworkSelectionMode::MANUAL:
-            preferencePtr->mode = TAF_PA_RADIO_NETWORK_SELECTION_MODE_MANUAL;
-            paResult = Utility::Convert::StringToU16(request->networkModeInfo.mcc,
-                &preferencePtr->mcc);
-            if (paResult != TAF_PA_OK)
+        {
+            if (request->networkModeInfo.mcc.size() >=
+                    sizeof(preferencePtr->mcc) ||
+                request->networkModeInfo.mnc.size() >=
+                    sizeof(preferencePtr->mnc))
             {
-                TAF_PA_ERROR("Failed to convert MCC %s.", request->networkModeInfo.mcc.c_str());
-                return paResult;
+                TAF_PA_ERROR("MCC or MNC does not fit in the output buffer.");
+                return TAF_PA_FAULT;
             }
-            paResult = Utility::Convert::StringToU16(request->networkModeInfo.mnc,
-                &preferencePtr->mnc);
-            if (paResult != TAF_PA_OK)
+
+            const auto& mcc = request->networkModeInfo.mcc;
+            const auto& mnc = request->networkModeInfo.mnc;
+            if ((!mcc.empty() &&
+                    !std::all_of(mcc.begin(), mcc.end(), [](char c)
+                    {
+                        return std::isdigit(static_cast<unsigned char>(c));
+                    })) ||
+                (!mnc.empty() &&
+                    !std::all_of(mnc.begin(), mnc.end(), [](char c)
+                    {
+                        return std::isdigit(static_cast<unsigned char>(c));
+                    })))
             {
-                TAF_PA_ERROR("Failed to convert MNC %s.", request->networkModeInfo.mnc.c_str());
-                return paResult;
+                TAF_PA_ERROR("Invalid MCC or MNC received from the modem.");
+                return TAF_PA_FAULT;
             }
+
+            preferencePtr->mode =
+                TAF_PA_RADIO_NETWORK_SELECTION_MODE_MANUAL;
+
+             strcpy(
+                 preferencePtr->mcc,
+                 request->networkModeInfo.mcc.c_str());
+
+             strcpy(
+                 preferencePtr->mnc,
+                 request->networkModeInfo.mnc.c_str());
+
             break;
+        }
+
         case tel::NetworkSelectionMode::AUTOMATIC:
-            preferencePtr->mode = TAF_PA_RADIO_NETWORK_SELECTION_MODE_AUTOMATIC;
-            preferencePtr->mcc = 0;
-            preferencePtr->mnc = 0;
+            preferencePtr->mode =
+                TAF_PA_RADIO_NETWORK_SELECTION_MODE_AUTOMATIC;
+            preferencePtr->mcc[0] = '\0';
+            preferencePtr->mnc[0] = '\0';
             break;
+
         default:
-            TAF_PA_ERROR("Unknown mode %d.", static_cast<int>(request->networkModeInfo.mode));
-            return TAF_PA_BAD_PARAMETER;
+            TAF_PA_ERROR(
+                "Unknown mode %d.",
+                static_cast<int>(request->networkModeInfo.mode));
+            return TAF_PA_FAULT;
     }
 
     return request->result;
