@@ -7,7 +7,6 @@
 #define TAF_PROP_RADIO_H
 
 #include "taf_prop_common.h"
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -92,32 +91,6 @@ typedef enum
 
 typedef struct
 {
-    uint16_t pci;
-    uint32_t freq;
-    taf_prop_radio_LteCphyCaBandwidth_t cphyCaDlBandwidth;
-    uint32_t band;
-} taf_prop_radio_LteCphyPcellInfo_t;
-
-typedef struct
-{
-    uint16_t pci;
-    uint32_t freq;
-    taf_prop_radio_LteCphyCaBandwidth_t cphyCaDlBandwidth;
-    uint32_t band;
-    taf_prop_radio_LteCphyScellState_t scellState;
-    uint8_t scellIndex;
-    uint8_t ulConfigured;
-} taf_prop_radio_LteCphyScellInfo_t;
-
-typedef struct
-{
-    taf_prop_radio_LteCphyPcellInfo_t pcellInfo;
-    uint32_t scellInfoCount;
-    taf_prop_radio_LteCphyScellInfo_t scellInfo[TAF_PROP_RADIO_LTE_CPHY_SCELL_INFO_MAX_COUNT];
-} taf_prop_radio_LteCphyCaInfo_t;
-
-typedef struct
-{
     uint16_t mcc;
     uint16_t mnc;
     uint8_t mncIncludesPcsDigit;
@@ -148,6 +121,32 @@ typedef struct
     uint32_t availSysCount;
     taf_prop_radio_DataAvailSysStatusInfo_t availSysStatusInfo[TAF_PROP_RADIO_DATA_AVAIL_SYS_MAX_COUNT];
 } taf_prop_radio_DataAvailSysStatus_t;
+
+typedef struct
+{
+    uint16_t pci;
+    uint32_t freq;
+    taf_prop_radio_LteCphyCaBandwidth_t cphyCaDlBandwidth;
+    uint32_t band;
+} taf_prop_radio_LteCphyPcellInfo_t;
+
+typedef struct
+{
+    uint16_t pci;
+    uint32_t freq;
+    taf_prop_radio_LteCphyCaBandwidth_t cphyCaDlBandwidth;
+    uint32_t band;
+    taf_prop_radio_LteCphyScellState_t scellState;
+    uint8_t scellIndex;
+    uint8_t ulConfigured;
+} taf_prop_radio_LteCphyScellInfo_t;
+
+typedef struct
+{
+    taf_prop_radio_LteCphyPcellInfo_t pcellInfo;
+    uint32_t scellInfoCount;
+    taf_prop_radio_LteCphyScellInfo_t scellInfo[TAF_PROP_RADIO_LTE_CPHY_SCELL_INFO_MAX_COUNT];
+} taf_prop_radio_LteCphyCaInfo_t;
 
 typedef struct
 {

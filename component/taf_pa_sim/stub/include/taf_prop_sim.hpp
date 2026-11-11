@@ -119,10 +119,11 @@ PROP_SHARED taf_prop_sim_Result_t taf_prop_sim_SetSimProfileById
  *  SIM prop initialization.
  */
 //--------------------------------------------------------------------------------------------------
-PROP_SHARED  taf_prop_sim_Result_t taf_prop_sim_Init
+PROP_SHARED taf_prop_sim_Result_t taf_prop_sim_Init
 (
     void
 );
+
 
 //--------------------------------------------------------------------------------------------------
 /**

@@ -8,7 +8,6 @@
 #define TAF_PROP_MRC_H
 
 #include "taf_prop_common.h"
-#include <cstdint>
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,15 +83,15 @@ typedef struct
     uint64_t writeCallCounters;
     uint64_t maxNbyte;
     uint32_t taskNameLen;
-    char taskName[TAF_PROP_MRC_EFS_TASK_NAME_LEN];
+    char     taskName[TAF_PROP_MRC_EFS_TASK_NAME_LEN];
 } taf_prop_mrc_EfsWriteClient_t;
 
 typedef struct
 {
-    uint32_t blockStatsLen;
+    uint32_t                      blockStatsLen;
     taf_prop_mrc_EfsBlockCounters_t blockStats[TAF_PROP_MRC_EFS_PARTITION_BLOCKS];
-    uint32_t clientListLen;
-    taf_prop_mrc_EfsWriteClient_t clientList[TAF_PROP_MRC_EFS_WRITE_TASKS];
+    uint32_t                      clientListLen;
+    taf_prop_mrc_EfsWriteClient_t   clientList[TAF_PROP_MRC_EFS_WRITE_TASKS];
 } taf_prop_mrc_EfsUsageStats_t;
 
 typedef struct taf_prop_mrc_ProcessStatusHandler* taf_prop_mrc_ProcessStatusHandlerRef_t;
@@ -170,12 +169,6 @@ PROP_SHARED int32_t taf_prop_mrc_GetEfsUsageStats
     taf_prop_mrc_EfsUsageStats_t* statsPtr
 );
 
-/**
- * Acknowledge slot toggle request.
- *
- * @param success Status code: 0 = SUCCESS, 1 = FAILED
- * @return 0 on success, negative error code on failure
- */
 PROP_SHARED int32_t taf_prop_mrc_AckSlotToggle
 (
     int32_t success

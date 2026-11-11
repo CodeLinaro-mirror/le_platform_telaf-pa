@@ -16,7 +16,7 @@ int32_t taf_prop_net_Init
     void
 )
 {
-    PA_INFO("Function is not implemented in stub PA.");
+    PROP_INFO("Function is not implemented in stub PA.");
     return TAF_PROP_NET_RESULT_NOT_IMPLEMENTED;
 }
 
@@ -30,7 +30,7 @@ int32_t taf_prop_net_Deinit
     void
 )
 {
-    PA_INFO("Function is not implemented in stub PA.");
+    PROP_INFO("Function is not implemented in stub PA.");
     return TAF_PROP_NET_RESULT_NOT_IMPLEMENTED;
 }
 
@@ -49,7 +49,7 @@ int32_t taf_prop_net_SetDeviceMode
     taf_prop_net_DeviceMode_t deviceMode  ///< [IN] Device mode
 )
 {
-    PA_INFO("-----default stub Impl SetDeviceMode---");
+    PROP_INFO("-----default stub Impl SetDeviceMode---");
     return TAF_PROP_NET_RESULT_OK;
 }
 
@@ -65,7 +65,7 @@ taf_prop_net_DeviceMode_t taf_prop_net_GetDeviceMode
 (
 )
 {
-    PA_INFO("-----default stub Impl GetDeviceMode---");
+    PROP_INFO("-----default stub Impl GetDeviceMode---");
     return TAF_PROP_NET_DEVICE_NONE;
 }
 
@@ -79,7 +79,7 @@ int32_t taf_prop_net_SetSocksAuthMethod
     taf_prop_net_AuthMethod_t authMethod
 )
 {
-    PA_INFO("-----default stub Impl SetSocksAuthMethod---");
+    PROP_INFO("-----default stub Impl SetSocksAuthMethod---");
     return TAF_PROP_NET_RESULT_OK;
 }
 
@@ -92,7 +92,7 @@ taf_prop_net_AuthMethod_t taf_prop_net_GetSocksAuthMethod
 (
 )
 {
-    PA_INFO("-----default stub Impl GetSocksAuthMethod---");
+    PROP_INFO("-----default stub Impl GetSocksAuthMethod---");
     return TAF_PROP_NET_SOCKS_UNKNOWN;
 }
 
@@ -106,7 +106,7 @@ int32_t taf_prop_net_SetSocksLanInterface
     const char* ifName
 )
 {
-    PA_INFO("-----default stub Impl SetSocksLanInterface---");
+    PROP_INFO("-----default stub Impl SetSocksLanInterface---");
     return TAF_PROP_NET_RESULT_OK;
 }
 
@@ -121,7 +121,7 @@ int32_t taf_prop_net_GetSocksLanInterface
     size_t ifNameSize
 )
 {
-    PA_INFO("-----default stub Impl GetSocksLanInterface---");
+    PROP_INFO("-----default stub Impl GetSocksLanInterface---");
     return TAF_PROP_NET_RESULT_OK;
 }
 
@@ -136,7 +136,7 @@ int32_t taf_prop_net_AddSocksAssociation
     uint32_t profileId
 )
 {
-    PA_INFO("-----default stub Impl AddSocksAssociation---");
+    PROP_INFO("-----default stub Impl AddSocksAssociation---");
     return TAF_PROP_NET_RESULT_OK;
 }
 
@@ -150,6 +150,6 @@ int32_t taf_prop_net_RemoveSocksAssociation
     const char* userName
 )
 {
-    PA_INFO("-----default stub Impl RemoveSocksAssociation---");
+    PROP_INFO("-----default stub Impl RemoveSocksAssociation---");
     return TAF_PROP_NET_RESULT_OK;
 }
