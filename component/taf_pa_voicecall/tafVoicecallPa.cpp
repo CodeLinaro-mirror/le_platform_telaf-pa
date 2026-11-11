@@ -5,6 +5,9 @@
 
 #include <cstring>
 #include <cstdio>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -17,6 +20,7 @@
 #include "telux/common/CommonDefines.hpp"
 #include "tafCommonPa.h"
 #include "tafVoicecallPa.hpp"
+#include "../include/tafInternalCommonPa.h"
 
 #define MAX_INIT_TIMEOUT 5
 
@@ -262,15 +266,15 @@ public:
         return instance;
     }
 
-    pa_result_t initialize();
-    pa_result_t deinitialize();
+    taf_pa_result_t initialize();
+    taf_pa_result_t deinitialize();
 
     std::shared_ptr<telux::tel::ICallManager> getCallManager()
     {
         return callManager_;
     }
 
-    pa_result_t registerEventListener(taf_pa_voicecall_EventListener listener, std::any context)
+    taf_pa_result_t registerEventListener(taf_pa_voicecall_EventListener listener, std::any context)
     {
         if (listener)
         {
@@ -279,8 +283,8 @@ public:
         }
         else
         {
-            PA_ERROR("Listener is NULL");
-            return PA_NOT_FOUND;
+            TAF_PA_ERROR("Listener is NULL");
+            return TAF_PA_NOT_FOUND;
         }
 
         if (context.has_value())
@@ -288,12 +292,12 @@ public:
             eventListenerContext_ = std::move(context);
         }
 
-        return PA_OK;
+        return TAF_PA_OK;
     }
 
     const char* stateToStr(telux::tel::CallState state);
 
-    pa_result_t setTermination(taf_pa_voicecall_CallInfo_t *callInfoPtr, taf_pa_voicecall_termination_t termination);
+    taf_pa_result_t setTermination(taf_pa_voicecall_CallInfo_t *callInfoPtr, taf_pa_voicecall_termination_t termination);
 
     taf_pa_voicecall_termination_t convertToPaTermination(telux::tel::CallEndCause endCause);
 
@@ -339,10 +343,10 @@ public:
 
             void commandResponse(telux::common::ErrorCode error) override
             {
-                PA_INFO("Cmd resp: %d", static_cast<int>(error));
+                TAF_PA_INFO("Cmd resp: %d", static_cast<int>(error));
                 callProm_.set_value(error);
                 if (callback_) {
-                    callback_(PA_OK, *callInfoPtr_, context_);
+                    callback_(TAF_PA_OK, *callInfoPtr_, context_);
                 }
             }
 
@@ -372,13 +376,13 @@ public:
             std::shared_ptr<telux::tel::ICall> iCall) override
         {
             auto pACtrl = VoiceCallPAController::getInstance();
-            PA_INFO("Make call resp: %s", pACtrl->paErrorToString(error).c_str());
+            TAF_PA_INFO("Make call resp: %s", pACtrl->paErrorToString(error).c_str());
 
             callObj_ = std::move(iCall);
             callProm_.set_value(error);
 
             if (callback_) {
-                pa_result_t errorCode = (error == telux::common::ErrorCode::SUCCESS) ? PA_OK : PA_FAULT;
+                taf_pa_result_t errorCode = (error == telux::common::ErrorCode::SUCCESS) ? TAF_PA_OK : TAF_PA_FAULT;
                 callback_(errorCode, *callInfoPtr_, context_);
             }
         }
@@ -489,16 +493,16 @@ const char* VoiceCallPAController::stateToStr(telux::tel::CallState state)
     }
 }
 
-pa_result_t VoiceCallPAController::setTermination(taf_pa_voicecall_CallInfo_t* callInfoPtr, taf_pa_voicecall_termination_t termination)
+taf_pa_result_t VoiceCallPAController::setTermination(taf_pa_voicecall_CallInfo_t* callInfoPtr, taf_pa_voicecall_termination_t termination)
 {
     if (callInfoPtr == NULL)
     {
-        PA_ERROR("Cannot found call info from reference: %p", callInfoPtr);
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("Cannot found call info from reference: %p", callInfoPtr);
+        return TAF_PA_NOT_FOUND;
     }
 
     callInfoPtr->termination = termination;
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
 taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(telux::tel::CallEndCause endCause)
@@ -738,7 +742,7 @@ taf_pa_voicecall_termination_t VoiceCallPAController::convertToPaTermination(tel
         break;
     }
 
-    PA_INFO("iCall end cause: %d, PA end cause: %d", (int)endCause, termination);
+    TAF_PA_INFO("iCall end cause: %d, PA end cause: %d", (int)endCause, termination);
     return termination;
 }
 
@@ -768,7 +772,7 @@ std::shared_ptr<taf_pa_voicecall_CallInfo_t> VoiceCallPAController::createCallIn
     );
     if (src_len >= PA_MAX_DESTINATION_LEN_BYTE)
     {
-        PA_DEBUG("destId truncated: src_len=%zu, buf_size=%u, value='%s'",
+        TAF_PA_DEBUG("destId truncated: src_len=%zu, buf_size=%u, value='%s'",
                  static_cast<size_t>(src_len),
                  static_cast<unsigned>(PA_MAX_DESTINATION_LEN_BYTE),
                  remote.c_str());
@@ -797,7 +801,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
                 O_CREAT | O_RDWR | O_APPEND | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
         if (callInfoFd < 0)
         {
-            PA_ERROR("Failed to open voice call info file!");
+            TAF_PA_ERROR("Failed to open voice call info file!");
         }
         else
         {
@@ -806,7 +810,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
                  iCall->getPhoneId(), iCall->getRemotePartyNumber().c_str(), (int)iCall->getCallDirection());
             if (write(callInfoFd, buffer, strlen(buffer)) < 0)
             {
-                PA_ERROR("Failed to write to voice call info file");
+                TAF_PA_ERROR("Failed to write to voice call info file");
             }
             close(callInfoFd);
         }
@@ -844,7 +848,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
                 {
                     if (unlink(VoiceCallInfoConfFile) < 0)
                     {
-                        PA_ERROR("Faild to delete %s: %s", VoiceCallInfoConfFile, strerror(errno));
+                        TAF_PA_ERROR("Faild to delete %s: %s", VoiceCallInfoConfFile, taf_pa_get_error_string(errno));
                     }
                 }
                 else
@@ -861,7 +865,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
                     });
                 if (it != obsoletedIcalls.end())
                 {
-                    PA_INFO("Found an endded event from obsoleted icall %p, skip it..", iCall.get());
+                    TAF_PA_INFO("Found an endded event from obsoleted icall %p, skip it..", iCall.get());
                     obsoletedIcalls.erase(it, obsoletedIcalls.end());
                     return;
                 }
@@ -870,7 +874,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
         }
     }
 
-    PA_DEBUG("On call state change dest: %s, state: %s",
+    TAF_PA_DEBUG("On call state change dest: %s, state: %s",
         iCall->getRemotePartyNumber().c_str(), pACtrl->stateToStr(state));
     // call platform listener
     taf_pa_voicecall_EventListener listener = nullptr;
@@ -890,7 +894,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
                               sizeof(callInfo.destId));
         if (src_len >= sizeof(callInfo.destId))
         {
-            PA_DEBUG("destId truncated: src_len=%zu, buf_size=%zu, value='%s'",
+            TAF_PA_DEBUG("destId truncated: src_len=%zu, buf_size=%zu, value='%s'",
             static_cast<size_t>(src_len),
             sizeof(callInfo.destId),
             remote.c_str());
@@ -905,7 +909,7 @@ void VoiceCallPAController::VoiceCallListener::onCallInfoChange(std::shared_ptr<
     }
     else
     {
-        PA_ERROR("No listener is registered!, skip state: %s", pACtrl->stateToStr(state));
+        TAF_PA_ERROR("No listener is registered!, skip state: %s", pACtrl->stateToStr(state));
     }
 }
 
@@ -915,12 +919,12 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
     telux::tel::CallState state = iCall->getCallState();
     auto pACtrl = VoiceCallPAController::getInstance();
 
-    PA_DEBUG("On call state change dest: %s, state: %s",
+    TAF_PA_DEBUG("On call state change dest: %s, state: %s",
         iCall->getRemotePartyNumber().c_str(), pACtrl->stateToStr(state));
 
     if (iCall->getCallDirection() != telux::tel::CallDirection::INCOMING)
     {
-        PA_ERROR("Call is not incoming type: %d", (int)iCall->getCallDirection());
+        TAF_PA_ERROR("Call is not incoming type: %d", (int)iCall->getCallDirection());
         return;
     }
 
@@ -928,7 +932,7 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
             O_CREAT | O_RDWR | O_APPEND | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR);
     if (callInfoFd < 0)
     {
-        PA_ERROR("Failed to open voice call info file!");
+        TAF_PA_ERROR("Failed to open voice call info file!");
     }
     else
     {
@@ -937,7 +941,7 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
              iCall->getPhoneId(), iCall->getRemotePartyNumber().c_str(), (int)iCall->getCallDirection());
         if (write(callInfoFd, buffer, strlen(buffer)) < 0)
         {
-            PA_ERROR("Failed to write to voice call info file");
+            TAF_PA_ERROR("Failed to write to voice call info file");
         }
         close(callInfoFd);
     }
@@ -960,7 +964,7 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
                               sizeof(callInfo.destId));
         if (src_len >= sizeof(callInfo.destId))
         {
-            PA_ERROR("destId truncated: src_len=%zu, buf_size=%zu, value='%s'",
+            TAF_PA_ERROR("destId truncated: src_len=%zu, buf_size=%zu, value='%s'",
                 static_cast<size_t>(src_len),
                 sizeof(callInfo.destId),
                 remote.c_str());
@@ -971,12 +975,12 @@ void VoiceCallPAController::VoiceCallListener::onIncomingCall(std::shared_ptr<te
     }
     else
     {
-        PA_ERROR("No listener is registered!, skip state: %s", pACtrl->stateToStr(state));
+        TAF_PA_ERROR("No listener is registered!, skip state: %s", pACtrl->stateToStr(state));
     }
 }
 
 /* Implementation */
-pa_result_t tafpa::voicecall::taf_pa_voicecall_Make(
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_Make(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
@@ -989,7 +993,7 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Make(
         callMgr, std::move(callInfoPtr), callback, context
     );
 
-    PA_DEBUG("Starting voice call for phone %d num: %s", callInfo.phoneId, callInfo.destId);
+    TAF_PA_DEBUG("Starting voice call for phone %d num: %s", callInfo.phoneId, callInfo.destId);
 
     telux::common::Status status = callMgr->makeCall(callInfo.phoneId, std::string(callInfo.destId), cbObj);
     telux::common::ErrorCode errorCode = cbObj->getFuture().get();
@@ -997,17 +1001,17 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Make(
     if (status == telux::common::Status::SUCCESS &&
         errorCode == telux::common::ErrorCode::SUCCESS)
     {
-        PA_INFO("Success to make call");
-        return PA_OK;
+        TAF_PA_INFO("Success to make call");
+        return TAF_PA_OK;
     }
 
-    PA_ERROR("Failed to make call, status: %d, error: %s", static_cast<int>(status),
+    TAF_PA_ERROR("Failed to make call, status: %d, error: %s", static_cast<int>(status),
         pACtrl->paErrorToString(errorCode).c_str());
 
-    return PA_FAULT;
+    return TAF_PA_FAULT;
 }
 
-pa_result_t tafpa::voicecall::taf_pa_voicecall_Stop(
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_Stop(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
@@ -1019,8 +1023,8 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Stop(
 
     auto activeCall = callMgr->getInProgressCalls();
     if (activeCall.empty()) {
-        PA_ERROR("Cannot find any valid call");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("Cannot find any valid call");
+        return TAF_PA_NOT_FOUND;
     }
 
     for (auto& iCall : activeCall) {
@@ -1029,9 +1033,9 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Stop(
             (pACtrl->directionToPaDirection(iCall->getCallDirection()) == callInfo.direction))
         {
             if (iCall->getCallState() == telux::tel::CallState::CALL_ENDED) {
-                PA_DEBUG("Call for phone %d, dest: %s is already ended", callInfo.phoneId,
+                TAF_PA_DEBUG("Call for phone %d, dest: %s is already ended", callInfo.phoneId,
                         callInfo.destId);
-                return PA_DUPLICATE;
+                return TAF_PA_DUPLICATE;
             }
 
             auto callInfoPtr = std::make_unique<taf_pa_voicecall_CallInfo_t>(callInfo);
@@ -1047,20 +1051,20 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Stop(
             if ((status == telux::common::Status::SUCCESS) &&
                 (cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS))
             {
-                PA_INFO("Success to stop call");
-                return PA_OK;
+                TAF_PA_INFO("Success to stop call");
+                return TAF_PA_OK;
             }
 
-            PA_ERROR("Failed to stop call, status: %d", static_cast<int>(status));
-            return PA_FAULT;
+            TAF_PA_ERROR("Failed to stop call, status: %d", static_cast<int>(status));
+            return TAF_PA_FAULT;
         }
     }
 
-    PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
-    return PA_NOT_FOUND;
+    TAF_PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t tafpa::voicecall::taf_pa_voicecall_Hold(
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_Hold(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
@@ -1072,12 +1076,12 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Hold(
 
     auto activeCall = callMgr->getInProgressCalls();
     if (activeCall.empty()) {
-        PA_ERROR("No call is in progress");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("No call is in progress");
+        return TAF_PA_NOT_FOUND;
     }
 
     for (auto& iCall : activeCall) {
-        PA_INFO("Holding call status: %s", pACtrl->stateToStr(iCall->getCallState()));
+        TAF_PA_INFO("Holding call status: %s", pACtrl->stateToStr(iCall->getCallState()));
 
         if ((strncmp(iCall->getRemotePartyNumber().c_str(), callInfo.destId, PA_MAX_DESTINATION_LEN_BYTE) == 0) &&
             (iCall->getPhoneId() == callInfo.phoneId) &&
@@ -1085,8 +1089,8 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Hold(
         {
             if (iCall->getCallState() == telux::tel::CallState::CALL_ON_HOLD)
             {
-                PA_INFO("Already on HOLD status");
-                return PA_DUPLICATE;
+                TAF_PA_INFO("Already on HOLD status");
+                return TAF_PA_DUPLICATE;
             }
             auto callInfoPtr = std::make_unique<taf_pa_voicecall_CallInfo_t>(callInfo);
             auto cbObj = std::make_shared<VoiceCallPAController::CommandCallback>(
@@ -1097,21 +1101,21 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Hold(
             if ((status == telux::common::Status::SUCCESS) &&
                 (cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS))
             {
-                PA_INFO("Success to hold call");
-                return PA_OK;
+                TAF_PA_INFO("Success to hold call");
+                return TAF_PA_OK;
             }
 
-            PA_ERROR("Failed to hold call, ret: %d, status: %s",
+            TAF_PA_ERROR("Failed to hold call, ret: %d, status: %s",
                 static_cast<int>(status), pACtrl->stateToStr(iCall->getCallState()));
-            return PA_FAULT;
+            return TAF_PA_FAULT;
         }
     }
 
-    PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
-    return PA_NOT_FOUND;
+    TAF_PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t tafpa::voicecall::taf_pa_voicecall_Resume(
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_Resume(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
@@ -1123,8 +1127,8 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Resume(
 
     auto activeCall = callMgr->getInProgressCalls();
     if (activeCall.empty()) {
-        PA_ERROR("No call is in progress");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("No call is in progress");
+        return TAF_PA_NOT_FOUND;
     }
 
     for (auto& iCall : activeCall) {
@@ -1141,20 +1145,20 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Resume(
             if ((status == telux::common::Status::SUCCESS) &&
                 (cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS))
             {
-                PA_INFO("Success to resume call");
-                return PA_OK;
+                TAF_PA_INFO("Success to resume call");
+                return TAF_PA_OK;
             }
 
-            PA_ERROR("Failed to resume call, status: %d", static_cast<int>(status));
-            return PA_FAULT;
+            TAF_PA_ERROR("Failed to resume call, status: %d", static_cast<int>(status));
+            return TAF_PA_FAULT;
         }
     }
 
-    PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
-    return PA_NOT_FOUND;
+    TAF_PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t tafpa::voicecall::taf_pa_voicecall_Answer(
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_Answer(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
@@ -1166,8 +1170,8 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Answer(
 
     auto activeCall = callMgr->getInProgressCalls();
     if (activeCall.empty()) {
-        PA_ERROR("No call is in progress");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("No call is in progress");
+        return TAF_PA_NOT_FOUND;
     }
 
     for (auto& iCall : activeCall) {
@@ -1184,20 +1188,20 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Answer(
             if ((status == telux::common::Status::SUCCESS) &&
                 (cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS))
             {
-                PA_INFO("Success to answer call");
-                return PA_OK;
+                TAF_PA_INFO("Success to answer call");
+                return TAF_PA_OK;
             }
 
-            PA_ERROR("Failed to answer call, status: %d", static_cast<int>(status));
-            return PA_FAULT;
+            TAF_PA_ERROR("Failed to answer call, status: %d", static_cast<int>(status));
+            return TAF_PA_FAULT;
         }
     }
 
-    PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
-    return PA_NOT_FOUND;
+    TAF_PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t tafpa::voicecall::taf_pa_voicecall_Swap(
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_Swap(
     const taf_pa_voicecall_CallInfo_t& callInfo,
     taf_pa_voicecall_CallCb callback,
     std::any context
@@ -1209,8 +1213,8 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Swap(
 
     auto activeCall = callMgr->getInProgressCalls();
     if (activeCall.size() < 2) {
-        PA_ERROR("Call list does not have 2 calls");
-        return PA_NOT_FOUND;
+        TAF_PA_ERROR("Call list does not have 2 calls");
+        return TAF_PA_NOT_FOUND;
     }
 
     std::shared_ptr<telux::tel::ICall> iCall1, iCall2;
@@ -1241,23 +1245,23 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_Swap(
         if (status == telux::common::Status::SUCCESS &&
             cbObj->getFuture().get() == telux::common::ErrorCode::SUCCESS)
         {
-            PA_INFO("Success to swap calls");
-            return PA_OK;
+            TAF_PA_INFO("Success to swap calls");
+            return TAF_PA_OK;
         }
 
-        PA_ERROR("Failed to swap calls, status: %d", static_cast<int>(status));
-        return PA_FAULT;
+        TAF_PA_ERROR("Failed to swap calls, status: %d", static_cast<int>(status));
+        return TAF_PA_FAULT;
     }
     else {
-        PA_ERROR("Call list does not have 2 calls or phone IDs do not match");
-        return PA_FAULT;
+        TAF_PA_ERROR("Call list does not have 2 calls or phone IDs do not match");
+        return TAF_PA_FAULT;
     }
 
-    PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
-    return PA_NOT_FOUND;
+    TAF_PA_ERROR("Cannot find valid iCall for phone %d, dest: %s", callInfo.phoneId, callInfo.destId);
+    return TAF_PA_NOT_FOUND;
 }
 
-pa_result_t tafpa::voicecall::taf_pa_voicecall_RegisterEventListener
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_RegisterEventListener
 (
     taf_pa_voicecall_EventListener listener, std::any context
 )
@@ -1267,13 +1271,13 @@ pa_result_t tafpa::voicecall::taf_pa_voicecall_RegisterEventListener
     return pACtrl->registerEventListener(listener, context);
 }
 
-pa_result_t VoiceCallPAController::initialize()
+taf_pa_result_t VoiceCallPAController::initialize()
 {
     auto& phoneFactory = telux::tel::PhoneFactory::getInstance();
     std::promise<telux::common::ServiceStatus> promise;
 
     callManager_ = phoneFactory.getCallManager([&](telux::common::ServiceStatus status) {
-        PA_INFO("Getting status: %d from call manager", static_cast<int>(status));
+        TAF_PA_INFO("Getting status: %d from call manager", static_cast<int>(status));
         if (status != telux::common::ServiceStatus::SERVICE_UNAVAILABLE)
         {
             promise.set_value(status);
@@ -1281,27 +1285,27 @@ pa_result_t VoiceCallPAController::initialize()
     });
 
     if (!callManager_) {
-        PA_CRIT("*** ERROR - callManager is NULL");
-        return PA_FAULT;
+        TAF_PA_CRIT("*** ERROR - callManager is NULL");
+        return TAF_PA_FAULT;
     }
 
     auto initFuture = promise.get_future();
     auto waitStatus = initFuture.wait_for(std::chrono::seconds(MAX_INIT_TIMEOUT));
     if (waitStatus == std::future_status::timeout) {
-        PA_CRIT("*** ERROR - Timeout to get call manager ready");
-        return PA_TIMEOUT;
+        TAF_PA_CRIT("*** ERROR - Timeout to get call manager ready");
+        return TAF_PA_TIMEOUT;
     } else {
         auto serviceStatus = initFuture.get();
         if (serviceStatus != telux::common::ServiceStatus::SERVICE_AVAILABLE) {
-            PA_CRIT("*** ERROR - call manager is unavailable : %d", static_cast<int>(serviceStatus));
-            return PA_UNAVAILABLE;
+            TAF_PA_CRIT("*** ERROR - call manager is unavailable : %d", static_cast<int>(serviceStatus));
+            return TAF_PA_UNAVAILABLE;
         }
     }
 
     struct stat st;
     if (stat(VoiceCallInfoConfFile, &st) == 0)
     {
-        PA_INFO("voice call was not closed normal");
+        TAF_PA_INFO("voice call was not closed normal");
         std::shared_ptr<telux::tel::ICall> iCall = nullptr;
         telux::common::Status status = telux::common::Status::FAILED;
         std::vector<std::shared_ptr<telux::tel::ICall>> inProgressCalls
@@ -1340,7 +1344,7 @@ pa_result_t VoiceCallPAController::initialize()
 
                     if (matchFound)
                     {
-                        PA_INFO("There's obsoleted voice call active");
+                        TAF_PA_INFO("There's obsoleted voice call active");
                         if (iCall->getCallState() == telux::tel::CallState::CALL_INCOMING)
                             status = iCall->reject(std::shared_ptr<telux::common::ICommandResponseCallback>(nullptr));
                         else
@@ -1356,13 +1360,13 @@ pa_result_t VoiceCallPAController::initialize()
 
                             if (it == obsoletedIcalls.end())
                             {
-                                PA_INFO("Pushing obsoleted voice call %p for backup", iCall.get());
+                                TAF_PA_INFO("Pushing obsoleted voice call %p for backup", iCall.get());
                                 obsoletedIcalls.push_back(iCall);
                             }
                         }
                         else
                         {
-                            PA_ERROR("voice call hangup failed for iCall %p!", iCall.get());
+                            TAF_PA_ERROR("voice call hangup failed for iCall %p!", iCall.get());
                         }
                     }
                 }
@@ -1373,40 +1377,40 @@ pa_result_t VoiceCallPAController::initialize()
     callListener_ = std::make_shared<VoiceCallListener>(this);
     auto ret = callManager_->registerListener(callListener_);
     if (ret != telux::common::Status::SUCCESS) {
-        PA_CRIT("*** ERROR - Cannot register Listener for call event");
-        return PA_FAULT;
+        TAF_PA_CRIT("*** ERROR - Cannot register Listener for call event");
+        return TAF_PA_FAULT;
     }
 
-    return PA_OK;
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::voicecall::taf_pa_voicecall_Init()
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_Init()
 {
     auto pACtrl = VoiceCallPAController::getInstance();
 
-    pa_result_t result = pACtrl->initialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->initialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Voice call platform adapter initialization is done");
+        TAF_PA_INFO("Voice call platform adapter initialization is done");
         g_voicecallPaInitialized.store(true, std::memory_order_release);
     }
     else
     {
-        PA_CRIT("Failed to initialize voice call platform adapter, ret: %d", result);
+        TAF_PA_CRIT("Failed to initialize voice call platform adapter, ret: %d", result);
     }
 
     return result;
 }
 
-pa_result_t VoiceCallPAController::deinitialize()
+taf_pa_result_t VoiceCallPAController::deinitialize()
 {
-    PA_INFO("Starting voice call platform adaptor deinitialization...");
+    TAF_PA_INFO("Starting voice call platform adaptor deinitialization...");
 
     // Step 1: Clear the PA-level event listener and context so no further call
     // state change or incoming call notifications are dispatched after this point.
     // Hold eventListenerMutex_ so the clear is mutually exclusive with any in-flight
     // SB callback that reads eventListener_ under the same mutex.
-    PA_INFO("Clearing eventListener_ and eventListenerContext_");
+    TAF_PA_INFO("Clearing eventListener_ and eventListenerContext_");
     {
         std::lock_guard<std::mutex> lock(eventListenerMutex_);
         eventListener_ = nullptr;
@@ -1415,56 +1419,56 @@ pa_result_t VoiceCallPAController::deinitialize()
 
     // Step 2: Deregister the call listener from the call manager so the SDK
     // stops delivering call events to it.
-    PA_INFO("Deregistering callListener_ from callManager_");
+    TAF_PA_INFO("Deregistering callListener_ from callManager_");
     if (callManager_ && callListener_)
     {
         telux::common::Status status = callManager_->removeListener(callListener_);
         if (status != telux::common::Status::SUCCESS)
         {
-            PA_ERROR("Failed to remove call listener");
+            TAF_PA_ERROR("Failed to remove call listener");
             // Continue cleanup even if removal failed
         }
     }
 
     // Step 3: Reset the call listener shared pointer so the listener object is
     // released once no other owners remain.
-    PA_INFO("Resetting callListener_");
+    TAF_PA_INFO("Resetting callListener_");
     callListener_.reset();
 
     // Step 4: Clear the obsoleted ICall vector so stale call references are
     // released.
-    PA_INFO("Clearing obsoletedIcalls");
+    TAF_PA_INFO("Clearing obsoletedIcalls");
     obsoletedIcalls.clear();
 
     // Step 5: Reset the call manager shared pointer so the underlying SDK object
     // is released once no other owners remain.
-    PA_INFO("Resetting callManager_");
+    TAF_PA_INFO("Resetting callManager_");
     callManager_.reset();
 
-    PA_INFO("Voice call platform adaptor deinitialization complete.");
-    return PA_OK;
+    TAF_PA_INFO("Voice call platform adaptor deinitialization complete.");
+    return TAF_PA_OK;
 }
 
-pa_result_t tafpa::voicecall::taf_pa_voicecall_Deinit()
+taf_pa_result_t tafpa::voicecall::taf_pa_voicecall_Deinit()
 {
     // Step 0: Check if Init() was called successfully
     if (!g_voicecallPaInitialized.load(std::memory_order_acquire))
     {
-        PA_WARN("Deinit() called before Init() was successfully called");
-        return PA_FAULT;
+        TAF_PA_WARN("Deinit() called before Init() was successfully called");
+        return TAF_PA_FAULT;
     }
 
     auto pACtrl = VoiceCallPAController::getInstance();
 
-    pa_result_t result = pACtrl->deinitialize();
-    if (result == PA_OK)
+    taf_pa_result_t result = pACtrl->deinitialize();
+    if (result == TAF_PA_OK)
     {
-        PA_INFO("Voice call platform adapter deinitialization done.");
+        TAF_PA_INFO("Voice call platform adapter deinitialization done.");
         g_voicecallPaInitialized.store(false, std::memory_order_release);
     }
     else
     {
-        PA_ERROR("Voice call platform adapter deinitialization failed, ret: %d", result);
+        TAF_PA_ERROR("Voice call platform adapter deinitialization failed, ret: %d", result);
     }
 
     return result;

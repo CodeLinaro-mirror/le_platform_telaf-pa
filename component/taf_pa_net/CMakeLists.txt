@@ -9,8 +9,6 @@ set(LIBRARY_SOVERSION "1")
 set(TARGET_NAME taf_pa_net)
 set(OUTPUT_NAME Component_${TARGET_NAME})
 
-add_subdirectory(stub)
-
 # -------------------------------------------------------------------------
 # Sources
 # -------------------------------------------------------------------------
@@ -26,7 +24,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../include/taf_pa_net)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../stub/include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../taf_pa_common/stub/include)
 
 
 add_library(${TARGET_NAME} SHARED ${TAF_PA_NET_SOURCES})
