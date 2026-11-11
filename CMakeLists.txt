@@ -37,6 +37,8 @@ set(MODULE_LIST
     component/taf_pa_therm
     component/taf_pa_keystore
     component/taf_pa_fscrypt
+    component/taf_pa_remotesim
+    component/taf_pa_sap
     # IMPORTANT: split_debug_symbols_strip_binaries must be the last module in this list.
     # This module extracts debug symbols from all installed binaries and strips them.
     # It must run after all other components have installed their files, otherwise

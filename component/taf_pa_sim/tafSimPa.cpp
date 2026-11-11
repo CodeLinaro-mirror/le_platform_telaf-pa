@@ -3821,3 +3821,36 @@ pa_result_t taf_pa_sim_GetEID
         return TAF_PA_SIM_RESULT_TIMEOUT;
     }
 }
+
+pa_result_t taf_pa_sim_IsNtnProfileActive
+(
+    taf_pa_sim_Id_t simId,
+    bool* isActive
+)
+{
+    if (!isActive)
+    {
+        PA_ERROR("isActive pointer is NULL");
+        return TAF_PA_SIM_RESULT_BAD_PARAMETER;
+    }
+
+    auto& pa = PlatformAdaptor::GetInstance();
+    PA_INFO("taf_pa_sim_IsNtnProfileActive for simId: %d", (int)simId);
+
+    if (simId == TAF_PA_SIM_UNSPECIFIED)
+    {
+        simId = pa.GetSelectedCard();
+    }
+
+    auto card = pa.GetCard(simId);
+    if (card == nullptr)
+    {
+        PA_ERROR("Card not found for simId: %d", (int)simId);
+        *isActive = false;
+        return TAF_PA_SIM_RESULT_FAULT;
+    }
+
+    *isActive = card->isNtnProfileActive();
+    PA_INFO("NTN profile active status: %d", (int)*isActive);
+    return TAF_PA_SIM_RESULT_OK;
+}
