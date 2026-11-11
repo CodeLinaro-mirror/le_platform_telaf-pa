@@ -10,10 +10,12 @@
  */
 #include "tafDataUtilsPa.hpp"
 #include "../include/tafInternalCommonPa.h"
+#include "telux/data/DataConnectionManager.hpp"
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <unistd.h>
 #include <cstring>
+#include <utility>
 
 using namespace taf::pa::data;
 
@@ -321,6 +323,108 @@ DataCallStatus_e Utils::ConvertCallStatus
             TAF_PA_WARN("Invalid data call status: %d", TO_INT(status));
             return DataCallStatus_e::UNKNOWN;
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Convert the Start/Stop response exposed by a TelSDK IDataCall into a PA data-call snapshot,
+ * including available IPv4/IPv6 address details. Listener-only bearer, end-reason, and bit-rate
+ * information is filled separately by the state-event path.
+ *
+ * @return TAF_PA_OK when the snapshot is populated, TAF_PA_BAD_PARAMETER for a null IDataCall, or
+ *         TAF_PA_FAULT if a TelSDK getter throws while parsing.
+ */
+//--------------------------------------------------------------------------------------------------
+taf_pa_result_t Utils::ParseDataCallInfo
+(
+    const std::shared_ptr<telux::data::IDataCall> &iDataCall,
+    PhoneId_e phoneId,
+    DataCallEventInfo_t &eventInfo,
+    telux::data::DataCallStatus *rawCallStatus
+)
+{
+    eventInfo = DataCallEventInfo_t{};
+    if (rawCallStatus)
+    {
+        *rawCallStatus = telux::data::DataCallStatus::INVALID;
+    }
+
+    if (!iDataCall)
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    try
+    {
+        const telux::data::DataCallStatus dataCallStatus = iDataCall->getDataCallStatus();
+        const telux::data::IpFamilyInfo ipv4Info = iDataCall->getIpv4Info();
+        const telux::data::IpFamilyInfo ipv6Info = iDataCall->getIpv6Info();
+
+        DataCallEventInfo_t parsedInfo{};
+        parsedInfo.phoneId = phoneId;
+        parsedInfo.slotId = ConvertSlotId(iDataCall->getSlotId());
+        parsedInfo.profileId = static_cast<ProfileId_e>(iDataCall->getProfileId());
+        parsedInfo.callStatus = ConvertCallStatus(dataCallStatus);
+        parsedInfo.ipType = ConvertIpType(iDataCall->getIpFamilyType());
+        parsedInfo.techPref = ConvertTechPref(iDataCall->getTechPreference());
+        parsedInfo.hostIfName = iDataCall->getInterfaceName();
+
+        const auto fillIpFamilyInfo = [&parsedInfo](
+            const telux::data::IpFamilyInfo &teluxInfo,
+            DataCallInfo_t &paInfo,
+            const char *ipFamily)
+        {
+            paInfo.callStatus = ConvertCallStatus(teluxInfo.status);
+            if (telux::data::DataCallStatus::NET_CONNECTED == teluxInfo.status ||
+                telux::data::DataCallStatus::NET_RECONFIGURED == teluxInfo.status ||
+                telux::data::DataCallStatus::NET_NEWADDR == teluxInfo.status)
+            {
+                TAF_PA_DEBUG("Fill in %s call info.", ipFamily);
+                paInfo.ipAddr = teluxInfo.addr.ifAddress;
+                paInfo.ipAddrMask = teluxInfo.addr.ifMask;
+                paInfo.gwAddr = teluxInfo.addr.gwAddress;
+                paInfo.gwAddrMask = teluxInfo.addr.gwMask;
+                paInfo.dnsAddrPrimary = teluxInfo.addr.primaryDnsAddress;
+                paInfo.dnsAddrSecondary = teluxInfo.addr.secondaryDnsAddress;
+
+                if (!parsedInfo.hostIfName.empty())
+                {
+                    int32_t mtu = taf::pa::data::MTU_NOT_SET;
+                    if (TAF_PA_OK == GetMtuFromInterface(parsedInfo.hostIfName, mtu))
+                    {
+                        paInfo.mtu = mtu;
+                        TAF_PA_DEBUG("%s MTU: %d", ipFamily, mtu);
+                    }
+                    else
+                    {
+                        TAF_PA_WARN("Failed to get MTU for %s interface %s", ipFamily,
+                                    parsedInfo.hostIfName.c_str());
+                    }
+                }
+            }
+        };
+
+        fillIpFamilyInfo(ipv4Info, parsedInfo.ipv4DataCallInfo, "IPv4");
+        fillIpFamilyInfo(ipv6Info, parsedInfo.ipv6DataCallInfo, "IPv6");
+
+        if (rawCallStatus)
+        {
+            *rawCallStatus = dataCallStatus;
+        }
+        eventInfo = std::move(parsedInfo);
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("Failed to parse TelSDK data-call info: %s", error.what());
+        return TAF_PA_FAULT;
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("Unknown exception while parsing TelSDK data-call info");
+        return TAF_PA_FAULT;
+    }
+
+    return TAF_PA_OK;
 }
 
 taf_pa_result_t Utils::ConvertProfileInfo
