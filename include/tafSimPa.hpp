@@ -879,6 +879,20 @@ TAF_PA_SHARED  TAF_PA_WEAK taf_pa_result_t taf_pa_sim_GetPhysicalSlotCount
     int* count
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the currently selected SIM card slot.
+ * @return
+ *  - TAF_PA_OK on success
+ *  - TAF_PA_BAD_PARAMETER if simIdPtr is null
+ *
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED TAF_PA_WEAK taf_pa_result_t taf_pa_sim_GetSelectedCard
+(
+    taf_pa_sim_Id_t* simIdPtr
+);
+
 #ifdef __cplusplus
 }
 #endif
