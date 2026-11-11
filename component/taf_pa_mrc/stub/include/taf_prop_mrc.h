@@ -121,6 +121,11 @@ PROP_SHARED int32_t taf_prop_mrc_Init
     void
 );
 
+PROP_SHARED int32_t taf_prop_mrc_Deinit
+(
+    void
+);
+
 PROP_SHARED int32_t taf_prop_mrc_RegisterIndication
 (
     uint8_t registration
