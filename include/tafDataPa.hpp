@@ -1180,8 +1180,9 @@ struct DataCallInfo_t
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Data call events that are provided back to the service.
- * Use the phone Id and profile Id to uniquely identify a data session.
+ * Snapshot of a data call, including status and IP-family information. Used by data-call event,
+ * list, and Start/Stop operation-result callbacks. Use the phone Id and profile Id to identify a
+ * data session.
  */
 //--------------------------------------------------------------------------------------------------
 struct DataCallEventInfo_t
@@ -1200,6 +1201,49 @@ struct DataCallEventInfo_t
     uint64_t               maxRxBitRate;        ///< The maximum receive data rate in bits/second.
     uint64_t               maxTxBitRate;        ///< The maximum transmit data rate in bits/second.
 };
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Type of operation represented by a per-request result callback.
+ */
+//--------------------------------------------------------------------------------------------------
+enum class DataCallOperationType : uint8_t
+{
+    START = 0,
+    STOP,
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Result of one accepted Start or Stop request. result is TAF_PA_OK when the TelSDK operation
+ * succeeds. A non-success TelSDK error, a null IDataCall (including when TelSDK reports success),
+ * or a failure to retrieve or parse call information is reported as TAF_PA_FAULT through this
+ * callback. The specific TelSDK error code is not preserved.
+ *
+ * dataCallInfo is populated only when the overall data-call status is CONNECTED; otherwise it
+ * remains default-initialized. This snapshot is not a state indication. Its maximum bit-rate
+ * fields are not queried by the operation callback and remain at their default values. State
+ * changes are reported separately through taf_pa_data_CallEventsCb.
+ */
+//--------------------------------------------------------------------------------------------------
+struct DataCallOperationResult_t
+{
+    DataCallOperationType operationType{DataCallOperationType::START};
+    taf_pa_result_t result{TAF_PA_FAULT};
+    DataCallEventInfo_t dataCallInfo{}; ///< Snapshot from the operation response, if available.
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Per-request Start/Stop result callback.
+ */
+//--------------------------------------------------------------------------------------------------
+using taf_pa_data_OperationCb =
+    std::function<void
+                    (
+                        const DataCallOperationResult_t &result,
+                        std::shared_ptr<void> context
+                    )>;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -1481,6 +1525,7 @@ TAF_PA_SHARED taf_pa_result_t Init
 //--------------------------------------------------------------------------------------------------
 /**
  * Deinitialize the Telux data PA state.
+ * Active data calls should be stopped and cleaned up by the caller before invoking PA Deinit.
  *
  * @return
  *  - TAF_PA_OK              PA completely initialized
@@ -1851,30 +1896,56 @@ TAF_PA_SHARED taf_pa_result_t RemoveDataCallEventsCallback
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Start a data session. Events will be provided via taf_pa_data_CallEventsCb that is registered
- * via AddDataCallEventsCallback()
+ * Start a data session with a request-specific operation result callback.
+ * The callback is invoked only if this API returns TAF_PA_OK. If this API returns any other
+ * result, the callback is not invoked and the return value is the final operation result.
+ * TAF_PA_UNAVAILABLE is returned if the phone or connection manager is not ready; an immediate
+ * TelSDK dispatch failure returns TAF_PA_FAULT.
  *
- * @return TAF_PA_OK on success. Wait for callback for final status.
+ * The operation-result callback's dataCallInfo snapshot is populated only when the overall
+ * data-call status is CONNECTED; otherwise it remains default-initialized. The snapshot is not a
+ * state event. Use RequestDataCallsListAsync() when the current list of active calls is required.
+ *
+ * The context pointer is not interpreted by PA. It is present for callback API consistency and is
+ * passed back unchanged to the operation-result callback.
+ *
+ * State changes are delivered independently through taf_pa_data_CallEventsCb. OSS is responsible
+ * for managing its own operation timer and should wait up to 10 seconds for the CONNECTED event
+ * for this data call.
  */
 //--------------------------------------------------------------------------------------------------
 TAF_PA_SHARED taf_pa_result_t StartDataSessionAsync
 (
-    const DataCallStartStopParams_t& params
-                ///< [IN] The data call parameters.
+    const DataCallStartStopParams_t& params,
+    taf_pa_data_OperationCb callBack,
+    std::shared_ptr<void> context
 );
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Stop a data session. Events will be provided via taf_pa_data_CallEventsCb that is registered
- * via RegisterDataCallEventsCallback()
+ * Stop a data session with a request-specific operation result callback.
+ * The callback is invoked only if this API returns TAF_PA_OK. If this API returns any other
+ * result, the callback is not invoked and the return value is the final operation result.
+ * TAF_PA_UNAVAILABLE is returned if the phone or connection manager is not ready; an immediate
+ * TelSDK dispatch failure returns TAF_PA_FAULT.
  *
- * @return TAF_PA_OK on success. Wait for callback for final status.
+ * The operation-result callback's dataCallInfo snapshot is populated only when the overall
+ * data-call status is CONNECTED; otherwise it remains default-initialized. The snapshot is not a
+ * state event. Use RequestDataCallsListAsync() when the current list of active calls is required.
+ *
+ * The context pointer is not interpreted by PA. It is present for callback API consistency and is
+ * passed back unchanged to the operation-result callback.
+ *
+ * State changes are delivered independently through taf_pa_data_CallEventsCb. OSS is responsible
+ * for managing its own operation timer and should wait up to 10 seconds for the DISCONNECTED event
+ * for this data call.
  */
 //--------------------------------------------------------------------------------------------------
 TAF_PA_SHARED taf_pa_result_t StopDataSessionAsync
 (
-    const DataCallStartStopParams_t &params
-                ///< [IN] The data call parameters.
+    const DataCallStartStopParams_t &params,
+    taf_pa_data_OperationCb callBack,
+    std::shared_ptr<void> context
 );
 
 //--------------------------------------------------------------------------------------------------

@@ -17,7 +17,9 @@
 
 #include <algorithm>
 #include <condition_variable>
+#include <exception>
 #include <sstream>
+#include <utility>
 
 using namespace taf::pa::data;
 
@@ -37,6 +39,35 @@ namespace
 {
 
 constexpr uint32_t IPV6_FLOW_LABEL_MAX = 0xFFFFF;
+
+taf_pa_result_t GetTeluxDataCallStatus
+(
+    const std::shared_ptr<telux::data::IDataCall> &dataCall,
+    telux::data::DataCallStatus &callStatus
+)
+{
+    if (!dataCall)
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    try
+    {
+        callStatus = dataCall->getDataCallStatus();
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("Failed to get TelSDK data-call status: %s", error.what());
+        return TAF_PA_FAULT;
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("Unknown exception getting TelSDK data-call status");
+        return TAF_PA_FAULT;
+    }
+
+    return TAF_PA_OK;
+}
 
 taf_pa_result_t ConvertServiceStatus(telux::common::ServiceStatus status)
 {
@@ -2006,7 +2037,6 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionMan
         TAF_PA_WARN("Request call list operation in progress during deinit");
         // Log warning but continue - the operation will be aborted when maps are cleared
     }
-
     // Phase 2: Deregister callbacks with error checking
     taf_pa_result_t result = PaDeregisterDataConnCallbacks();
     if (TAF_PA_OK != result)
@@ -2208,95 +2238,11 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaDeregisterDataConnCal
     return TAF_PA_OK;
 }
 
-/**
- * The callback fuction for TelSDK startDataCall()
- *
- * When callback is used with startDataCall, expected behavior is as following:
- * If this is first client to start datacall in the system and no error is detected,
- * getDataCallStatus() of telux::data::IDataCall object will return NET_CONNECTING and
- * onDataCallInfoChanged will be called once data call is brought up successfully or failed.
- *
- * If client tries to start data call that is already up and no error is detected,
- * getDataCallStatus() of telux::data::IDataCall object will return NET_CONNECTED and
- * onDataCallInfoChanged will not get called.
- *
- * If any client starts data call and error is detected, error argument will contain error code and
- * onDataCallInfoChanged will not get called.
- *
- */
-void taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback
-(
-    const std::shared_ptr<telux::data::IDataCall> &iDataCall,
-    telux::common::ErrorCode errorCode
-)
-{
-    SET_SDK_THREAD_NAME();
-
-    // Log the call data
-    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-    teluxPaDataConn.LogDataCallInfo(iDataCall, __func__);
-
-    // Fill DataCallEventInfo_t
-    DataCallEventInfo_t eventInfo;
-    taf::pa::data::PhoneId_e phoneId;
-    eventInfo.slotId = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
-    telux::data::IpFamilyInfo IPv4Info = iDataCall->getIpv4Info();
-    telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
-
-    auto &teluxPaData    = TafPaTeluxData::GetInstance();
-    taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "PaGetPhoneIdFromSlotId err: %d, drop this event",
-                                                                                            result);
-
-    eventInfo.phoneId    = phoneId;
-    eventInfo.profileId  = static_cast<taf::pa::data::ProfileId_e>(iDataCall->getProfileId());
-
-    eventInfo.maxRxBitRate = 0;
-    eventInfo.maxTxBitRate = 0;
-
-    if (telux::common::ErrorCode::SUCCESS != errorCode)
-    {
-        TAF_PA_ERROR("Starting data session failed with error code: %d", TO_INT(errorCode));
-        // Set the call status to DISCONNECTED
-        eventInfo.callStatus                  = DataCallStatus_e::DISCONNECTED;
-        eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-        eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-    }
-    else
-    {
-        /**
-         * In some cases, getDataCallStatus() returns NET_NO_NET even in success.
-         * Set status to NET_CONNECTING.
-        */
-        if (telux::data::DataCallStatus::NET_NO_NET == iDataCall->getDataCallStatus())
-        {
-            TAF_PA_WARN("TelSDK returned NET_NOT_NET");
-            eventInfo.callStatus                  = DataCallStatus_e::CONNECTING;
-            eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::CONNECTING;
-            eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::CONNECTING;
-        }
-        else
-        {
-            // Update status with TelSDK status.
-            eventInfo.callStatus                  = taf::pa::data::Utils::ConvertCallStatus(
-                                                                    iDataCall->getDataCallStatus());
-            eventInfo.ipv4DataCallInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(
-                                                                                IPv4Info.status);
-            eventInfo.ipv6DataCallInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(
-                                                                                IPv6Info.status);
-        }
-    }
-
-    eventInfo.ipType     = taf::pa::data::Utils::ConvertIpType(iDataCall->getIpFamilyType());
-
-    // Send the data call event info to registered clients
-    teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
-    return;
-}
-
 taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
 (
-    const taf::pa::data::DataCallStartStopParams_t& params
+    const taf::pa::data::DataCallStartStopParams_t &params,
+    taf_pa_data_OperationCb callback,
+    std::shared_ptr<void> context
 )
 {
     telux::data::DataCallParams teluxParams;
@@ -2306,131 +2252,158 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
     teluxParams.ipFamilyType = taf::pa::data::Utils::ConvertIpType(params.ipType);
     teluxParams.interfaceName = params.interfaceName;
 
-    TAF_PA_DEBUG("PaStartDataSessionAsync - teluxParams (after): profileId=%d, ipFamilyType=%d, "
-            "interfaceName='%s', operationType=%d",
-            teluxParams.profileId, TO_INT(teluxParams.ipFamilyType),
-            teluxParams.interfaceName.c_str(), TO_INT(teluxParams.operationType));
+    if (!callback)
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
 
-    auto &teluxPaData = TafPaTeluxData::GetInstance();
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
-                                                             "PA phone manager not initialized.");
+    if (taf::pa::data::SubsystemState_e::AVAILABLE != phoneMngrState)
+    {
+        TAF_PA_ERROR("PA phone manager not initialized for Start data-call operation");
+        return TAF_PA_UNAVAILABLE;
+    }
+
     taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(params.phoneId, slotIDpa);
     if (TAF_PA_OK != result)
     {
-        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(params.phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d", TO_INT(params.phoneId));
         return result;
     }
     TAF_PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
-
-    if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
+    auto managerIt = dataConnectionManagersMap_.find(slotId);
+    if (managerIt == dataConnectionManagersMap_.end() || !managerIt->second)
     {
-        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return TAF_PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not initialized for slot %d", TO_INT(slotId));
+        return TAF_PA_UNAVAILABLE;
     }
 
-    taf::pa::data::PhoneId_e phoneId = params.phoneId;
-    taf::pa::data::ProfileId_e profileId = params.profileId;
-    taf::pa::data::SlotId_e paSlotId = slotIDpa;
-    taf::pa::data::IpType_e ipType = params.ipType;
-
-    auto cb =
-        [phoneId, profileId, paSlotId, ipType]
-        (
-            const std::shared_ptr<telux::data::IDataCall> &iDataCall,
-            telux::common::ErrorCode errorCode
-        )
+    // Forward only the TelSDK operation response. Data-call state indications still
+    // flow through TafPaTeluxDataConnectionListener::onDataCallInfoChanged().
+    telux::common::Status status = managerIt->second->startDataCall(
+        teluxParams,
+        [callback, context, requestedPhoneId = params.phoneId, requestedSlotId = slotIDpa](
+            const std::shared_ptr<telux::data::IDataCall> &dataCall,
+            telux::common::ErrorCode errorCode)
         {
             SET_SDK_THREAD_NAME();
+            taf::pa::data::DataCallOperationResult_t operationResult{};
+            operationResult.operationType = taf::pa::data::DataCallOperationType::START;
+            operationResult.result =
+                telux::common::ErrorCode::SUCCESS == errorCode ? TAF_PA_OK : TAF_PA_FAULT;
+
             auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-
-            if (!iDataCall)
+            if (!dataCall)
             {
-                // Graceful handling of NULL iDataCall
-                TAF_PA_WARN("startDataCallCallback iDataCall is NULL, phoneId=%d profileId=%d err=%d",
-                        TO_INT(phoneId), TO_INT(profileId), TO_INT(errorCode));
-
-                DataCallEventInfo_t eventInfo{};
-                eventInfo.phoneId = phoneId;
-                eventInfo.slotId = paSlotId;
-                eventInfo.profileId = profileId;
-                eventInfo.ipType = ipType;
-
-                // On error, report DISCONNECTED. If TelSDK claims SUCCESS with null pointer,
-                // treat as failure defensively.
-                if (telux::common::ErrorCode::SUCCESS != errorCode)
-                {
-                    TAF_PA_ERROR("Starting data session failed with error code: %d",
-                             TO_INT(errorCode));
-                }
-
-                eventInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-                eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-                eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-
-                teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
+                TAF_PA_WARN("TelSDK returned a null IDataCall for Start data-call operation, "
+                            "error=%d", TO_INT(errorCode));
+                operationResult.result = TAF_PA_FAULT;
+                teluxPaDataConn.invokeDataCallOperationCallback(
+                    callback, context, operationResult);
                 return;
             }
 
-            // Normal path: we have a valid IDataCall, reuse existing implementation
-            taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback(
-                iDataCall, errorCode);
-        };
+            try
+            {
+                LogDataCallInfo(dataCall, __func__);
+            }
+            catch (const std::exception &error)
+            {
+                TAF_PA_WARN("Failed to log Start data-call info: %s", error.what());
+            }
+            catch (...)
+            {
+                TAF_PA_WARN("Unknown exception while logging Start data-call info");
+            }
 
-    auto status = dataConnectionManagersMap_[slotId]->startDataCall(teluxParams, cb);
-    if (status != telux::common::Status::SUCCESS)
+            taf::pa::data::DataCallEventInfo_t parsedDataCallInfo{};
+            telux::data::DataCallStatus callStatus = telux::data::DataCallStatus::INVALID;
+            const taf_pa_result_t statusResult = GetTeluxDataCallStatus(dataCall, callStatus);
+            if (TAF_PA_OK != statusResult)
+            {
+                TAF_PA_ERROR("Failed to get Start data-call status: %d", statusResult);
+                if (telux::common::ErrorCode::SUCCESS == errorCode)
+                {
+                    operationResult.result = statusResult;
+                }
+                teluxPaDataConn.invokeDataCallOperationCallback(
+                    callback, context, operationResult);
+                return;
+            }
+            parsedDataCallInfo.callStatus =
+                taf::pa::data::Utils::ConvertCallStatus(callStatus);
+
+            if (taf::pa::data::DataCallStatus_e::CONNECTED == parsedDataCallInfo.callStatus)
+            {
+                // Parse the remaining operation-response fields only for a connected call.
+                const taf_pa_result_t parseResult = taf::pa::data::Utils::ParseDataCallInfo(
+                    dataCall, requestedPhoneId, parsedDataCallInfo, &callStatus);
+                if (TAF_PA_OK != parseResult)
+                {
+                    TAF_PA_ERROR("Failed to parse Start data-call info: %d", parseResult);
+                    if (telux::common::ErrorCode::SUCCESS == errorCode)
+                    {
+                        operationResult.result = parseResult;
+                    }
+                    teluxPaDataConn.invokeDataCallOperationCallback(
+                        callback, context, operationResult);
+                    return;
+                }
+            }
+
+            if (telux::common::ErrorCode::SUCCESS != errorCode)
+            {
+                TAF_PA_ERROR("Starting data session failed with error code: %d",
+                             TO_INT(errorCode));
+                parsedDataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::DISCONNECTED;
+                parsedDataCallInfo.ipv4DataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::DISCONNECTED;
+                parsedDataCallInfo.ipv6DataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::DISCONNECTED;
+            }
+            else if (telux::data::DataCallStatus::NET_NO_NET == callStatus)
+            {
+                // Preserve legacy Start behavior: TelSDK can report SUCCESS while the
+                // IDataCall still shows NET_NO_NET during bring-up. Treat that operation
+                // result as CONNECTING; the listener indication will report the final state.
+                TAF_PA_WARN("TelSDK returned NET_NO_NET for successful Start data-call operation");
+                parsedDataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::CONNECTING;
+                parsedDataCallInfo.ipv4DataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::CONNECTING;
+                parsedDataCallInfo.ipv6DataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::CONNECTING;
+            }
+
+            if (taf::pa::data::DataCallStatus_e::CONNECTED == parsedDataCallInfo.callStatus)
+            {
+                // Prefer the identifiers from the accepted request for this connected snapshot.
+                parsedDataCallInfo.phoneId = requestedPhoneId;
+                parsedDataCallInfo.slotId = requestedSlotId;
+                operationResult.dataCallInfo = std::move(parsedDataCallInfo);
+            }
+
+            teluxPaDataConn.invokeDataCallOperationCallback(callback, context, operationResult);
+        });
+
+    if (telux::common::Status::SUCCESS != status)
     {
-        TAF_PA_ERROR("startDataCall failed. Status: %d", TO_INT(status));
+        TAF_PA_ERROR("TelSDK Start data-call dispatch failed. Status: %d", TO_INT(status));
         return TAF_PA_FAULT;
     }
+
     return TAF_PA_OK;
-}
-
-void taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback
-(
-    const std::shared_ptr<telux::data::IDataCall> &iDataCall,
-    telux::common::ErrorCode errorCode
-)
-{
-    SET_SDK_THREAD_NAME();
-
-    if (telux::common::ErrorCode::SUCCESS != errorCode)
-    {
-        TAF_PA_ERROR("Stopping data session failed with error code: %d", TO_INT(errorCode));
-    }
-
-    // Log the call data
-    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-    teluxPaDataConn.LogDataCallInfo(iDataCall, __func__);
-
-    // Fill DataCallEventInfo_t
-    DataCallEventInfo_t eventInfo;
-    taf::pa::data::PhoneId_e phoneId;
-    eventInfo.slotId = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
-    telux::data::IpFamilyInfo IPv4Info = iDataCall->getIpv4Info();
-    telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
-
-    auto &teluxPaData = TafPaTeluxData::GetInstance();
-    taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "PaGetPhoneIdFromSlotId err: %d, drop this event",
-                                                                                           result);
-    eventInfo.phoneId = phoneId;
-    eventInfo.profileId = static_cast<taf::pa::data::ProfileId_e>(iDataCall->getProfileId());
-    eventInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(iDataCall->getDataCallStatus());
-    eventInfo.ipv4DataCallInfo.callStatus=taf::pa::data::Utils::ConvertCallStatus(IPv4Info.status);
-    eventInfo.ipv6DataCallInfo.callStatus=taf::pa::data::Utils::ConvertCallStatus(IPv6Info.status);
-    eventInfo.ipType     = taf::pa::data::Utils::ConvertIpType(iDataCall->getIpFamilyType());
-
-    // Send the data call event info to registered clients
-    teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
-    return;
 }
 
 taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
 (
-    const taf::pa::data::DataCallStartStopParams_t& params
+    const taf::pa::data::DataCallStartStopParams_t &params,
+    taf_pa_data_OperationCb callback,
+    std::shared_ptr<void> context
 )
 {
     telux::data::DataCallParams teluxParams;
@@ -2438,81 +2411,162 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
 
     teluxParams.profileId = static_cast<int>(params.profileId);
     teluxParams.ipFamilyType = taf::pa::data::Utils::ConvertIpType(params.ipType);
+    teluxParams.interfaceName = params.interfaceName;
 
-    auto &teluxPaData = TafPaTeluxData::GetInstance();
+    if (!callback)
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
-                                                             "PA phone manager not initialized.");
+    if (taf::pa::data::SubsystemState_e::AVAILABLE != phoneMngrState)
+    {
+        TAF_PA_ERROR("PA phone manager not initialized for Stop data-call operation");
+        return TAF_PA_UNAVAILABLE;
+    }
+
     taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(params.phoneId, slotIDpa);
     if (TAF_PA_OK != result)
     {
-        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(params.phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d", TO_INT(params.phoneId));
         return result;
     }
     TAF_PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
-
-    if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
+    auto managerIt = dataConnectionManagersMap_.find(slotId);
+    if (managerIt == dataConnectionManagersMap_.end() || !managerIt->second)
     {
-        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return TAF_PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not initialized for slot %d", TO_INT(slotId));
+        return TAF_PA_UNAVAILABLE;
     }
 
-    taf::pa::data::PhoneId_e phoneId = params.phoneId;
-    taf::pa::data::ProfileId_e profileId = params.profileId;
-    taf::pa::data::SlotId_e paSlotId = slotIDpa;
-    taf::pa::data::IpType_e ipType = params.ipType;
-
-    auto cb =
-        [phoneId, profileId, paSlotId, ipType]
-        (
-            const std::shared_ptr<telux::data::IDataCall> &iDataCall,
-            telux::common::ErrorCode errorCode
-        )
+    // Forward only the TelSDK operation response. Data-call state indications still
+    // flow through TafPaTeluxDataConnectionListener::onDataCallInfoChanged().
+    telux::common::Status status = managerIt->second->stopDataCall(
+        teluxParams,
+        [callback, context, requestedPhoneId = params.phoneId, requestedSlotId = slotIDpa](
+            const std::shared_ptr<telux::data::IDataCall> &dataCall,
+            telux::common::ErrorCode errorCode)
         {
             SET_SDK_THREAD_NAME();
+            taf::pa::data::DataCallOperationResult_t operationResult{};
+            operationResult.operationType = taf::pa::data::DataCallOperationType::STOP;
+            operationResult.result =
+                telux::common::ErrorCode::SUCCESS == errorCode ? TAF_PA_OK : TAF_PA_FAULT;
+
             auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-
-            if (!iDataCall)
+            if (!dataCall)
             {
-                // Graceful handling of NULL iDataCall
-                TAF_PA_WARN("stopDataCallCallback iDataCall is NULL, phoneId=%d profileId=%d err=%d",
-                        TO_INT(phoneId), TO_INT(profileId), TO_INT(errorCode));
-
-                if (telux::common::ErrorCode::SUCCESS != errorCode)
-                {
-                    TAF_PA_ERROR("Stopping data session failed with error code: %d",
-                             TO_INT(errorCode));
-                }
-
-                DataCallEventInfo_t eventInfo{};
-                eventInfo.phoneId = phoneId;
-                eventInfo.slotId = paSlotId;
-                eventInfo.profileId = profileId;
-                eventInfo.ipType = ipType;
-
-                // Stopping a session with null call is effectively disconnected.
-                eventInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-                eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-                eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-
-                teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
+                TAF_PA_WARN("TelSDK returned a null IDataCall for Stop data-call operation, "
+                            "error=%d", TO_INT(errorCode));
+                operationResult.result = TAF_PA_FAULT;
+                teluxPaDataConn.invokeDataCallOperationCallback(
+                    callback, context, operationResult);
                 return;
             }
 
-            // Normal path: we have a valid IDataCall, reuse existing implementation
-            taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback(
-                iDataCall, errorCode);
-        };
+            try
+            {
+                LogDataCallInfo(dataCall, __func__);
+            }
+            catch (const std::exception &error)
+            {
+                TAF_PA_WARN("Failed to log Stop data-call info: %s", error.what());
+            }
+            catch (...)
+            {
+                TAF_PA_WARN("Unknown exception while logging Stop data-call info");
+            }
 
-    auto status = dataConnectionManagersMap_[slotId]->stopDataCall(teluxParams, cb);
-    if (status != telux::common::Status::SUCCESS)
+            // Return the operation-response status and available IP-family details. Listener state
+            // bookkeeping and its bit-rate request remain independent of this callback.
+            taf::pa::data::DataCallEventInfo_t parsedDataCallInfo{};
+            telux::data::DataCallStatus callStatus = telux::data::DataCallStatus::INVALID;
+            const taf_pa_result_t statusResult = GetTeluxDataCallStatus(dataCall, callStatus);
+            if (TAF_PA_OK != statusResult)
+            {
+                TAF_PA_ERROR("Failed to get Stop data-call status: %d", statusResult);
+                if (telux::common::ErrorCode::SUCCESS == errorCode)
+                {
+                    operationResult.result = statusResult;
+                }
+                teluxPaDataConn.invokeDataCallOperationCallback(
+                    callback, context, operationResult);
+                return;
+            }
+            parsedDataCallInfo.callStatus =
+                taf::pa::data::Utils::ConvertCallStatus(callStatus);
+
+            if (taf::pa::data::DataCallStatus_e::CONNECTED == parsedDataCallInfo.callStatus)
+            {
+                const taf_pa_result_t parseResult = taf::pa::data::Utils::ParseDataCallInfo(
+                    dataCall, requestedPhoneId, parsedDataCallInfo, &callStatus);
+                if (TAF_PA_OK != parseResult)
+                {
+                    TAF_PA_ERROR("Failed to parse Stop data-call info: %d", parseResult);
+                    if (telux::common::ErrorCode::SUCCESS == errorCode)
+                    {
+                        operationResult.result = parseResult;
+                    }
+                    teluxPaDataConn.invokeDataCallOperationCallback(
+                        callback, context, operationResult);
+                    return;
+                }
+            }
+
+            if (taf::pa::data::DataCallStatus_e::CONNECTED == parsedDataCallInfo.callStatus)
+            {
+                parsedDataCallInfo.phoneId = requestedPhoneId;
+                parsedDataCallInfo.slotId = requestedSlotId;
+                operationResult.dataCallInfo = std::move(parsedDataCallInfo);
+            }
+
+            teluxPaDataConn.invokeDataCallOperationCallback(callback, context, operationResult);
+        });
+
+    if (telux::common::Status::SUCCESS != status)
     {
-        TAF_PA_ERROR("stopDataCall failed. Status: %d", TO_INT(status));
+        TAF_PA_ERROR("TelSDK Stop data-call dispatch failed. Status: %d", TO_INT(status));
         return TAF_PA_FAULT;
     }
+
     return TAF_PA_OK;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Invoke the caller-provided operation callback with exception protection.
+ *
+ * Client callbacks are external code from the PA's perspective. Catching exceptions here prevents a
+ * bad callback from unwinding through PA/TelSDK callback handling.
+ */
+//--------------------------------------------------------------------------------------------------
+void taf::pa::data::TafPaTeluxDataConnection::invokeDataCallOperationCallback
+(
+    taf_pa_data_OperationCb callback,
+    std::shared_ptr<void> context,
+    const DataCallOperationResult_t &result
+)
+{
+    if (!callback)
+    {
+        return;
+    }
+
+    try
+    {
+        callback(result, context);
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("Exception in data-call operation callback: %s", error.what());
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("Unknown exception in data-call operation callback");
+    }
 }
 
 void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
