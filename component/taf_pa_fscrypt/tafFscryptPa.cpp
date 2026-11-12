@@ -3,40 +3,37 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-#include "tafFscryptPa.h"
 #include "taf_prop_fscrypt.h"
 #include "tafInternalCommonPa.h"
-#include <stdatomic.h>
-#include <stdbool.h>
+#include <atomic>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Thread-safe initialization flag
-static _Atomic(bool) g_fscrypt_initialized = false;
+static std::atomic<bool> g_fscrypt_initialized{false};
 
 //--------------------------------------------------------------------------------------------------
 /**
  * PA initialization.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_fsc_Init
+TAF_PA_SHARED taf_pa_result_t taf_pa_fsc_Init
 (
     void* cryptoFunc
 )
 {
-    taf_prop_result_t rc = taf_prop_fsc_Component_Init();
-    if (rc != TAF_PROP_OK)
+    if (cryptoFunc == NULL)
     {
-        TAF_PA_ERROR("taf_prop_fsc_Component_Init failed: %d", rc);
-        return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
+        TAF_PA_ERROR("taf_pa_fsc_Init: cryptoFunc is NULL.");
+        return TAF_PA_BAD_PARAMETER;
     }
 
-    rc = taf_prop_fsc_Init(cryptoFunc);
-    if (rc != TAF_PROP_OK)
-    {
-        TAF_PA_ERROR("taf_prop_fsc_Init failed: %d", rc);
-        return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
-    }
+    taf_prop_fsc_Component_Init();
+    taf_prop_fsc_Init(cryptoFunc);
 
-    atomic_store(&g_fscrypt_initialized, true);
+    g_fscrypt_initialized.store(true);
     TAF_PA_INFO("Telaf fscrypt PA initialized.");
     return TAF_PA_OK;
 }
@@ -46,13 +43,13 @@ taf_pa_result_t taf_pa_fsc_Init
  * PA deinitialization.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_fsc_Deinit
+TAF_PA_SHARED taf_pa_result_t taf_pa_fsc_Deinit
 (
     void
 )
 {
     // Check if initialization was successful before proceeding with deinitialization
-    if (!atomic_load(&g_fscrypt_initialized))
+    if (!g_fscrypt_initialized.load())
     {
         TAF_PA_WARN("Deinit() called before successful Init(). Ignoring deinit request.");
         return TAF_PA_FAULT;
@@ -62,7 +59,7 @@ taf_pa_result_t taf_pa_fsc_Deinit
     // maps, or open handles of its own. The underlying taf_prop_fscrypt layer does not
     // expose a Deinit API. This function provides the symmetric counterpart to
     // taf_pa_fsc_Init() so callers can follow a consistent Init/Deinit lifecycle.
-    atomic_store(&g_fscrypt_initialized, false);
+    g_fscrypt_initialized.store(false);
     TAF_PA_INFO("Telaf fscrypt PA deinitialized.");
     return TAF_PA_OK;
 }
@@ -72,7 +69,7 @@ taf_pa_result_t taf_pa_fsc_Deinit
  * Get a key file reference by directory name.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_fsc_GetKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_fsc_GetKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
@@ -91,7 +88,7 @@ taf_pa_result_t taf_pa_fsc_GetKey
  * Create AES key and return a key file reference.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_fsc_GenerateAesKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_fsc_GenerateAesKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     const char* dirName,                    ///< [IN] dir Name
@@ -110,7 +107,7 @@ taf_pa_result_t taf_pa_fsc_GenerateAesKey
  * Delete a key file.
  */
 //--------------------------------------------------------------------------------------------------
-taf_pa_result_t taf_pa_fsc_DeleteKey
+TAF_PA_SHARED taf_pa_result_t taf_pa_fsc_DeleteKey
 (
     int clientSessionFd,                    ///< [IN] Client session Fd
     KeyMgt_KeyFileRef_t keyFileRef          ///< [IN] Key file reference
@@ -119,3 +116,8 @@ taf_pa_result_t taf_pa_fsc_DeleteKey
     taf_prop_result_t rc = taf_prop_fsc_DeleteKey(clientSessionFd, keyFileRef);
     return PropResultToPaResult(rc, TAF_PROP_UNDERLYING_ERR_NONE);
 }
+
+
+#ifdef __cplusplus
+}
+#endif // extern "C"
