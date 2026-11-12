@@ -18,10 +18,20 @@
 #include "telux/data/DataFactory.hpp"
 #include "telux/data/ServingSystemManager.hpp"
 #include "telux/common/CommonDefines.hpp"
+#include <memory>
 #include <thread>
 #include <sstream>
 #include <future>
 #include <exception>
+
+namespace telux
+{
+namespace data
+{
+class IDataCall;
+}
+}
+
 namespace taf
 {
 namespace pa
@@ -54,6 +64,17 @@ class Utils
 
         static telux::data::DataCallStatus ConvertCallStatus(DataCallStatus_e);
         static DataCallStatus_e            ConvertCallStatus(telux::data::DataCallStatus);
+
+        // Convert a TelSDK IDataCall into a PA snapshot, including available per-IP-family address
+        // details. Used for Start/Stop results and call-list entries. Listener-only bearer,
+        // end-reason, and bit-rate fields remain separate.
+        static taf_pa_result_t ParseDataCallInfo
+        (
+            const std::shared_ptr<telux::data::IDataCall> &iDataCall,
+            PhoneId_e phoneId,
+            DataCallEventInfo_t &eventInfo,
+            telux::data::DataCallStatus *rawCallStatus = nullptr
+        );
 
         static QosFlowState_e ConvertQosFlowState
         (
@@ -125,6 +146,9 @@ class Utils
             const telux::data::DownlinkThroughputInfo &sdkInfo,
             DownlinkThroughputInfo_t &paInfo
         );
+
+        static taf_pa_result_t ConvertStatus(telux::common::Status status);
+        static taf_pa_result_t ConvertErrorCode(telux::common::ErrorCode errorCode);
 
         // String conversions
         static const char *CallStatusToString(telux::data::DataCallStatus status);

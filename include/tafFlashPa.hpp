@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -35,6 +35,11 @@ typedef struct
 typedef struct taf_pa_flash_MtdRef* taf_pa_flash_MtdRef_t;
 
 typedef struct taf_pa_flash_UbiVolumeRef* taf_pa_flash_UbiVolumeRef_t;
+
+TAF_PA_SHARED taf_pa_result_t taf_pa_flash_GetActiveSlot
+(
+    taf_pa_ABSlot_t* slotPtr
+);
 
 TAF_PA_SHARED taf_pa_result_t taf_pa_flash_Init
 (

@@ -13,6 +13,139 @@
 #include "tafDataTeluxDataPa.hpp"
 #include "tafDataTeluxDataConnectionPa.hpp"
 
+#include <arpa/inet.h>
+
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <exception>
+#include <sstream>
+#include <thread>
+#include <utility>
+
+using namespace taf::pa::data;
+
+/*
+ * TelSDK to PA mapping:
+ *   telux::data::TCPKAParams          -> TcpKeepAliveParams_t
+ *   telux::data::MonitorHandleType    -> TcpMonitorHandle_t
+ *   telux::data::TCPKAOffloadHandle   -> TcpKeepAliveOffloadHandle_t
+ *   telux::data::DataRestrictMode     -> FilterModeInfo_t
+ *   telux::data::DataRestrictModeType -> FilterMode_e
+ *   telux::common::ResponseCallback   -> taf_pa_data_DataRestrictResponseCb
+ *   telux::data::DataRestrictModeCb   -> taf_pa_data_DataRestrictModeResponseCb
+ *   telux::data::IIpFilter variants   -> IpFilter_t and protocol-specific fields
+ *   telux::common::ErrorCode/Status   -> taf_pa_result_t via Utils conversion helpers
+ */
+namespace
+{
+
+constexpr uint32_t IPV6_FLOW_LABEL_MAX = 0xFFFFF;
+
+taf_pa_result_t GetTeluxDataCallStatus
+(
+    const std::shared_ptr<telux::data::IDataCall> &dataCall,
+    telux::data::DataCallStatus &callStatus
+)
+{
+    if (!dataCall)
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    try
+    {
+        callStatus = dataCall->getDataCallStatus();
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("Failed to get TelSDK data-call status: %s", error.what());
+        return TAF_PA_FAULT;
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("Unknown exception getting TelSDK data-call status");
+        return TAF_PA_FAULT;
+    }
+
+    return TAF_PA_OK;
+}
+
+taf_pa_result_t ConvertServiceStatus(telux::common::ServiceStatus status)
+{
+    switch (status)
+    {
+    case telux::common::ServiceStatus::SERVICE_AVAILABLE:
+        return TAF_PA_OK;
+    case telux::common::ServiceStatus::SERVICE_UNAVAILABLE:
+        return TAF_PA_UNAVAILABLE;
+    case telux::common::ServiceStatus::SERVICE_FAILED:
+    default:
+        return TAF_PA_FAULT;
+    }
+}
+
+bool IsValidIpAddress(const std::string &address, int &family)
+{
+    uint8_t buffer[sizeof(struct in6_addr)] = {};
+    if (inet_pton(AF_INET, address.c_str(), buffer) == 1)
+    {
+        family = AF_INET;
+        return true;
+    }
+    if (inet_pton(AF_INET6, address.c_str(), buffer) == 1)
+    {
+        family = AF_INET6;
+        return true;
+    }
+    return false;
+}
+
+bool IsValidAddress(const std::string &address, int family)
+{
+    uint8_t buffer[sizeof(struct in6_addr)] = {};
+    return inet_pton(family, address.c_str(), buffer) == 1;
+}
+
+telux::data::DataRestrictModeType ConvertDataRestrictModeType(FilterMode_e mode)
+{
+    switch (mode)
+    {
+    case FilterMode_e::DISABLE:
+        return telux::data::DataRestrictModeType::DISABLE;
+    case FilterMode_e::ENABLE:
+        return telux::data::DataRestrictModeType::ENABLE;
+    case FilterMode_e::UNKNOWN:
+    default:
+        return telux::data::DataRestrictModeType::UNKNOWN;
+    }
+}
+
+FilterMode_e ConvertDataRestrictModeType(telux::data::DataRestrictModeType mode)
+{
+    switch (mode)
+    {
+    case telux::data::DataRestrictModeType::DISABLE:
+        return FilterMode_e::DISABLE;
+    case telux::data::DataRestrictModeType::ENABLE:
+        return FilterMode_e::ENABLE;
+    case telux::data::DataRestrictModeType::UNKNOWN:
+    default:
+        return FilterMode_e::UNKNOWN;
+    }
+}
+
+void AppendOptionalPrefix(std::ostringstream &stream, const char *name, bool hasValue)
+{
+    stream << name << '=';
+    if (!hasValue)
+    {
+        stream << "<unset>;";
+    }
+}
+
+} // namespace
+
 taf::pa::data::TafPaTeluxDataConnection &taf::pa::data::TafPaTeluxDataConnection::GetInstance()
 {
     static TafPaTeluxDataConnection instance;
@@ -39,6 +172,1314 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetSubsysState
     TAF_PA_INFO("Conn init state for slot id[%d]: %d", slotId, TO_INT(sState));
     return TAF_PA_OK;
 }
+
+TafPaTeluxKeepAlive &TafPaTeluxKeepAlive::GetInstance()
+{
+    static TafPaTeluxKeepAlive instance;
+    return instance;
+}
+
+taf_pa_result_t TafPaTeluxKeepAlive::Init()
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (initialized_ && !keepAliveManagersMap_.empty())
+        {
+            // Check if all managers are available
+            bool allAvailable = true;
+            for (const auto &entry : keepAliveManagersMap_)
+            {
+                if (!entry.second ||
+                    entry.second->getServiceStatus() != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+                {
+                    allAvailable = false;
+                    break;
+                }
+            }
+            if (allAvailable)
+            {
+                return TAF_PA_OK;
+            }
+        }
+    }
+
+    auto &dataFactory = telux::data::DataFactory::getInstance();
+
+    // Initialize KeepAlive managers for both slots
+    std::vector<int> failedSlots;
+    std::vector<int> successfulSlots;
+
+    TAF_PA_INFO("Starting KeepAlive manager initialization for slots");
+
+    for (int slotId = 1; slotId <= MAX_SLOT_NUM; slotId++)
+    {
+        auto initPromise = std::make_shared<std::promise<telux::common::ServiceStatus>>();
+        std::future<telux::common::ServiceStatus> initFuture = initPromise->get_future();
+
+        auto manager = dataFactory.getKeepAliveManager(
+            (SlotId)slotId,
+            [initPromise, slotId](telux::common::ServiceStatus status)
+            {
+                SET_SDK_THREAD_NAME();
+                TAF_PA_INFO("KeepAlive manager callback for slot %d, status: %d", slotId, TO_INT(status));
+                try
+                {
+                    initPromise->set_value(status);
+                }
+                catch (const std::future_error &error)
+                {
+                    TAF_PA_WARN("KeepAlive init callback completed more than once for slot %d: %s",
+                            slotId, error.what());
+                }
+            });
+
+        if (!manager)
+        {
+            TAF_PA_ERROR("Failed to get KeepAlive manager instance for slot %d", slotId);
+            failedSlots.push_back(slotId);
+            continue;
+        }
+
+        telux::common::ServiceStatus status = manager->getServiceStatus();
+        if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            std::future_status waitStatus = initFuture.wait_for(
+                std::chrono::seconds(taf::pa::data::SUBSYSTEM_INIT_TIMEOUT));
+            if (waitStatus == std::future_status::ready)
+            {
+                status = initFuture.get();
+            }
+        }
+
+        if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            keepAliveManagersMap_[(SlotId)slotId] = manager;
+            successfulSlots.push_back(slotId);
+            TAF_PA_INFO("KeepAlive manager initialized successfully for slot %d", slotId);
+        }
+        else
+        {
+            TAF_PA_WARN("KeepAlive manager not available for slot %d. Status: %d", slotId, TO_INT(status));
+            failedSlots.push_back(slotId);
+        }
+    }
+
+    // Log summary
+    TAF_PA_INFO("=== KeepAlive Manager Initialization Summary ===");
+    TAF_PA_INFO("Successfully initialized: %zu slot(s)", successfulSlots.size());
+    if (!successfulSlots.empty())
+    {
+        for (auto slot : successfulSlots)
+        {
+            TAF_PA_INFO("  - Slot %d: AVAILABLE", slot);
+        }
+    }
+    if (!failedSlots.empty())
+    {
+        TAF_PA_WARN("Failed to initialize: %zu slot(s)", failedSlots.size());
+        for (auto slot : failedSlots)
+        {
+            TAF_PA_WARN("  - Slot %d: FAILED", slot);
+        }
+    }
+    TAF_PA_INFO("================================================");
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        initialized_ = !keepAliveManagersMap_.empty();
+    }
+
+    return keepAliveManagersMap_.empty() ? TAF_PA_UNAVAILABLE : TAF_PA_OK;
+}
+
+taf_pa_result_t TafPaTeluxKeepAlive::Deinit()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (keepAliveManagersMap_.empty())
+    {
+        monitorHandles_.clear();
+        offloadHandles_.clear();
+        initialized_ = false;
+        return TAF_PA_OK;
+    }
+
+    // Clean up offload handles using the first available manager
+    // (all managers should have the same handles since they're global)
+    if (!keepAliveManagersMap_.empty())
+    {
+        auto manager = keepAliveManagersMap_.begin()->second;
+        for (const auto &entry : offloadHandles_)
+        {
+            telux::common::ErrorCode error =
+                manager->stopTCPKeepAliveOffload(entry.first);
+            if (error != telux::common::ErrorCode::SUCCESS)
+            {
+                TAF_PA_WARN("Failed to stop keep-alive offload %u during deinit: %d",
+                        entry.first, TO_INT(error));
+            }
+        }
+    }
+    offloadHandles_.clear();
+
+    // Clean up monitor handles using the first available manager
+    if (!keepAliveManagersMap_.empty())
+    {
+        auto manager = keepAliveManagersMap_.begin()->second;
+        for (auto monHandle : monitorHandles_)
+        {
+            telux::common::ErrorCode error = manager->disableTCPMonitor(monHandle);
+            if (error != telux::common::ErrorCode::SUCCESS)
+            {
+                TAF_PA_WARN("Failed to disable TCP monitor %u during deinit: %d",
+                        monHandle, TO_INT(error));
+            }
+        }
+    }
+    monitorHandles_.clear();
+
+    keepAliveManagersMap_.clear();
+    initialized_ = false;
+    return TAF_PA_OK;
+}
+
+
+bool TafPaTeluxKeepAlive::IsValidTcpKaParams(const TcpKeepAliveParams_t &tcpKaParams)
+{
+    int sourceFamily = AF_UNSPEC;
+    int destinationFamily = AF_UNSPEC;
+
+    if (tcpKaParams.sourcePort == 0 || tcpKaParams.destinationPort == 0)
+    {
+        TAF_PA_ERROR("TCP keep-alive source and destination ports must be non-zero");
+        return false;
+    }
+    if (!IsValidIpAddress(tcpKaParams.sourceAddress, sourceFamily))
+    {
+        TAF_PA_ERROR("Invalid TCP keep-alive source address: %s", tcpKaParams.sourceAddress.c_str());
+        return false;
+    }
+    if (!IsValidIpAddress(tcpKaParams.destinationAddress, destinationFamily))
+    {
+        TAF_PA_ERROR("Invalid TCP keep-alive destination address: %s",
+                 tcpKaParams.destinationAddress.c_str());
+        return false;
+    }
+    if (sourceFamily != destinationFamily)
+    {
+        TAF_PA_ERROR("TCP keep-alive source and destination address families differ");
+        return false;
+    }
+    return true;
+}
+
+telux::data::TCPKAParams TafPaTeluxKeepAlive::ConvertTcpKaParams(
+    const TcpKeepAliveParams_t &tcpKaParams)
+{
+    telux::data::TCPKAParams sdkParams{};
+    sdkParams.srcIp = tcpKaParams.sourceAddress;
+    sdkParams.dstIp = tcpKaParams.destinationAddress;
+    sdkParams.srcPort = tcpKaParams.sourcePort;
+    sdkParams.dstPort = tcpKaParams.destinationPort;
+    return sdkParams;
+}
+
+taf_pa_result_t TafPaTeluxKeepAlive::PaEnableTCPMonitor(
+    taf::pa::data::SlotId_e slotId,
+    const TcpKeepAliveParams_t &tcpKaParams,
+    TcpMonitorHandle_t &monHandle)
+{
+    monHandle = INVALID_TCP_MONITOR_HANDLE;
+    TAF_PA_ERROR_IF_RET_VAL(!IsValidTcpKaParams(tcpKaParams), TAF_PA_BAD_PARAMETER,
+                            "Invalid TCP keep-alive parameters");
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto managerIt = keepAliveManagersMap_.find((SlotId)slotId);
+    if (managerIt == keepAliveManagersMap_.end())
+    {
+        TAF_PA_ERROR("No KeepAlive manager available for slot %d", TO_INT(slotId));
+        return TAF_PA_NOT_FOUND;
+    }
+    auto manager = managerIt->second;
+    telux::data::MonitorHandleType sdkHandle = INVALID_TCP_MONITOR_HANDLE;
+    telux::common::ErrorCode error =
+        manager->enableTCPMonitor(ConvertTcpKaParams(tcpKaParams), sdkHandle);
+    taf_pa_result_t result = Utils::ConvertErrorCode(error);
+    if (result != TAF_PA_OK)
+    {
+        TAF_PA_ERROR("enableTCPMonitor failed. ErrorCode: %d", TO_INT(error));
+        return result;
+    }
+    if (sdkHandle == INVALID_TCP_MONITOR_HANDLE)
+    {
+        TAF_PA_ERROR("enableTCPMonitor returned an invalid monitor handle");
+        return TAF_PA_FAULT;
+    }
+
+    monHandle = sdkHandle;
+    monitorHandles_.insert(monHandle);
+    return TAF_PA_OK;
+}
+
+taf_pa_result_t TafPaTeluxKeepAlive::PaDisableTCPMonitor(taf::pa::data::SlotId_e slotId, TcpMonitorHandle_t monHandle)
+{
+    TAF_PA_ERROR_IF_RET_VAL(monHandle == INVALID_TCP_MONITOR_HANDLE, TAF_PA_BAD_PARAMETER,
+                            "Invalid TCP monitor handle");
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (monitorHandles_.find(monHandle) == monitorHandles_.end())
+    {
+        TAF_PA_WARN("Unknown TCP monitor handle: %u", monHandle);
+        return TAF_PA_NOT_FOUND;
+    }
+
+    auto managerIt = keepAliveManagersMap_.find((SlotId)slotId);
+    if (managerIt == keepAliveManagersMap_.end())
+    {
+        TAF_PA_ERROR("No KeepAlive manager available for slot %d", TO_INT(slotId));
+        return TAF_PA_NOT_FOUND;
+    }
+    auto manager = managerIt->second;
+    auto offload = std::find_if(offloadHandles_.begin(), offloadHandles_.end(),
+        [monHandle](const auto &entry) { return entry.second == monHandle; });
+    if (offload != offloadHandles_.end())
+    {
+        telux::common::ErrorCode stopError =
+            manager->stopTCPKeepAliveOffload(offload->first);
+        taf_pa_result_t result = Utils::ConvertErrorCode(stopError);
+        if (result != TAF_PA_OK)
+        {
+            TAF_PA_ERROR("Failed to stop keep-alive offload %u before disabling monitor %u: %d",
+                     offload->first, monHandle, TO_INT(stopError));
+            return result;
+        }
+        offloadHandles_.erase(offload);
+    }
+
+    telux::common::ErrorCode error = manager->disableTCPMonitor(monHandle);
+    taf_pa_result_t result = Utils::ConvertErrorCode(error);
+    if (result != TAF_PA_OK)
+    {
+        TAF_PA_ERROR("disableTCPMonitor failed for handle %u. ErrorCode: %d",
+                 monHandle, TO_INT(error));
+        return result;
+    }
+
+    monitorHandles_.erase(monHandle);
+    return TAF_PA_OK;
+}
+
+taf_pa_result_t TafPaTeluxKeepAlive::PaStartTCPKeepAliveOffload(
+    taf::pa::data::SlotId_e slotId,
+    TcpMonitorHandle_t monHandle,
+    uint32_t interval,
+    TcpKeepAliveOffloadHandle_t &handle)
+{
+    handle = INVALID_TCP_KEEP_ALIVE_OFFLOAD_HANDLE;
+    TAF_PA_ERROR_IF_RET_VAL(monHandle == INVALID_TCP_MONITOR_HANDLE, TAF_PA_BAD_PARAMETER,
+                            "Invalid TCP monitor handle");
+    TAF_PA_ERROR_IF_RET_VAL(interval == 0, TAF_PA_BAD_PARAMETER,
+                            "TCP keep-alive interval must be non-zero");
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (monitorHandles_.find(monHandle) == monitorHandles_.end())
+    {
+        TAF_PA_WARN("Unknown TCP monitor handle: %u", monHandle);
+        return TAF_PA_NOT_FOUND;
+    }
+
+    auto existing = std::find_if(offloadHandles_.begin(), offloadHandles_.end(),
+        [monHandle](const auto &entry) { return entry.second == monHandle; });
+    if (existing != offloadHandles_.end())
+    {
+        TAF_PA_WARN("TCP monitor %u already has offload handle %u", monHandle, existing->first);
+        return TAF_PA_DUPLICATE;
+    }
+
+    auto managerIt = keepAliveManagersMap_.find((SlotId)slotId);
+    if (managerIt == keepAliveManagersMap_.end())
+    {
+        TAF_PA_ERROR("No KeepAlive manager available for slot %d", TO_INT(slotId));
+        return TAF_PA_NOT_FOUND;
+    }
+    auto manager = managerIt->second;
+    telux::data::TCPKAOffloadHandle sdkHandle = INVALID_TCP_KEEP_ALIVE_OFFLOAD_HANDLE;
+    telux::common::ErrorCode error =
+        manager->startTCPKeepAliveOffload(monHandle, interval, sdkHandle);
+    taf_pa_result_t result = Utils::ConvertErrorCode(error);
+    if (result != TAF_PA_OK)
+    {
+        TAF_PA_ERROR("startTCPKeepAliveOffload failed for monitor %u. ErrorCode: %d",
+                 monHandle, TO_INT(error));
+        return result;
+    }
+    if (sdkHandle == INVALID_TCP_KEEP_ALIVE_OFFLOAD_HANDLE)
+    {
+        TAF_PA_ERROR("startTCPKeepAliveOffload returned an invalid offload handle");
+        return TAF_PA_FAULT;
+    }
+
+    handle = sdkHandle;
+    offloadHandles_[handle] = monHandle;
+    return TAF_PA_OK;
+}
+
+taf_pa_result_t TafPaTeluxKeepAlive::PaStopTCPKeepAliveOffload(taf::pa::data::SlotId_e slotId, TcpKeepAliveOffloadHandle_t handle)
+{
+    TAF_PA_ERROR_IF_RET_VAL(handle == INVALID_TCP_KEEP_ALIVE_OFFLOAD_HANDLE, TAF_PA_BAD_PARAMETER,
+                            "Invalid TCP keep-alive offload handle");
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto offload = offloadHandles_.find(handle);
+    if (offload == offloadHandles_.end())
+    {
+        TAF_PA_WARN("Unknown TCP keep-alive offload handle: %u", handle);
+        return TAF_PA_NOT_FOUND;
+    }
+
+    auto managerIt = keepAliveManagersMap_.find((SlotId)slotId);
+    if (managerIt == keepAliveManagersMap_.end())
+    {
+        TAF_PA_ERROR("No KeepAlive manager available for slot %d", TO_INT(slotId));
+        return TAF_PA_NOT_FOUND;
+    }
+    auto manager = managerIt->second;
+    telux::common::ErrorCode error = manager->stopTCPKeepAliveOffload(handle);
+    taf_pa_result_t result = Utils::ConvertErrorCode(error);
+    if (result != TAF_PA_OK)
+    {
+        TAF_PA_ERROR("stopTCPKeepAliveOffload failed for handle %u. ErrorCode: %d",
+                 handle, TO_INT(error));
+        return result;
+    }
+
+    offloadHandles_.erase(offload);
+    return TAF_PA_OK;
+}
+
+TafPaTeluxDataFilter &TafPaTeluxDataFilter::GetInstance()
+{
+    static TafPaTeluxDataFilter instance;
+    return instance;
+}
+
+taf_pa_result_t TafPaTeluxDataFilter::Init()
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (initialized_ && !dataFilterManagersMap_.empty())
+        {
+            // Check if all managers are available
+            bool allAvailable = true;
+            for (const auto &entry : dataFilterManagersMap_)
+            {
+                if (!entry.second ||
+                    entry.second->getServiceStatus() != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+                {
+                    allAvailable = false;
+                    break;
+                }
+            }
+            if (allAvailable)
+            {
+                return TAF_PA_OK;
+            }
+        }
+    }
+
+    auto &dataFactory = telux::data::DataFactory::getInstance();
+
+    // Initialize DataFilter managers for both slots
+    std::vector<int> failedSlots;
+    std::vector<int> successfulSlots;
+
+    TAF_PA_INFO("Starting DataFilter manager initialization for slots");
+
+    for (int slotId = 1; slotId <= MAX_SLOT_NUM; slotId++)
+    {
+        auto initPromise = std::make_shared<std::promise<telux::common::ServiceStatus>>();
+        std::future<telux::common::ServiceStatus> initFuture = initPromise->get_future();
+
+        auto manager = dataFactory.getDataFilterManager(
+            (SlotId)slotId,
+            [initPromise, slotId](telux::common::ServiceStatus status)
+            {
+                SET_SDK_THREAD_NAME();
+                TAF_PA_INFO("DataFilter manager callback for slot %d, status: %d", slotId, TO_INT(status));
+                try
+                {
+                    initPromise->set_value(status);
+                }
+                catch (const std::future_error &error)
+                {
+                    TAF_PA_WARN("DataFilter init callback completed more than once for slot %d: %s",
+                            slotId, error.what());
+                }
+            });
+
+        if (!manager)
+        {
+            TAF_PA_ERROR("Failed to get DataFilter manager instance for slot %d", slotId);
+            failedSlots.push_back(slotId);
+            continue;
+        }
+
+        telux::common::ServiceStatus status = manager->getServiceStatus();
+        if (status != telux::common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            std::future_status waitStatus = initFuture.wait_for(
+                std::chrono::seconds(taf::pa::data::SUBSYSTEM_INIT_TIMEOUT));
+            if (waitStatus == std::future_status::ready)
+            {
+                status = initFuture.get();
+            }
+        }
+
+        if (status == telux::common::ServiceStatus::SERVICE_AVAILABLE)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            dataFilterManagersMap_[(SlotId)slotId] = manager;
+            successfulSlots.push_back(slotId);
+            TAF_PA_INFO("DataFilter manager initialized successfully for slot %d", slotId);
+        }
+        else
+        {
+            TAF_PA_WARN("DataFilter manager not available for slot %d. Status: %d", slotId, TO_INT(status));
+            failedSlots.push_back(slotId);
+        }
+    }
+
+    // Log summary
+    TAF_PA_INFO("=== DataFilter Manager Initialization Summary ===");
+    TAF_PA_INFO("Successfully initialized: %zu slot(s)", successfulSlots.size());
+    if (!successfulSlots.empty())
+    {
+        for (auto slot : successfulSlots)
+        {
+            TAF_PA_INFO("  - Slot %d: AVAILABLE", slot);
+        }
+    }
+    if (!failedSlots.empty())
+    {
+        TAF_PA_WARN("Failed to initialize: %zu slot(s)", failedSlots.size());
+        for (auto slot : failedSlots)
+        {
+            TAF_PA_WARN("  - Slot %d: FAILED", slot);
+        }
+    }
+    TAF_PA_INFO("================================================");
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        initialized_ = !dataFilterManagersMap_.empty();
+        callbacksEnabled_.store(initialized_);
+    }
+
+    return dataFilterManagersMap_.empty() ? TAF_PA_UNAVAILABLE : TAF_PA_OK;
+}
+
+taf_pa_result_t TafPaTeluxDataFilter::Deinit()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    callbacksEnabled_.store(false);
+
+    taf_pa_result_t result = TAF_PA_OK;
+    if (!dataFilterManagersMap_.empty())
+    {
+        // Clean up using the first available manager
+        // (all managers should have the same global rules since they're global)
+        auto manager = dataFilterManagersMap_.begin()->second;
+
+        // Disable the modem-side mode before releasing the manager. The TelSDK manager does not
+        // document filter lifetime across a manager/client restart, so explicitly remove the
+        // global rules as well.
+        telux::data::DataRestrictMode disableMode{};
+        disableMode.filterMode = telux::data::DataRestrictModeType::DISABLE;
+        disableMode.filterAutoExit = telux::data::DataRestrictModeType::DISABLE;
+
+        telux::common::Status status = manager->setDataRestrictMode(disableMode);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            result = Utils::ConvertStatus(status);
+            TAF_PA_WARN("Failed to disable data restrict mode during deinit. Status: %d",
+                    TO_INT(status));
+        }
+
+        status = manager->removeAllDataRestrictFilters();
+        if (status != telux::common::Status::SUCCESS)
+        {
+            if (result == TAF_PA_OK)
+            {
+                result = Utils::ConvertStatus(status);
+            }
+            TAF_PA_WARN("Failed to remove data restrict filters during deinit. Status: %d",
+                    TO_INT(status));
+        }
+    }
+
+    configuredFilterKeys_.clear();
+    dataFilterManagersMap_.clear();
+    initialized_ = false;
+    return result;
+}
+
+
+bool TafPaTeluxDataFilter::IsValidMode(FilterMode_e mode)
+{
+    return mode == FilterMode_e::DISABLE || mode == FilterMode_e::ENABLE;
+}
+
+bool TafPaTeluxDataFilter::IsValidDataRestrictMode(const FilterModeInfo_t &mode)
+{
+    if (!IsValidMode(mode.filterMode))
+    {
+        TAF_PA_ERROR("Invalid data restrict filterMode: %d", TO_INT(mode.filterMode));
+        return false;
+    }
+    if (!IsValidMode(mode.filterAutoExit))
+    {
+        TAF_PA_ERROR("Invalid data restrict filterAutoExit: %d", TO_INT(mode.filterAutoExit));
+        return false;
+    }
+    return true;
+}
+
+bool TafPaTeluxDataFilter::IsValidPortInfo(const PortInfo_t &portInfo)
+{
+    if (portInfo.port == 0)
+    {
+        TAF_PA_ERROR("Port must be non-zero when a port filter is supplied");
+        return false;
+    }
+    if (static_cast<uint32_t>(portInfo.port) + portInfo.range > UINT16_MAX)
+    {
+        TAF_PA_ERROR("Port range exceeds maximum TCP/UDP port value");
+        return false;
+    }
+    return true;
+}
+
+bool TafPaTeluxDataFilter::IsValidFilter(const IpFilter_t &filter)
+{
+    switch (filter.protocol)
+    {
+    case IpProtocol_e::TCP:
+    case IpProtocol_e::UDP:
+        if (filter.icmp || filter.esp)
+        {
+            TAF_PA_ERROR("ICMP/ESP fields cannot be used with TCP/UDP data restrict filters");
+            return false;
+        }
+        break;
+    case IpProtocol_e::ICMP:
+        if (filter.sourcePort || filter.destinationPort || filter.esp)
+        {
+            TAF_PA_ERROR("Port/ESP fields cannot be used with ICMP data restrict filters");
+            return false;
+        }
+        break;
+    case IpProtocol_e::ESP:
+        if (filter.sourcePort || filter.destinationPort || filter.icmp)
+        {
+            TAF_PA_ERROR("Port/ICMP fields cannot be used with ESP data restrict filters");
+            return false;
+        }
+        if (filter.esp && filter.esp->spi == 0)
+        {
+            TAF_PA_ERROR("ESP SPI must be non-zero when supplied");
+            return false;
+        }
+        break;
+    case IpProtocol_e::UNKNOWN:
+    default:
+        TAF_PA_ERROR("Invalid data restrict IP protocol: %d", TO_INT(filter.protocol));
+        return false;
+    }
+
+    if (filter.profileId && *filter.profileId == ProfileId_e::INVALID)
+    {
+        TAF_PA_ERROR("Invalid data restrict profile ID");
+        return false;
+    }
+    if (filter.ipFamilyType &&
+        (*filter.ipFamilyType == IpType_e::UNKNOWN ||
+         (*filter.ipFamilyType == IpType_e::IPV4 && filter.ipv6) ||
+         (*filter.ipFamilyType == IpType_e::IPV6 && filter.ipv4)))
+    {
+        TAF_PA_ERROR("Invalid data restrict IP family combination");
+        return false;
+    }
+    if (filter.sourcePort && !IsValidPortInfo(*filter.sourcePort))
+    {
+        return false;
+    }
+    if (filter.destinationPort && !IsValidPortInfo(*filter.destinationPort))
+    {
+        return false;
+    }
+
+    if (filter.ipv4)
+    {
+        if (filter.ipv4->source)
+        {
+            if (!IsValidAddress(filter.ipv4->source->address, AF_INET))
+            {
+                TAF_PA_ERROR("Invalid source IPv4 address: %s",
+                         filter.ipv4->source->address.c_str());
+                return false;
+            }
+            if (!filter.ipv4->source->subnetMask.empty() &&
+                !IsValidAddress(filter.ipv4->source->subnetMask, AF_INET))
+            {
+                TAF_PA_ERROR("Invalid source IPv4 subnet mask: %s",
+                         filter.ipv4->source->subnetMask.c_str());
+                return false;
+            }
+        }
+        if (filter.ipv4->destination)
+        {
+            if (!IsValidAddress(filter.ipv4->destination->address, AF_INET))
+            {
+                TAF_PA_ERROR("Invalid destination IPv4 address: %s",
+                         filter.ipv4->destination->address.c_str());
+                return false;
+            }
+            if (!filter.ipv4->destination->subnetMask.empty() &&
+                !IsValidAddress(filter.ipv4->destination->subnetMask, AF_INET))
+            {
+                TAF_PA_ERROR("Invalid destination IPv4 subnet mask: %s",
+                         filter.ipv4->destination->subnetMask.c_str());
+                return false;
+            }
+        }
+    }
+
+    if (filter.ipv6)
+    {
+        if (filter.ipv6->source)
+        {
+            if (!IsValidAddress(filter.ipv6->source->address, AF_INET6))
+            {
+                TAF_PA_ERROR("Invalid source IPv6 address: %s",
+                         filter.ipv6->source->address.c_str());
+                return false;
+            }
+            if (filter.ipv6->source->prefixLength > 128)
+            {
+                TAF_PA_ERROR("Invalid source IPv6 prefix length: %u",
+                         filter.ipv6->source->prefixLength);
+                return false;
+            }
+        }
+        if (filter.ipv6->destination)
+        {
+            if (!IsValidAddress(filter.ipv6->destination->address, AF_INET6))
+            {
+                TAF_PA_ERROR("Invalid destination IPv6 address: %s",
+                         filter.ipv6->destination->address.c_str());
+                return false;
+            }
+            if (filter.ipv6->destination->prefixLength > 128)
+            {
+                TAF_PA_ERROR("Invalid destination IPv6 prefix length: %u",
+                         filter.ipv6->destination->prefixLength);
+                return false;
+            }
+        }
+        if (filter.ipv6->flowLabel && *filter.ipv6->flowLabel > IPV6_FLOW_LABEL_MAX)
+        {
+            TAF_PA_ERROR("Invalid IPv6 flow label: %u", *filter.ipv6->flowLabel);
+            return false;
+        }
+        if (filter.ipv6->natEnabled && *filter.ipv6->natEnabled > 1)
+        {
+            TAF_PA_ERROR("Invalid IPv6 NAT enabled value: %u", *filter.ipv6->natEnabled);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+std::string TafPaTeluxDataFilter::BuildFilterKey(const IpFilter_t &filter)
+{
+    std::ostringstream key;
+    key << "profile=";
+    if (filter.profileId)
+    {
+        key << TO_INT(*filter.profileId);
+    }
+    else
+    {
+        key << "<unset>";
+    }
+    key << ";family=";
+    if (filter.ipFamilyType)
+    {
+        key << TO_INT(*filter.ipFamilyType);
+    }
+    else
+    {
+        key << "<unset>";
+    }
+    key << ";proto=" << TO_INT(filter.protocol);
+
+    AppendOptionalPrefix(key, ";v4src", filter.ipv4 && filter.ipv4->source);
+    if (filter.ipv4 && filter.ipv4->source)
+    {
+        key << filter.ipv4->source->address << '/' << filter.ipv4->source->subnetMask << ';';
+    }
+    AppendOptionalPrefix(key, "v4dst", filter.ipv4 && filter.ipv4->destination);
+    if (filter.ipv4 && filter.ipv4->destination)
+    {
+        key << filter.ipv4->destination->address << '/' << filter.ipv4->destination->subnetMask
+            << ';';
+    }
+    AppendOptionalPrefix(key, "v4tos", filter.ipv4 && filter.ipv4->typeOfServiceValue);
+    if (filter.ipv4 && filter.ipv4->typeOfServiceValue)
+    {
+        key << TO_INT(*filter.ipv4->typeOfServiceValue) << ';';
+    }
+    AppendOptionalPrefix(key, "v4tosmask", filter.ipv4 && filter.ipv4->typeOfServiceMask);
+    if (filter.ipv4 && filter.ipv4->typeOfServiceMask)
+    {
+        key << TO_INT(*filter.ipv4->typeOfServiceMask) << ';';
+    }
+
+    AppendOptionalPrefix(key, "v6src", filter.ipv6 && filter.ipv6->source);
+    if (filter.ipv6 && filter.ipv6->source)
+    {
+        key << filter.ipv6->source->address << '/' << TO_INT(filter.ipv6->source->prefixLength)
+            << ';';
+    }
+    AppendOptionalPrefix(key, "v6dst", filter.ipv6 && filter.ipv6->destination);
+    if (filter.ipv6 && filter.ipv6->destination)
+    {
+        key << filter.ipv6->destination->address << '/'
+            << TO_INT(filter.ipv6->destination->prefixLength) << ';';
+    }
+    AppendOptionalPrefix(key, "v6tc", filter.ipv6 && filter.ipv6->trafficClassValue);
+    if (filter.ipv6 && filter.ipv6->trafficClassValue)
+    {
+        key << TO_INT(*filter.ipv6->trafficClassValue) << ';';
+    }
+    AppendOptionalPrefix(key, "v6tcmask", filter.ipv6 && filter.ipv6->trafficClassMask);
+    if (filter.ipv6 && filter.ipv6->trafficClassMask)
+    {
+        key << TO_INT(*filter.ipv6->trafficClassMask) << ';';
+    }
+    AppendOptionalPrefix(key, "v6flow", filter.ipv6 && filter.ipv6->flowLabel);
+    if (filter.ipv6 && filter.ipv6->flowLabel)
+    {
+        key << *filter.ipv6->flowLabel << ';';
+    }
+    AppendOptionalPrefix(key, "v6nat", filter.ipv6 && filter.ipv6->natEnabled);
+    if (filter.ipv6 && filter.ipv6->natEnabled)
+    {
+        key << TO_INT(*filter.ipv6->natEnabled) << ';';
+    }
+
+    AppendOptionalPrefix(key, "srcport", filter.sourcePort.has_value());
+    if (filter.sourcePort)
+    {
+        key << filter.sourcePort->port << '/' << filter.sourcePort->range << ';';
+    }
+    AppendOptionalPrefix(key, "dstport", filter.destinationPort.has_value());
+    if (filter.destinationPort)
+    {
+        key << filter.destinationPort->port << '/' << filter.destinationPort->range << ';';
+    }
+    AppendOptionalPrefix(key, "icmp", filter.icmp.has_value());
+    if (filter.icmp)
+    {
+        key << TO_INT(filter.icmp->type) << '/' << TO_INT(filter.icmp->code) << ';';
+    }
+    AppendOptionalPrefix(key, "esp", filter.esp.has_value());
+    if (filter.esp)
+    {
+        key << filter.esp->spi << ';';
+    }
+
+    return key.str();
+}
+
+telux::data::DataRestrictMode TafPaTeluxDataFilter::ConvertDataRestrictMode(
+    const FilterModeInfo_t &mode)
+{
+    telux::data::DataRestrictMode sdkMode{};
+    sdkMode.filterMode = ConvertDataRestrictModeType(mode.filterMode);
+    sdkMode.filterAutoExit = ConvertDataRestrictModeType(mode.filterAutoExit);
+    return sdkMode;
+}
+
+FilterModeInfo_t TafPaTeluxDataFilter::ConvertDataRestrictMode(
+    const telux::data::DataRestrictMode &mode)
+{
+    FilterModeInfo_t paMode{};
+    paMode.filterMode = ConvertDataRestrictModeType(mode.filterMode);
+    paMode.filterAutoExit = ConvertDataRestrictModeType(mode.filterAutoExit);
+    return paMode;
+}
+
+taf_pa_result_t TafPaTeluxDataFilter::ConvertFilter(
+    const IpFilter_t &filter,
+    std::shared_ptr<telux::data::IIpFilter> &sdkFilter) const
+{
+    auto &dataFactory = telux::data::DataFactory::getInstance();
+    sdkFilter = dataFactory.getNewIpFilter(static_cast<telux::data::IpProtocol>(filter.protocol));
+    if (!sdkFilter)
+    {
+        TAF_PA_ERROR("Failed to allocate TelSDK data restrict IP filter");
+        return TAF_PA_UNSUPPORTED;
+    }
+
+    const auto protocol = static_cast<telux::data::IpProtocol>(filter.protocol);
+    telux::common::Status status = telux::common::Status::SUCCESS;
+
+    if (filter.ipv4)
+    {
+        telux::data::IPv4Info ipv4Info{};
+        ipv4Info.nextProtoId = protocol;
+        if (filter.ipv4->source)
+        {
+            ipv4Info.srcAddr = filter.ipv4->source->address;
+            ipv4Info.srcSubnetMask = filter.ipv4->source->subnetMask.empty()
+                ? "255.255.255.255"
+                : filter.ipv4->source->subnetMask;
+        }
+        if (filter.ipv4->destination)
+        {
+            ipv4Info.destAddr = filter.ipv4->destination->address;
+            ipv4Info.destSubnetMask = filter.ipv4->destination->subnetMask.empty()
+                ? "255.255.255.255"
+                : filter.ipv4->destination->subnetMask;
+        }
+        if (filter.ipv4->typeOfServiceValue)
+        {
+            ipv4Info.value = *filter.ipv4->typeOfServiceValue;
+        }
+        if (filter.ipv4->typeOfServiceMask)
+        {
+            ipv4Info.mask = *filter.ipv4->typeOfServiceMask;
+        }
+        status = sdkFilter->setIPv4Info(ipv4Info);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            TAF_PA_ERROR("setIPv4Info failed. Status: %d", TO_INT(status));
+            return Utils::ConvertStatus(status);
+        }
+    }
+
+    if (filter.ipv6)
+    {
+        telux::data::IPv6Info ipv6Info{};
+        ipv6Info.nextProtoId = protocol;
+        if (filter.ipv6->source)
+        {
+            ipv6Info.srcAddr = filter.ipv6->source->address;
+            ipv6Info.srcPrefixLen = filter.ipv6->source->prefixLength;
+        }
+        if (filter.ipv6->destination)
+        {
+            ipv6Info.destAddr = filter.ipv6->destination->address;
+            ipv6Info.dstPrefixLen = filter.ipv6->destination->prefixLength;
+        }
+        if (filter.ipv6->trafficClassValue)
+        {
+            ipv6Info.val = *filter.ipv6->trafficClassValue;
+        }
+        if (filter.ipv6->trafficClassMask)
+        {
+            ipv6Info.mask = *filter.ipv6->trafficClassMask;
+        }
+        if (filter.ipv6->flowLabel)
+        {
+            ipv6Info.flowLabel = *filter.ipv6->flowLabel;
+        }
+        if (filter.ipv6->natEnabled)
+        {
+            ipv6Info.natEnabled = *filter.ipv6->natEnabled;
+        }
+        status = sdkFilter->setIPv6Info(ipv6Info);
+        if (status != telux::common::Status::SUCCESS)
+        {
+            TAF_PA_ERROR("setIPv6Info failed. Status: %d", TO_INT(status));
+            return Utils::ConvertStatus(status);
+        }
+    }
+
+    switch (filter.protocol)
+    {
+    case IpProtocol_e::TCP:
+    {
+        auto tcpFilter = std::dynamic_pointer_cast<telux::data::ITcpFilter>(sdkFilter);
+        if (!tcpFilter)
+        {
+            TAF_PA_ERROR("TelSDK returned a non-TCP filter for TCP protocol");
+            return TAF_PA_FAULT;
+        }
+        telux::data::TcpInfo tcpInfo{};
+        if (filter.sourcePort)
+        {
+            tcpInfo.src.port = filter.sourcePort->port;
+            tcpInfo.src.range = filter.sourcePort->range;
+        }
+        if (filter.destinationPort)
+        {
+            tcpInfo.dest.port = filter.destinationPort->port;
+            tcpInfo.dest.range = filter.destinationPort->range;
+        }
+        status = tcpFilter->setTcpInfo(tcpInfo);
+        break;
+    }
+    case IpProtocol_e::UDP:
+    {
+        auto udpFilter = std::dynamic_pointer_cast<telux::data::IUdpFilter>(sdkFilter);
+        if (!udpFilter)
+        {
+            TAF_PA_ERROR("TelSDK returned a non-UDP filter for UDP protocol");
+            return TAF_PA_FAULT;
+        }
+        telux::data::UdpInfo udpInfo{};
+        if (filter.sourcePort)
+        {
+            udpInfo.src.port = filter.sourcePort->port;
+            udpInfo.src.range = filter.sourcePort->range;
+        }
+        if (filter.destinationPort)
+        {
+            udpInfo.dest.port = filter.destinationPort->port;
+            udpInfo.dest.range = filter.destinationPort->range;
+        }
+        status = udpFilter->setUdpInfo(udpInfo);
+        break;
+    }
+    case IpProtocol_e::ICMP:
+    {
+        if (filter.icmp)
+        {
+            auto icmpFilter = std::dynamic_pointer_cast<telux::data::IIcmpFilter>(sdkFilter);
+            if (!icmpFilter)
+            {
+                TAF_PA_ERROR("TelSDK returned a non-ICMP filter for ICMP protocol");
+                return TAF_PA_FAULT;
+            }
+            telux::data::IcmpInfo icmpInfo{};
+            icmpInfo.type = filter.icmp->type;
+            icmpInfo.code = filter.icmp->code;
+            status = icmpFilter->setIcmpInfo(icmpInfo);
+        }
+        break;
+    }
+    case IpProtocol_e::ESP:
+    {
+        if (filter.esp)
+        {
+            auto espFilter = std::dynamic_pointer_cast<telux::data::IEspFilter>(sdkFilter);
+            if (!espFilter)
+            {
+                TAF_PA_ERROR("TelSDK returned a non-ESP filter for ESP protocol");
+                return TAF_PA_FAULT;
+            }
+            telux::data::EspInfo espInfo{};
+            espInfo.spi = filter.esp->spi;
+            status = espFilter->setEspInfo(espInfo);
+        }
+        break;
+    }
+    default:
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    if (status != telux::common::Status::SUCCESS)
+    {
+        TAF_PA_ERROR("Setting protocol-specific filter info failed. Status: %d", TO_INT(status));
+        return Utils::ConvertStatus(status);
+    }
+
+    return TAF_PA_OK;
+}
+
+void TafPaTeluxDataFilter::RemoveFilterKey(const std::string &key)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = std::find(configuredFilterKeys_.begin(), configuredFilterKeys_.end(), key);
+    if (it != configuredFilterKeys_.end())
+    {
+        configuredFilterKeys_.erase(it);
+    }
+}
+
+taf_pa_result_t TafPaTeluxDataFilter::PaSetDataRestrictMode(
+    taf::pa::data::SlotId_e slotId,
+    FilterModeInfo_t mode)
+{
+    if (!IsValidDataRestrictMode(mode))
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    std::shared_ptr<telux::data::IDataFilterManager> manager;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = dataFilterManagersMap_.find((SlotId)slotId);
+        if (it == dataFilterManagersMap_.end())
+        {
+            TAF_PA_ERROR("No DataFilter manager available for slot %d", TO_INT(slotId));
+            return TAF_PA_NOT_FOUND;
+        }
+        manager = it->second;
+    }
+
+    auto promisePtr = std::make_shared<std::promise<telux::common::ErrorCode>>();
+    std::future<telux::common::ErrorCode> future = promisePtr->get_future();
+
+    telux::common::ResponseCallback sdkCallback =
+        [promisePtr](telux::common::ErrorCode error)
+        {
+            SET_SDK_THREAD_NAME();
+            try
+            {
+                promisePtr->set_value(error);
+            }
+            catch (const std::future_error &e)
+            {
+                TAF_PA_WARN("Future error in setDataRestrictMode callback: %s", e.what());
+            }
+        };
+
+    telux::common::Status status =
+        manager->setDataRestrictMode(ConvertDataRestrictMode(mode), sdkCallback);
+    taf_pa_result_t result = Utils::ConvertStatus(status);
+    if (result != TAF_PA_OK)
+    {
+        return result;
+    }
+
+    std::future_status waitStatus = future.wait_for(
+        std::chrono::seconds(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT));
+    if (std::future_status::timeout == waitStatus)
+    {
+        TAF_PA_ERROR("setDataRestrictMode callback timed out");
+        return TAF_PA_TIMEOUT;
+    }
+
+    telux::common::ErrorCode error;
+    FUTURE_GET_RET_VAL(future, error, TAF_PA_FAULT);
+    return Utils::ConvertErrorCode(error);
+}
+
+taf_pa_result_t TafPaTeluxDataFilter::PaRequestDataRestrictMode(taf::pa::data::SlotId_e slotId, FilterModeInfo_t &mode)
+{
+    std::shared_ptr<telux::data::IDataFilterManager> manager;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = dataFilterManagersMap_.find((SlotId)slotId);
+        if (it == dataFilterManagersMap_.end())
+        {
+            TAF_PA_ERROR("No DataFilter manager available for slot %d", TO_INT(slotId));
+            return TAF_PA_NOT_FOUND;
+        }
+        manager = it->second;
+    }
+
+    auto promisePtr = std::make_shared<
+        std::promise<std::pair<telux::data::DataRestrictMode, telux::common::ErrorCode>>>();
+    std::future<std::pair<telux::data::DataRestrictMode, telux::common::ErrorCode>> future =
+        promisePtr->get_future();
+
+    telux::data::DataRestrictModeCb sdkCallback =
+        [promisePtr](telux::data::DataRestrictMode sdkMode, telux::common::ErrorCode error)
+        {
+            SET_SDK_THREAD_NAME();
+            try
+            {
+                promisePtr->set_value(std::make_pair(sdkMode, error));
+            }
+            catch (const std::future_error &e)
+            {
+                TAF_PA_WARN("Future error in requestDataRestrictMode callback: %s", e.what());
+            }
+        };
+
+    telux::common::Status status = manager->requestDataRestrictMode(sdkCallback);
+    taf_pa_result_t result = Utils::ConvertStatus(status);
+    if (result != TAF_PA_OK)
+    {
+        return result;
+    }
+
+    std::future_status waitStatus = future.wait_for(
+        std::chrono::seconds(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT));
+    if (std::future_status::timeout == waitStatus)
+    {
+        TAF_PA_ERROR("requestDataRestrictMode callback timed out");
+        return TAF_PA_TIMEOUT;
+    }
+
+    std::pair<telux::data::DataRestrictMode, telux::common::ErrorCode> resultPair;
+    FUTURE_GET_RET_VAL(future, resultPair, TAF_PA_FAULT);
+    result = Utils::ConvertErrorCode(resultPair.second);
+    if (result == TAF_PA_OK)
+    {
+        mode  =
+            ConvertDataRestrictMode(resultPair.first);
+    }
+    return result;
+}
+
+taf_pa_result_t TafPaTeluxDataFilter::PaAddDataRestrictFilter(
+    taf::pa::data::SlotId_e slotId,
+    const IpFilter_t &filter)
+{
+    if (!IsValidFilter(filter))
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    // The current TelSDK NAO filter API is global. Its legacy overload accepts profile and IP
+    // family arguments but is explicitly deprecated because those arguments do not scope the
+    // resulting filter. Do not silently turn a scoped PA request into a global modem rule.
+    if (filter.profileId || filter.ipFamilyType)
+    {
+        TAF_PA_WARN("Profile-specific or IP-family-specific data restrict filters are unsupported");
+        return TAF_PA_UNSUPPORTED;
+    }
+
+    std::shared_ptr<telux::data::IIpFilter> sdkFilter;
+    taf_pa_result_t result = ConvertFilter(filter, sdkFilter);
+    if (result != TAF_PA_OK)
+    {
+        return result;
+    }
+
+    std::shared_ptr<telux::data::IDataFilterManager> manager;
+    std::string filterKey = BuildFilterKey(filter);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = dataFilterManagersMap_.find((SlotId)slotId);
+        if (it == dataFilterManagersMap_.end())
+        {
+            TAF_PA_ERROR("No DataFilter manager available for slot %d", TO_INT(slotId));
+            return TAF_PA_NOT_FOUND;
+        }
+        if (std::find(configuredFilterKeys_.begin(), configuredFilterKeys_.end(), filterKey) !=
+            configuredFilterKeys_.end())
+        {
+            TAF_PA_WARN("Duplicate data restrict filter rejected");
+            return TAF_PA_DUPLICATE;
+        }
+        configuredFilterKeys_.push_back(filterKey);
+        manager = it->second;
+    }
+
+    auto promisePtr = std::make_shared<std::promise<telux::common::ErrorCode>>();
+    std::future<telux::common::ErrorCode> future = promisePtr->get_future();
+
+    telux::common::ResponseCallback sdkCallback =
+        [promisePtr, this, filterKey](telux::common::ErrorCode error)
+        {
+            SET_SDK_THREAD_NAME();
+            taf_pa_result_t callbackResult = Utils::ConvertErrorCode(error);
+            if (callbackResult != TAF_PA_OK)
+            {
+                RemoveFilterKey(filterKey);
+            }
+            try
+            {
+                promisePtr->set_value(error);
+            }
+            catch (const std::future_error &e)
+            {
+                TAF_PA_WARN("Future error in addDataRestrictFilter callback: %s", e.what());
+            }
+        };
+
+    telux::common::Status status = manager->addDataRestrictFilter(sdkFilter, sdkCallback);
+
+    result = Utils::ConvertStatus(status);
+    if (result != TAF_PA_OK)
+    {
+        RemoveFilterKey(filterKey);
+        return result;
+    }
+
+    std::future_status waitStatus = future.wait_for(
+        std::chrono::seconds(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT));
+    if (std::future_status::timeout == waitStatus)
+    {
+        TAF_PA_ERROR("addDataRestrictFilter callback timed out");
+        return TAF_PA_TIMEOUT;
+    }
+
+    telux::common::ErrorCode error;
+    FUTURE_GET_RET_VAL(future, error, TAF_PA_FAULT);
+    result = Utils::ConvertErrorCode(error);
+    if (result != TAF_PA_OK)
+    {
+        return result;
+    }
+
+    return TAF_PA_OK;
+}
+
+taf_pa_result_t TafPaTeluxDataFilter::PaRemoveAllDataRestrictFilters(taf::pa::data::SlotId_e slotId)
+{
+    std::shared_ptr<telux::data::IDataFilterManager> manager;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = dataFilterManagersMap_.find((SlotId)slotId);
+        if (it == dataFilterManagersMap_.end())
+        {
+            TAF_PA_ERROR("No DataFilter manager available for slot %d", TO_INT(slotId));
+            return TAF_PA_NOT_FOUND;
+        }
+        manager = it->second;
+    }
+
+    auto promisePtr = std::make_shared<std::promise<telux::common::ErrorCode>>();
+    std::future<telux::common::ErrorCode> future = promisePtr->get_future();
+
+    telux::common::ResponseCallback sdkCallback =
+        [promisePtr, this](telux::common::ErrorCode error)
+        {
+            SET_SDK_THREAD_NAME();
+            taf_pa_result_t callbackResult = Utils::ConvertErrorCode(error);
+            if (callbackResult == TAF_PA_OK)
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                configuredFilterKeys_.clear();
+            }
+            try
+            {
+                promisePtr->set_value(error);
+            }
+            catch (const std::future_error &e)
+            {
+                TAF_PA_WARN("Future error in removeAllDataRestrictFilters callback: %s", e.what());
+            }
+        };
+
+    telux::common::Status status = manager->removeAllDataRestrictFilters(sdkCallback);
+    taf_pa_result_t result = Utils::ConvertStatus(status);
+    if (result != TAF_PA_OK)
+    {
+        return result;
+    }
+
+    std::future_status waitStatus = future.wait_for(
+        std::chrono::seconds(taf::pa::data::NON_NETWORK_COMMAND_TIMEOUT));
+    if (std::future_status::timeout == waitStatus)
+    {
+        TAF_PA_ERROR("removeAllDataRestrictFilters callback timed out");
+        return TAF_PA_TIMEOUT;
+    }
+
+    telux::common::ErrorCode error;
+    FUTURE_GET_RET_VAL(future, error, TAF_PA_FAULT);
+    return Utils::ConvertErrorCode(error);
+}
+
 
 taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::SetSubsysState
 (
@@ -517,11 +1958,9 @@ void taf::pa::data::TafPaTeluxDataConnection::initDataConnectionManagers()
             TAF_PA_INFO("dataConnMngr for slot %d: AVAILABLE", slotId);
             // Store the manager in the map with slot Id as index
             dataConnectionManagersMap_.emplace((SlotId)slotId, dataProfMngr);
-            // Initialize and store the callback objects for later registration.
-            tafPaTeluxDataConnectionListenersMap_.emplace((SlotId)slotId,
-                            std::make_shared<TafPaTeluxDataConnectionListener>((SlotId)slotId));
+            // Keep the listener alive for TelSDK state-change callbacks and later registration.
             dataConnectionListenersMap_[(SlotId)slotId] =
-                                        tafPaTeluxDataConnectionListenersMap_[(SlotId)slotId];
+                std::make_shared<TafPaTeluxDataConnectionListener>((SlotId)slotId);
             // Mark listener as not registered (under lock for consistency with
             // PaRegisterDataConnCallbacks / PaDeregisterDataConnCallbacks).
             {
@@ -592,14 +2031,7 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionMan
 {
     TAF_PA_INFO("Starting data connection managers deinitialization...");
 
-    // Phase 1: Check for active operations
-    if (bRequestCallListInProgress_.load())
-    {
-        TAF_PA_WARN("Request call list operation in progress during deinit");
-        // Log warning but continue - the operation will be aborted when maps are cleared
-    }
-
-    // Phase 2: Deregister callbacks with error checking
+    // Deregister callbacks with error checking.
     taf_pa_result_t result = PaDeregisterDataConnCallbacks();
     if (TAF_PA_OK != result)
     {
@@ -635,9 +2067,6 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionMan
     }
 
     // Clear listener and manager maps in proper order
-    TAF_PA_INFO("Clear tafPaTeluxDataConnectionListenersMap_");
-    tafPaTeluxDataConnectionListenersMap_.clear();
-
     TAF_PA_INFO("Clear dataConnectionListenersMap_");
     dataConnectionListenersMap_.clear();
 
@@ -650,15 +2079,6 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::deInitDataConnectionMan
         dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_1] = SubsystemState_e::FAILED;
         dataConnectionManagersSubsysStateMap_[SlotId_e::SLOT_2] = SubsystemState_e::FAILED;
     }
-
-    // Reset request call list state: release the stored context shared_ptr and
-    // clear the in-progress flag so a subsequent Init()/Deinit() cycle starts clean.
-    TAF_PA_INFO("Reset requestCallListClientEntry_ and bRequestCallListInProgress_");
-    {
-        std::lock_guard<std::mutex> lock(requestCallListMutex_);
-        requestCallListClientEntry_ = {nullptr, nullptr};
-    }
-    bRequestCallListInProgress_.store(false);
 
     TAF_PA_INFO("Data connection managers deinitialization complete");
     return TAF_PA_OK;
@@ -800,95 +2220,11 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaDeregisterDataConnCal
     return TAF_PA_OK;
 }
 
-/**
- * The callback fuction for TelSDK startDataCall()
- *
- * When callback is used with startDataCall, expected behavior is as following:
- * If this is first client to start datacall in the system and no error is detected,
- * getDataCallStatus() of telux::data::IDataCall object will return NET_CONNECTING and
- * onDataCallInfoChanged will be called once data call is brought up successfully or failed.
- *
- * If client tries to start data call that is already up and no error is detected,
- * getDataCallStatus() of telux::data::IDataCall object will return NET_CONNECTED and
- * onDataCallInfoChanged will not get called.
- *
- * If any client starts data call and error is detected, error argument will contain error code and
- * onDataCallInfoChanged will not get called.
- *
- */
-void taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback
-(
-    const std::shared_ptr<telux::data::IDataCall> &iDataCall,
-    telux::common::ErrorCode errorCode
-)
-{
-    SET_SDK_THREAD_NAME();
-
-    // Log the call data
-    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-    teluxPaDataConn.LogDataCallInfo(iDataCall, __func__);
-
-    // Fill DataCallEventInfo_t
-    DataCallEventInfo_t eventInfo;
-    taf::pa::data::PhoneId_e phoneId;
-    eventInfo.slotId = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
-    telux::data::IpFamilyInfo IPv4Info = iDataCall->getIpv4Info();
-    telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
-
-    auto &teluxPaData    = TafPaTeluxData::GetInstance();
-    taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "PaGetPhoneIdFromSlotId err: %d, drop this event",
-                                                                                            result);
-
-    eventInfo.phoneId    = phoneId;
-    eventInfo.profileId  = static_cast<taf::pa::data::ProfileId_e>(iDataCall->getProfileId());
-
-    eventInfo.maxRxBitRate = 0;
-    eventInfo.maxTxBitRate = 0;
-
-    if (telux::common::ErrorCode::SUCCESS != errorCode)
-    {
-        TAF_PA_ERROR("Starting data session failed with error code: %d", TO_INT(errorCode));
-        // Set the call status to DISCONNECTED
-        eventInfo.callStatus                  = DataCallStatus_e::DISCONNECTED;
-        eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-        eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-    }
-    else
-    {
-        /**
-         * In some cases, getDataCallStatus() returns NET_NO_NET even in success.
-         * Set status to NET_CONNECTING.
-        */
-        if (telux::data::DataCallStatus::NET_NO_NET == iDataCall->getDataCallStatus())
-        {
-            TAF_PA_WARN("TelSDK returned NET_NOT_NET");
-            eventInfo.callStatus                  = DataCallStatus_e::CONNECTING;
-            eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::CONNECTING;
-            eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::CONNECTING;
-        }
-        else
-        {
-            // Update status with TelSDK status.
-            eventInfo.callStatus                  = taf::pa::data::Utils::ConvertCallStatus(
-                                                                    iDataCall->getDataCallStatus());
-            eventInfo.ipv4DataCallInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(
-                                                                                IPv4Info.status);
-            eventInfo.ipv6DataCallInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(
-                                                                                IPv6Info.status);
-        }
-    }
-
-    eventInfo.ipType     = taf::pa::data::Utils::ConvertIpType(iDataCall->getIpFamilyType());
-
-    // Send the data call event info to registered clients
-    teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
-    return;
-}
-
 taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
 (
-    const taf::pa::data::DataCallStartStopParams_t& params
+    const taf::pa::data::DataCallStartStopParams_t &params,
+    taf_pa_data_OperationCb callback,
+    std::shared_ptr<void> context
 )
 {
     telux::data::DataCallParams teluxParams;
@@ -898,131 +2234,158 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStartDataSessionAsync
     teluxParams.ipFamilyType = taf::pa::data::Utils::ConvertIpType(params.ipType);
     teluxParams.interfaceName = params.interfaceName;
 
-    TAF_PA_DEBUG("PaStartDataSessionAsync - teluxParams (after): profileId=%d, ipFamilyType=%d, "
-            "interfaceName='%s', operationType=%d",
-            teluxParams.profileId, TO_INT(teluxParams.ipFamilyType),
-            teluxParams.interfaceName.c_str(), TO_INT(teluxParams.operationType));
+    if (!callback)
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
 
-    auto &teluxPaData = TafPaTeluxData::GetInstance();
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
-                                                             "PA phone manager not initialized.");
+    if (taf::pa::data::SubsystemState_e::AVAILABLE != phoneMngrState)
+    {
+        TAF_PA_ERROR("PA phone manager not initialized for Start data-call operation");
+        return TAF_PA_UNAVAILABLE;
+    }
+
     taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(params.phoneId, slotIDpa);
     if (TAF_PA_OK != result)
     {
-        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(params.phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d", TO_INT(params.phoneId));
         return result;
     }
     TAF_PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
-
-    if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
+    auto managerIt = dataConnectionManagersMap_.find(slotId);
+    if (managerIt == dataConnectionManagersMap_.end() || !managerIt->second)
     {
-        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return TAF_PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not initialized for slot %d", TO_INT(slotId));
+        return TAF_PA_UNAVAILABLE;
     }
 
-    taf::pa::data::PhoneId_e phoneId = params.phoneId;
-    taf::pa::data::ProfileId_e profileId = params.profileId;
-    taf::pa::data::SlotId_e paSlotId = slotIDpa;
-    taf::pa::data::IpType_e ipType = params.ipType;
-
-    auto cb =
-        [phoneId, profileId, paSlotId, ipType]
-        (
-            const std::shared_ptr<telux::data::IDataCall> &iDataCall,
-            telux::common::ErrorCode errorCode
-        )
+    // Forward only the TelSDK operation response. Data-call state indications still
+    // flow through TafPaTeluxDataConnectionListener::onDataCallInfoChanged().
+    telux::common::Status status = managerIt->second->startDataCall(
+        teluxParams,
+        [callback, context, requestedPhoneId = params.phoneId, requestedSlotId = slotIDpa](
+            const std::shared_ptr<telux::data::IDataCall> &dataCall,
+            telux::common::ErrorCode errorCode)
         {
             SET_SDK_THREAD_NAME();
+            taf::pa::data::DataCallOperationResult_t operationResult{};
+            operationResult.operationType = taf::pa::data::DataCallOperationType::START;
+            operationResult.result =
+                telux::common::ErrorCode::SUCCESS == errorCode ? TAF_PA_OK : TAF_PA_FAULT;
+
             auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-
-            if (!iDataCall)
+            if (!dataCall)
             {
-                // Graceful handling of NULL iDataCall
-                TAF_PA_WARN("startDataCallCallback iDataCall is NULL, phoneId=%d profileId=%d err=%d",
-                        TO_INT(phoneId), TO_INT(profileId), TO_INT(errorCode));
-
-                DataCallEventInfo_t eventInfo{};
-                eventInfo.phoneId = phoneId;
-                eventInfo.slotId = paSlotId;
-                eventInfo.profileId = profileId;
-                eventInfo.ipType = ipType;
-
-                // On error, report DISCONNECTED. If TelSDK claims SUCCESS with null pointer,
-                // treat as failure defensively.
-                if (telux::common::ErrorCode::SUCCESS != errorCode)
-                {
-                    TAF_PA_ERROR("Starting data session failed with error code: %d",
-                             TO_INT(errorCode));
-                }
-
-                eventInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-                eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-                eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-
-                teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
+                TAF_PA_WARN("TelSDK returned a null IDataCall for Start data-call operation, "
+                            "error=%d", TO_INT(errorCode));
+                operationResult.result = TAF_PA_FAULT;
+                teluxPaDataConn.invokeDataCallOperationCallback(
+                    callback, context, operationResult);
                 return;
             }
 
-            // Normal path: we have a valid IDataCall, reuse existing implementation
-            taf::pa::data::TafPaTeluxDataConnection::startDataCallCallback(
-                iDataCall, errorCode);
-        };
+            try
+            {
+                LogDataCallInfo(dataCall, __func__);
+            }
+            catch (const std::exception &error)
+            {
+                TAF_PA_WARN("Failed to log Start data-call info: %s", error.what());
+            }
+            catch (...)
+            {
+                TAF_PA_WARN("Unknown exception while logging Start data-call info");
+            }
 
-    auto status = dataConnectionManagersMap_[slotId]->startDataCall(teluxParams, cb);
-    if (status != telux::common::Status::SUCCESS)
+            taf::pa::data::DataCallEventInfo_t parsedDataCallInfo{};
+            telux::data::DataCallStatus callStatus = telux::data::DataCallStatus::INVALID;
+            const taf_pa_result_t statusResult = GetTeluxDataCallStatus(dataCall, callStatus);
+            if (TAF_PA_OK != statusResult)
+            {
+                TAF_PA_ERROR("Failed to get Start data-call status: %d", statusResult);
+                if (telux::common::ErrorCode::SUCCESS == errorCode)
+                {
+                    operationResult.result = statusResult;
+                }
+                teluxPaDataConn.invokeDataCallOperationCallback(
+                    callback, context, operationResult);
+                return;
+            }
+            parsedDataCallInfo.callStatus =
+                taf::pa::data::Utils::ConvertCallStatus(callStatus);
+
+            if (taf::pa::data::DataCallStatus_e::CONNECTED == parsedDataCallInfo.callStatus)
+            {
+                // Parse the remaining operation-response fields only for a connected call.
+                const taf_pa_result_t parseResult = taf::pa::data::Utils::ParseDataCallInfo(
+                    dataCall, requestedPhoneId, parsedDataCallInfo, &callStatus);
+                if (TAF_PA_OK != parseResult)
+                {
+                    TAF_PA_ERROR("Failed to parse Start data-call info: %d", parseResult);
+                    if (telux::common::ErrorCode::SUCCESS == errorCode)
+                    {
+                        operationResult.result = parseResult;
+                    }
+                    teluxPaDataConn.invokeDataCallOperationCallback(
+                        callback, context, operationResult);
+                    return;
+                }
+            }
+
+            if (telux::common::ErrorCode::SUCCESS != errorCode)
+            {
+                TAF_PA_ERROR("Starting data session failed with error code: %d",
+                             TO_INT(errorCode));
+                parsedDataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::DISCONNECTED;
+                parsedDataCallInfo.ipv4DataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::DISCONNECTED;
+                parsedDataCallInfo.ipv6DataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::DISCONNECTED;
+            }
+            else if (telux::data::DataCallStatus::NET_NO_NET == callStatus)
+            {
+                // Preserve legacy Start behavior: TelSDK can report SUCCESS while the
+                // IDataCall still shows NET_NO_NET during bring-up. Treat that operation
+                // result as CONNECTING; the listener indication will report the final state.
+                TAF_PA_WARN("TelSDK returned NET_NO_NET for successful Start data-call operation");
+                parsedDataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::CONNECTING;
+                parsedDataCallInfo.ipv4DataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::CONNECTING;
+                parsedDataCallInfo.ipv6DataCallInfo.callStatus =
+                    taf::pa::data::DataCallStatus_e::CONNECTING;
+            }
+
+            if (taf::pa::data::DataCallStatus_e::CONNECTED == parsedDataCallInfo.callStatus)
+            {
+                // Prefer the identifiers from the accepted request for this connected snapshot.
+                parsedDataCallInfo.phoneId = requestedPhoneId;
+                parsedDataCallInfo.slotId = requestedSlotId;
+                operationResult.dataCallInfo = std::move(parsedDataCallInfo);
+            }
+
+            teluxPaDataConn.invokeDataCallOperationCallback(callback, context, operationResult);
+        });
+
+    if (telux::common::Status::SUCCESS != status)
     {
-        TAF_PA_ERROR("startDataCall failed. Status: %d", TO_INT(status));
+        TAF_PA_ERROR("TelSDK Start data-call dispatch failed. Status: %d", TO_INT(status));
         return TAF_PA_FAULT;
     }
+
     return TAF_PA_OK;
-}
-
-void taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback
-(
-    const std::shared_ptr<telux::data::IDataCall> &iDataCall,
-    telux::common::ErrorCode errorCode
-)
-{
-    SET_SDK_THREAD_NAME();
-
-    if (telux::common::ErrorCode::SUCCESS != errorCode)
-    {
-        TAF_PA_ERROR("Stopping data session failed with error code: %d", TO_INT(errorCode));
-    }
-
-    // Log the call data
-    auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-    teluxPaDataConn.LogDataCallInfo(iDataCall, __func__);
-
-    // Fill DataCallEventInfo_t
-    DataCallEventInfo_t eventInfo;
-    taf::pa::data::PhoneId_e phoneId;
-    eventInfo.slotId = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
-    telux::data::IpFamilyInfo IPv4Info = iDataCall->getIpv4Info();
-    telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
-
-    auto &teluxPaData = TafPaTeluxData::GetInstance();
-    taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "PaGetPhoneIdFromSlotId err: %d, drop this event",
-                                                                                           result);
-    eventInfo.phoneId = phoneId;
-    eventInfo.profileId = static_cast<taf::pa::data::ProfileId_e>(iDataCall->getProfileId());
-    eventInfo.callStatus = taf::pa::data::Utils::ConvertCallStatus(iDataCall->getDataCallStatus());
-    eventInfo.ipv4DataCallInfo.callStatus=taf::pa::data::Utils::ConvertCallStatus(IPv4Info.status);
-    eventInfo.ipv6DataCallInfo.callStatus=taf::pa::data::Utils::ConvertCallStatus(IPv6Info.status);
-    eventInfo.ipType     = taf::pa::data::Utils::ConvertIpType(iDataCall->getIpFamilyType());
-
-    // Send the data call event info to registered clients
-    teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
-    return;
 }
 
 taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
 (
-    const taf::pa::data::DataCallStartStopParams_t& params
+    const taf::pa::data::DataCallStartStopParams_t &params,
+    taf_pa_data_OperationCb callback,
+    std::shared_ptr<void> context
 )
 {
     telux::data::DataCallParams teluxParams;
@@ -1030,161 +2393,264 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaStopDataSessionAsync
 
     teluxParams.profileId = static_cast<int>(params.profileId);
     teluxParams.ipFamilyType = taf::pa::data::Utils::ConvertIpType(params.ipType);
+    teluxParams.interfaceName = params.interfaceName;
 
-    auto &teluxPaData = TafPaTeluxData::GetInstance();
+    if (!callback)
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    auto &teluxPaData = taf::pa::data::TafPaTeluxData::GetInstance();
     SubsystemState_e phoneMngrState = teluxPaData.PaGetPhoneManagerInitState();
-    TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
-                                                             "PA phone manager not initialized.");
+    if (taf::pa::data::SubsystemState_e::AVAILABLE != phoneMngrState)
+    {
+        TAF_PA_ERROR("PA phone manager not initialized for Stop data-call operation");
+        return TAF_PA_UNAVAILABLE;
+    }
+
     taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(params.phoneId, slotIDpa);
     if (TAF_PA_OK != result)
     {
-        TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(params.phoneId));
+        TAF_PA_ERROR("Failed to get slot ID for phone ID %d", TO_INT(params.phoneId));
         return result;
     }
     TAF_PA_INFO("Slot Id: %d", TO_INT(slotIDpa));
 
     SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIDpa);
-
-    if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
+    auto managerIt = dataConnectionManagersMap_.find(slotId);
+    if (managerIt == dataConnectionManagersMap_.end() || !managerIt->second)
     {
-        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        return TAF_PA_FAULT;
+        TAF_PA_ERROR("Connection manager is not initialized for slot %d", TO_INT(slotId));
+        return TAF_PA_UNAVAILABLE;
     }
 
-    taf::pa::data::PhoneId_e phoneId = params.phoneId;
-    taf::pa::data::ProfileId_e profileId = params.profileId;
-    taf::pa::data::SlotId_e paSlotId = slotIDpa;
-    taf::pa::data::IpType_e ipType = params.ipType;
-
-    auto cb =
-        [phoneId, profileId, paSlotId, ipType]
-        (
-            const std::shared_ptr<telux::data::IDataCall> &iDataCall,
-            telux::common::ErrorCode errorCode
-        )
+    // Forward only the TelSDK operation response. Data-call state indications still
+    // flow through TafPaTeluxDataConnectionListener::onDataCallInfoChanged().
+    telux::common::Status status = managerIt->second->stopDataCall(
+        teluxParams,
+        [callback, context, requestedPhoneId = params.phoneId, requestedSlotId = slotIDpa](
+            const std::shared_ptr<telux::data::IDataCall> &dataCall,
+            telux::common::ErrorCode errorCode)
         {
             SET_SDK_THREAD_NAME();
+            taf::pa::data::DataCallOperationResult_t operationResult{};
+            operationResult.operationType = taf::pa::data::DataCallOperationType::STOP;
+            operationResult.result =
+                telux::common::ErrorCode::SUCCESS == errorCode ? TAF_PA_OK : TAF_PA_FAULT;
+
             auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
-
-            if (!iDataCall)
+            if (!dataCall)
             {
-                // Graceful handling of NULL iDataCall
-                TAF_PA_WARN("stopDataCallCallback iDataCall is NULL, phoneId=%d profileId=%d err=%d",
-                        TO_INT(phoneId), TO_INT(profileId), TO_INT(errorCode));
-
-                if (telux::common::ErrorCode::SUCCESS != errorCode)
-                {
-                    TAF_PA_ERROR("Stopping data session failed with error code: %d",
-                             TO_INT(errorCode));
-                }
-
-                DataCallEventInfo_t eventInfo{};
-                eventInfo.phoneId = phoneId;
-                eventInfo.slotId = paSlotId;
-                eventInfo.profileId = profileId;
-                eventInfo.ipType = ipType;
-
-                // Stopping a session with null call is effectively disconnected.
-                eventInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-                eventInfo.ipv4DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-                eventInfo.ipv6DataCallInfo.callStatus = DataCallStatus_e::DISCONNECTED;
-
-                teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
+                TAF_PA_WARN("TelSDK returned a null IDataCall for Stop data-call operation, "
+                            "error=%d", TO_INT(errorCode));
+                operationResult.result = TAF_PA_FAULT;
+                teluxPaDataConn.invokeDataCallOperationCallback(
+                    callback, context, operationResult);
                 return;
             }
 
-            // Normal path: we have a valid IDataCall, reuse existing implementation
-            taf::pa::data::TafPaTeluxDataConnection::stopDataCallCallback(
-                iDataCall, errorCode);
-        };
+            try
+            {
+                LogDataCallInfo(dataCall, __func__);
+            }
+            catch (const std::exception &error)
+            {
+                TAF_PA_WARN("Failed to log Stop data-call info: %s", error.what());
+            }
+            catch (...)
+            {
+                TAF_PA_WARN("Unknown exception while logging Stop data-call info");
+            }
 
-    auto status = dataConnectionManagersMap_[slotId]->stopDataCall(teluxParams, cb);
-    if (status != telux::common::Status::SUCCESS)
+            // Return the operation-response status and available IP-family details. Listener state
+            // bookkeeping and its bit-rate request remain independent of this callback.
+            taf::pa::data::DataCallEventInfo_t parsedDataCallInfo{};
+            telux::data::DataCallStatus callStatus = telux::data::DataCallStatus::INVALID;
+            const taf_pa_result_t statusResult = GetTeluxDataCallStatus(dataCall, callStatus);
+            if (TAF_PA_OK != statusResult)
+            {
+                TAF_PA_ERROR("Failed to get Stop data-call status: %d", statusResult);
+                if (telux::common::ErrorCode::SUCCESS == errorCode)
+                {
+                    operationResult.result = statusResult;
+                }
+                teluxPaDataConn.invokeDataCallOperationCallback(
+                    callback, context, operationResult);
+                return;
+            }
+            parsedDataCallInfo.callStatus =
+                taf::pa::data::Utils::ConvertCallStatus(callStatus);
+
+            if (taf::pa::data::DataCallStatus_e::CONNECTED == parsedDataCallInfo.callStatus)
+            {
+                const taf_pa_result_t parseResult = taf::pa::data::Utils::ParseDataCallInfo(
+                    dataCall, requestedPhoneId, parsedDataCallInfo, &callStatus);
+                if (TAF_PA_OK != parseResult)
+                {
+                    TAF_PA_ERROR("Failed to parse Stop data-call info: %d", parseResult);
+                    if (telux::common::ErrorCode::SUCCESS == errorCode)
+                    {
+                        operationResult.result = parseResult;
+                    }
+                    teluxPaDataConn.invokeDataCallOperationCallback(
+                        callback, context, operationResult);
+                    return;
+                }
+            }
+
+            if (taf::pa::data::DataCallStatus_e::CONNECTED == parsedDataCallInfo.callStatus)
+            {
+                parsedDataCallInfo.phoneId = requestedPhoneId;
+                parsedDataCallInfo.slotId = requestedSlotId;
+                operationResult.dataCallInfo = std::move(parsedDataCallInfo);
+            }
+
+            teluxPaDataConn.invokeDataCallOperationCallback(callback, context, operationResult);
+        });
+
+    if (telux::common::Status::SUCCESS != status)
     {
-        TAF_PA_ERROR("stopDataCall failed. Status: %d", TO_INT(status));
+        TAF_PA_ERROR("TelSDK Stop data-call dispatch failed. Status: %d", TO_INT(status));
         return TAF_PA_FAULT;
     }
+
     return TAF_PA_OK;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Invoke the caller-provided operation callback with exception protection.
+ *
+ * Client callbacks are external code from the PA's perspective. Catching exceptions here prevents a
+ * bad callback from unwinding through PA/TelSDK callback handling.
+ */
+//--------------------------------------------------------------------------------------------------
+void taf::pa::data::TafPaTeluxDataConnection::invokeDataCallOperationCallback
+(
+    taf_pa_data_OperationCb callback,
+    std::shared_ptr<void> context,
+    const DataCallOperationResult_t &result
+)
+{
+    if (!callback)
+    {
+        return;
+    }
+
+    try
+    {
+        callback(result, context);
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("Exception in data-call operation callback: %s", error.what());
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("Unknown exception in data-call operation callback");
+    }
 }
 
 void taf::pa::data::TafPaTeluxDataConnection::onRequestDataCallList
 (
+    const std::shared_ptr<DataCallListRequestContext_t> &request,
     const std::vector<std::shared_ptr<telux::data::IDataCall>> &iDataCalls,
     telux::common::ErrorCode error
 )
 {
     SET_SDK_THREAD_NAME();
-
-    auto &teluxPaDataConn = TafPaTeluxDataConnection::GetInstance();
-    TAF_PA_ERROR_IF_RET_NIL(!teluxPaDataConn.bRequestCallListInProgress_.load(),
-                                        "No pending request call list. Ignoring the event.");
-
-    TAF_PA_INFO("Number of active calls: %zu", iDataCalls.size());
-
-    // read the entry under the mutex so we always see the fully-written
-    // callback/context pair that was stored atomically in PaRequestDataCallsListAsync.
-    std::vector<DataCallEventInfo_t> callList;
-    RequestDataCallListCallbackEntry_t entry;
+    if (!request)
     {
-        std::lock_guard<std::mutex> lock(teluxPaDataConn.requestCallListMutex_);
-        entry = teluxPaDataConn.requestCallListClientEntry_;
+        TAF_PA_ERROR("Ignoring data-call-list response without request context");
+        return;
     }
-    auto callback = entry.callback;
-    auto context  = entry.context;
-
-    // Verify callback is not null before proceeding
-    if (!callback)
+    // This completion guard belongs to this request alone. It prevents duplicate/concurrent
+    // TelSDK responses from invoking the same client callback more than once.
+    if (request->completed.exchange(true))
     {
-        TAF_PA_ERROR("Callback is NULL. Exit request call list processing.");
-        teluxPaDataConn.bRequestCallListInProgress_.store(false);
+        TAF_PA_INFO("Ignoring duplicate data-call-list response");
         return;
     }
 
+    TAF_PA_INFO("Data-call-list response contains %zu calls", iDataCalls.size());
+
+    taf_pa_result_t result = Utils::ConvertErrorCode(error);
+    std::vector<DataCallEventInfo_t> callList;
     if (telux::common::ErrorCode::SUCCESS != error)
     {
-        TAF_PA_ERROR("onRequestDataCallList failed with error code: %d", TO_INT(error));
-        // Call the callback with error
-        callback(TAF_PA_FAULT, callList, context);
-        // Mark call as completed.
-        teluxPaDataConn.bRequestCallListInProgress_.store(false);
+        TAF_PA_ERROR("onRequestDataCallList failed with TelSDK error code: %d", TO_INT(error));
+    }
+    else
+    {
+        // Return a complete snapshot or a failure, never a partial list if one entry is invalid.
+        try
+        {
+            result = TAF_PA_OK;
+            for (const auto &iDataCall : iDataCalls)
+            {
+                if (!iDataCall)
+                {
+                    TAF_PA_ERROR("TelSDK returned a null IDataCall in the call list");
+                    result = TAF_PA_FAULT;
+                    callList.clear();
+                    break;
+                }
+
+                const SlotId slotId = iDataCall->getSlotId();
+                TAF_PA_INFO("Slot ID: %d", TO_INT(slotId));
+                DataCallEventInfo_t eventInfo{};
+                const taf_pa_result_t parseResult =
+                    Utils::ParseDataCallInfo(iDataCall, request->phoneId, eventInfo);
+                if (TAF_PA_OK != parseResult)
+                {
+                    TAF_PA_ERROR("Failed to parse call-list entry for slot %d: %d",
+                                 TO_INT(slotId), parseResult);
+                    result = parseResult;
+                    callList.clear();
+                    break;
+                }
+                callList.push_back(std::move(eventInfo));
+            }
+        }
+        catch (const std::exception &exception)
+        {
+            TAF_PA_ERROR("Exception while parsing data-call list: %s", exception.what());
+            result = TAF_PA_FAULT;
+            callList.clear();
+        }
+        catch (...)
+        {
+            TAF_PA_ERROR("Unknown exception while parsing data-call list");
+            result = TAF_PA_FAULT;
+            callList.clear();
+        }
+    }
+
+    if (TAF_PA_OK != result)
+    {
+        callList.clear();
+    }
+
+    TAF_PA_INFO("Data-call-list request completed with result %d and %zu calls",
+                result, callList.size());
+    if (!request->callback)
+    {
+        TAF_PA_WARN("Cannot invoke an empty data-call-list callback");
         return;
     }
 
-    for (const auto& iDataCall : iDataCalls)
+    try
     {
-        LogDataCallInfo(iDataCall, __func__);
-
-        SlotId slotId = iDataCall->getSlotId();
-        TAF_PA_INFO("Slot ID: %d", TO_INT(slotId));
-        if (teluxPaDataConn.tafPaTeluxDataConnectionListenersMap_.find(slotId) ==
-                                    teluxPaDataConn.tafPaTeluxDataConnectionListenersMap_.end())
-        {
-            TAF_PA_ERROR("Connection connection listener not available for slot %d", TO_INT(slotId));
-            return;
-        }
-        DataCallEventInfo_t eventInfo;
-        teluxPaDataConn.tafPaTeluxDataConnectionListenersMap_[slotId]->ParseIDataCall(
-                                                                            iDataCall, eventInfo);
-        callList.push_back(eventInfo);
+        request->callback(result, callList, std::move(request->context));
     }
-
-    TAF_PA_INFO("Number of calls in list: %zu", callList.size());
-
-    // Send the data call info to the requesting client
-    callback(TAF_PA_OK, callList, context);
-
-    // Reset the callback entry info.
-    teluxPaDataConn.resetCallListClientEntry();
-    // Mark call as completed.
-    teluxPaDataConn.bRequestCallListInProgress_.store(false);
-    return;
-}
-
-void taf::pa::data::TafPaTeluxDataConnection::resetCallListClientEntry()
-{
-    // reset the entry under the mutex.
-    std::lock_guard<std::mutex> lock(requestCallListMutex_);
-    requestCallListClientEntry_ = {nullptr, nullptr};
+    catch (const std::exception &exception)
+    {
+        TAF_PA_ERROR("Exception in data-call-list callback: %s", exception.what());
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("Unknown exception in data-call-list callback");
+    }
 }
 
 taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListAsync
@@ -1201,79 +2667,76 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaRequestDataCallsListA
     TAF_PA_ERROR_IF_RET_VAL(SubsystemState_e::AVAILABLE != phoneMngrState, TAF_PA_FAULT,
                                                              "PA phone manager not initialized.");
 
-    // acquire the mutex, set the flag, and write the entry atomically
-    // so the SB callback (onRequestDataCallList) can never read a null/stale entry.
-    {
-        std::lock_guard<std::mutex> lock(requestCallListMutex_);
-        bool expected = false;
-        if (!bRequestCallListInProgress_.compare_exchange_strong(expected, true))
-        {
-            // Another thread already set the flag, return TAF_PA_BUSY
-            TAF_PA_ERROR("Request call list already in progress for phone id: %d", TO_INT(phoneId));
-            return TAF_PA_BUSY;
-        }
-        // Write the entry under the lock, before the flag is visible to the SB thread.
-        requestCallListClientEntry_ = {callback, context};
-    }
-
     taf::pa::data::SlotId_e slotIdPa;
-    telux::common::Status status;
-    SlotId slotId;
-
     taf_pa_result_t result = teluxPaData.PaGetSlotIdFromPhoneId(phoneId, slotIdPa);
     if (TAF_PA_OK != result)
     {
         TAF_PA_ERROR("Failed to get slot ID for phone ID %d.", TO_INT(phoneId));
-        // Reset the entry and flag since we're returning early.
-        {
-            std::lock_guard<std::mutex> lock(requestCallListMutex_);
-            requestCallListClientEntry_ = {nullptr, nullptr};
-        }
-        bRequestCallListInProgress_.store(false);
         return result;
     }
     TAF_PA_INFO("Phone Id: %d, Slot Id: %d", TO_INT(phoneId), TO_INT(slotIdPa));
-    slotId = taf::pa::data::Utils::ConvertSlotId(slotIdPa);
+    const SlotId slotId = taf::pa::data::Utils::ConvertSlotId(slotIdPa);
     if (INVALID_SLOT_ID == slotId)
     {
         TAF_PA_ERROR("Invalid Slot ID");
-        // Reset the entry and flag since we're returning early.
-        {
-            std::lock_guard<std::mutex> lock(requestCallListMutex_);
-            requestCallListClientEntry_ = {nullptr, nullptr};
-        }
-        bRequestCallListInProgress_.store(false);
         return TAF_PA_BAD_PARAMETER;
     }
 
-    // Check if the data connection manager is initialized.
-    if (dataConnectionManagersMap_.find(slotId) == dataConnectionManagersMap_.end())
+    std::shared_ptr<DataCallListRequestContext_t> request;
+    try
     {
-        TAF_PA_ERROR("Connection manager is not init for slot %d", TO_INT(slotId));
-        // Reset the entry and flag since we're returning early.
-        {
-            std::lock_guard<std::mutex> lock(requestCallListMutex_);
-            requestCallListClientEntry_ = {nullptr, nullptr};
-        }
-        bRequestCallListInProgress_.store(false);
+        request = std::make_shared<DataCallListRequestContext_t>();
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("Failed to allocate data-call-list request context: %s", error.what());
+        return TAF_PA_NO_MEMORY;
+    }
+
+    request->callback = std::move(callback);
+    request->context = std::move(context);
+    request->phoneId = phoneId;
+
+    const auto managerIt = dataConnectionManagersMap_.find(slotId);
+    if (managerIt == dataConnectionManagersMap_.end() || !managerIt->second)
+    {
+        TAF_PA_ERROR("Connection manager is not initialized for slot %d", TO_INT(slotId));
         return TAF_PA_FAULT;
     }
 
-    status = dataConnectionManagersMap_[slotId]->requestDataCallList(
-                            telux::data::OperationType::DATA_LOCAL, onRequestDataCallList);
+    telux::common::Status status = telux::common::Status::FAILED;
+    try
+    {
+        status = managerIt->second->requestDataCallList(
+            telux::data::OperationType::DATA_LOCAL,
+            // Keep this request's callback/context with its TelSDK response. This avoids a shared
+            // "current request" slot, so concurrent requests can complete independently and out
+            // of order.
+            [request](
+                const std::vector<std::shared_ptr<telux::data::IDataCall>> &dataCalls,
+                telux::common::ErrorCode error)
+            {
+                TafPaTeluxDataConnection::onRequestDataCallList(
+                    request, dataCalls, error);
+            });
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("requestDataCallList threw an exception: %s", error.what());
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("requestDataCallList threw an unknown exception");
+    }
+
     if (telux::common::Status::SUCCESS != status)
     {
-        TAF_PA_ERROR("requestDataCallList failed for phone id[%d]: %d",TO_INT(phoneId), TO_INT(status));
-        // Reset the entry and flag since we're returning early.
-        {
-            std::lock_guard<std::mutex> lock(requestCallListMutex_);
-            requestCallListClientEntry_ = {nullptr, nullptr};
-        }
-        bRequestCallListInProgress_.store(false);
+        TAF_PA_ERROR("requestDataCallList failed for phone id[%d]: %d",
+                     TO_INT(phoneId), TO_INT(status));
         return TAF_PA_FAULT;
     }
 
-    TAF_PA_INFO("requestDataCallList in progress for phone id %d", TO_INT(phoneId));
+    TAF_PA_INFO("requestDataCallList accepted for phone id %d", TO_INT(phoneId));
     return TAF_PA_OK;
 }
 
@@ -2030,9 +3493,15 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnection::PaGetMtuByInterfaceName
 
     // Iterate through all slot listeners to find the data call with the matching interface name.
     // The MTU is read directly from IpAddrInfo (SDK-provided) via the active IDataCall object.
-    for (auto& entry : tafPaTeluxDataConnectionListenersMap_)
+    for (auto& entry : dataConnectionListenersMap_)
     {
-        taf_pa_result_t result = entry.second->GetMtuByInterfaceName(interfaceName, mtu);
+        // The map stores the SDK listener interface; the MTU lookup lives on our listener class.
+        auto listener = std::dynamic_pointer_cast<TafPaTeluxDataConnectionListener>(entry.second);
+        if (!listener)
+        {
+            continue;
+        }
+        taf_pa_result_t result = listener->GetMtuByInterfaceName(interfaceName, mtu);
         if (TAF_PA_OK == result)
         {
             return TAF_PA_OK;

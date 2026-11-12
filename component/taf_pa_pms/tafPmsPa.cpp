@@ -39,9 +39,26 @@ using namespace telux::power;
 using namespace telux::common;
 using namespace std;
 
-// Thread-safe initialization flag
+// Lifecycle state for the PA layer.
+//
+// gPmsPaInitialized: true only when Init() completed successfully and
+//   Deinit() has not yet been called.  Guarded by gPmsPaMutex.
+//
+// gPmsPaTerminated: latched to true the first time Init() encounters a
+//   manager-init timeout.  Once set it is never cleared.  It prevents
+//   any subsequent Init() call from overwriting the shared_ptr fields
+//   in 'pa' while a timed-out manager's SDK callback may still be in
+//   flight, and it gives Deinit() a defined path for partial state so
+//   that managers which *did* confirm readiness before the timeout can
+//   be released safely.
 static std::atomic<bool> gPmsPaInitialized(false);
+static std::atomic<bool> gPmsPaTerminated(false);
 static std::mutex gPmsPaMutex;
+
+// Mutex serializing all SDK callback bodies that write shared static
+// payload storage and call RaiseEvent.  Prevents data races when the
+// SDK dispatches concurrent callbacks on different threads.
+static std::mutex gPmsCallbackMutex;
 
 #define TAF_MODEM_NAS_SVC_ID                          (0x03)
 #define TAF_MODEM_WMS_SVC_ID                          (0x05)
@@ -90,8 +107,6 @@ public:
 
         TAF_PA_INFO("SDK wakeup event is coming");
 
-        static uint32_t wsBitset = 0;
-
         if (wakeupInfo.wakeupType != telux::power::WakeupType::QMI) {
             TAF_PA_WARN("Bad info type from wakeup event");
             return;
@@ -111,63 +126,72 @@ public:
             TAF_PA_INFO("processName : %s", wakeupInfo.qmiWakeupInfo.processName.c_str());
         }
 
-        if (wakeupInfo.qmiWakeupInfo.isMsgIdValid)
-        {
-            TAF_PA_INFO("msg_id : 0x%04x", wakeupInfo.qmiWakeupInfo.msgId);
-
-            if (TAF_MODEM_WMS_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
-            &&  TAF_MODEM_SMS_COMING_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
-            {
-                TAF_PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
-                        wakeupInfo.qmiWakeupInfo.serviceId,
-                        wakeupInfo.qmiWakeupInfo.msgId);
-                wsBitset = TAF_MODEM_WS_BIT_MASK_SMS;
-            }
-            else if (TAF_MODEM_VOICE_CALL_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
-            &&       TAF_MODEM_VCALL_COMING_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
-            {
-                TAF_PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
-                        wakeupInfo.qmiWakeupInfo.serviceId,
-                        wakeupInfo.qmiWakeupInfo.msgId);
-                wsBitset = TAF_MODEM_WS_BIT_MASK_VOICE_CALL;
-            }
-            else if (TAF_MODEM_SIM_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
-            &&       TAF_MODEM_SIM_PROFILE_SWAP_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
-            {
-                TAF_PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
-                        wakeupInfo.qmiWakeupInfo.serviceId,
-                        wakeupInfo.qmiWakeupInfo.msgId);
-                wsBitset = TAF_MODEM_WS_BIT_MASK_REMOTE_SIM_PROFILE_SWAP;
-            }
-            else if (TAF_MODEM_NAS_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
-            &&       TAF_MODEM_SYS_INFO_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
-            {
-                TAF_PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
-                         wakeupInfo.qmiWakeupInfo.serviceId,
-                         wakeupInfo.qmiWakeupInfo.msgId);
-                wsBitset = TAF_MODEM_WS_BIT_MASK_SYS_INFO;
-            }
-            else
-            {
-                TAF_PA_WARN("Combo [svc_id:0x%04x, msg_id:0x%04x] is NOT in range <-",
-                        wakeupInfo.qmiWakeupInfo.serviceId,
-                        wakeupInfo.qmiWakeupInfo.msgId);
-
-                return; // No need to raise the event
-            }
-
-            static taf_pa_pms_Event_t ev = {
-                .evType = EV_WAKEUP_INFO,
-                .evPayload = &wsBitset,
-                .evPsize = sizeof(wsBitset),
-            };
-
-            RaiseEvent(&ev);
-        }
-        else
+        if (!wakeupInfo.qmiWakeupInfo.isMsgIdValid)
         {
             TAF_PA_ERROR("No valid msg_id for svc_id: 0x%04x",
                      wakeupInfo.qmiWakeupInfo.serviceId);
+            return;
+        }
+
+        TAF_PA_INFO("msg_id : 0x%04x", wakeupInfo.qmiWakeupInfo.msgId);
+
+        uint32_t wsBitset = 0;
+
+        if (TAF_MODEM_WMS_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
+        &&  TAF_MODEM_SMS_COMING_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
+        {
+            TAF_PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
+                    wakeupInfo.qmiWakeupInfo.serviceId,
+                    wakeupInfo.qmiWakeupInfo.msgId);
+            wsBitset = TAF_MODEM_WS_BIT_MASK_SMS;
+        }
+        else if (TAF_MODEM_VOICE_CALL_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
+        &&       TAF_MODEM_VCALL_COMING_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
+        {
+            TAF_PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
+                    wakeupInfo.qmiWakeupInfo.serviceId,
+                    wakeupInfo.qmiWakeupInfo.msgId);
+            wsBitset = TAF_MODEM_WS_BIT_MASK_VOICE_CALL;
+        }
+        else if (TAF_MODEM_SIM_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
+        &&       TAF_MODEM_SIM_PROFILE_SWAP_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
+        {
+            TAF_PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
+                    wakeupInfo.qmiWakeupInfo.serviceId,
+                    wakeupInfo.qmiWakeupInfo.msgId);
+            wsBitset = TAF_MODEM_WS_BIT_MASK_REMOTE_SIM_PROFILE_SWAP;
+        }
+        else if (TAF_MODEM_NAS_SVC_ID == wakeupInfo.qmiWakeupInfo.serviceId
+        &&       TAF_MODEM_SYS_INFO_MSG_ID == wakeupInfo.qmiWakeupInfo.msgId)
+        {
+            TAF_PA_INFO("Combo [svc_id:0x%04x, msg_id:0x%04x] received <-",
+                     wakeupInfo.qmiWakeupInfo.serviceId,
+                     wakeupInfo.qmiWakeupInfo.msgId);
+            wsBitset = TAF_MODEM_WS_BIT_MASK_SYS_INFO;
+        }
+        else
+        {
+            TAF_PA_WARN("Combo [svc_id:0x%04x, msg_id:0x%04x] is NOT in range <-",
+                    wakeupInfo.qmiWakeupInfo.serviceId,
+                    wakeupInfo.qmiWakeupInfo.msgId);
+            return; // No need to raise the event
+        }
+
+        // Serialize payload write + RaiseEvent so concurrent wakeup
+        // callbacks on different SDK threads cannot interleave.
+        {
+            std::lock_guard<std::mutex> cbLock(gPmsCallbackMutex);
+
+            static uint32_t wsBitsetStorage = 0;
+            wsBitsetStorage = wsBitset;
+
+            static taf_pa_pms_Event_t ev = {
+                .evType = EV_WAKEUP_INFO,
+                .evPayload = &wsBitsetStorage,
+                .evPsize = sizeof(wsBitsetStorage),
+            };
+
+            RaiseEvent(&ev);
         }
     }
 };
@@ -176,22 +200,28 @@ class ServiceStatusListener : public telux::common::IServiceStatusListener {
 public:
     void onServiceStatusChange(ServiceStatus status) override
     {
-        static taf_pa_pms_ServiceStatus_t status_ = SVC_AVAILABLE;
+        taf_pa_pms_ServiceStatus_t svcStatus;
 
         if(status == ServiceStatus::SERVICE_UNAVAILABLE)
         {
             TAF_PA_ERROR( "SDK [master-service] status : UNAVAILABLE" );
-            status_ = SVC_UNAVAILABLE;
+            svcStatus = SVC_UNAVAILABLE;
         }
-        else if(status == ServiceStatus::SERVICE_AVAILABLE)
+        else
         {
             TAF_PA_INFO( "SDK [master-service] status : AVAILABLE" );
+            svcStatus = SVC_AVAILABLE;
         }
+
+        std::lock_guard<std::mutex> cbLock(gPmsCallbackMutex);
+
+        static taf_pa_pms_ServiceStatus_t svcStatusStorage = SVC_AVAILABLE;
+        svcStatusStorage = svcStatus;
 
         static taf_pa_pms_Event_t ev = {
             .evType = EV_SVC_STATUS,
-            .evPayload = &status_,
-            .evPsize = sizeof(status_),
+            .evPayload = &svcStatusStorage,
+            .evPsize = sizeof(svcStatusStorage),
         };
 
         RaiseEvent(&ev);
@@ -209,30 +239,33 @@ public :
     {
         TAF_PA_INFO("%s state is %s", __FUNCTION__, to_StateString(state));
 
-        static taf_pa_pms_PowerUpdateEvent_t pwrUpdate;
+        taf_pa_pms_PowerState_t pwrState;
 
         if(state == TcuActivityState::SUSPEND)
         {
-            pwrUpdate.state = taf_pa_pms_PwrSts_SUSPEND;
+            pwrState = taf_pa_pms_PwrSts_SUSPEND;
         }
         else if(state == TcuActivityState::SHUTDOWN)
         {
-            pwrUpdate.state = taf_pa_pms_PwrSts_SHUTDOWN;
+            pwrState = taf_pa_pms_PwrSts_SHUTDOWN;
         }
         else if(state == TcuActivityState::RESUME)
         {
-            pwrUpdate.state = taf_pa_pms_PwrSts_RESUME;
+            pwrState = taf_pa_pms_PwrSts_RESUME;
         }
         else
         {
             TAF_PA_ERROR("Unknown state from SDK");
-            pwrUpdate.state = taf_pa_pms_PwrSts_UNKNOWN;
             return; // Don't need to send out event
         }
 
+        std::lock_guard<std::mutex> cbLock(gPmsCallbackMutex);
+
+        static taf_pa_pms_PowerUpdateEvent_t pwrUpdate;
+        pwrUpdate.state = pwrState;
         snprintf(
             pwrUpdate.machineName,
-            MAX_MACHINE_NAME,
+            sizeof(pwrUpdate.machineName),
             "%s",
             machineName.c_str()
         );
@@ -243,7 +276,6 @@ public :
             .evPsize = sizeof(pwrUpdate),
         };
 
-        // Anyway, raise the evet to all PMS clients
         RaiseEvent(&ev);
     }
 
@@ -256,20 +288,18 @@ public :
     {
         TAF_PA_INFO("%s", __FUNCTION__);
 
+        taf_pa_pms_MachineStatusEvent_t machEvt =
+            (machineEvent == MachineEvent::AVAILABLE)
+                ? MACHINE_AVAILABLE
+                : MACHINE_UNAVAILABLE;
+
+        std::lock_guard<std::mutex> cbLock(gPmsCallbackMutex);
+
         static taf_pa_pms_MachineUpdateEvent_t machUpdate;
-
-        if (machineEvent == MachineEvent::AVAILABLE)
-        {
-            machUpdate.machineEvent = MACHINE_AVAILABLE;
-        }
-        else
-        {
-            machUpdate.machineEvent = MACHINE_UNAVAILABLE;
-        }
-
+        machUpdate.machineEvent = machEvt;
         snprintf(
             machUpdate.machineName,
-            MAX_MACHINE_NAME,
+            sizeof(machUpdate.machineName),
             "%s",
             machineName.c_str()
         );
@@ -305,7 +335,8 @@ public :
             TAF_PA_ERROR("Failed to receive ACK from slave apps");
         }
 
-        // Allocate the 'info-struct' on stack
+        std::lock_guard<std::mutex> cbLock(gPmsCallbackMutex);
+
         static taf_pa_pms_ConsolidatedInfo_t info;
 
         if (nackResponseClients.size() > TAF_CONSOLIDATED_CLNT_SIZE)
@@ -315,7 +346,7 @@ public :
         }
         else
         {
-            info.nackResponseClntSize = nackResponseClients.size();
+            info.nackResponseClntSize = static_cast<uint32_t>(nackResponseClients.size());
         }
 
         if (unresponsiveClients.size() > TAF_CONSOLIDATED_CLNT_SIZE)
@@ -325,64 +356,57 @@ public :
         }
         else
         {
-            info.unresponsiveClntSize = unresponsiveClients.size();
+            info.unresponsiveClntSize = static_cast<uint32_t>(unresponsiveClients.size());
         }
 
         TAF_PA_INFO("size: [nack]/(%d) [unresp]/(%d)",
                 info.nackResponseClntSize,
                 info.unresponsiveClntSize);
 
-        if (info.nackResponseClntSize != 0)
+        for (uint32_t i = 0; i < info.nackResponseClntSize; i++)
         {
-            for (uint32_t i = 0; i < info.nackResponseClntSize; i++)
-            {
-                auto itNack = nackResponseClients[i];
+            const auto& itNack = nackResponseClients[i];
 
-                TAF_PA_INFO("Client: %s, Machine: %s",
-                        itNack.first.c_str(),
-                        itNack.second.c_str());
+            TAF_PA_INFO("Client: %s, Machine: %s",
+                    itNack.first.c_str(),
+                    itNack.second.c_str());
 
-                snprintf(
-                    info.nackResponseClntData[i].clientName,
-                    sizeof(info.nackResponseClntData[i].clientName),
-                    "%s",
-                    itNack.first.c_str()
-                );
+            snprintf(
+                info.nackResponseClntData[i].clientName,
+                sizeof(info.nackResponseClntData[i].clientName),
+                "%s",
+                itNack.first.c_str()
+            );
 
-                snprintf(
-                    info.nackResponseClntData[i].machineName,
-                    sizeof(info.nackResponseClntData[i].machineName),
-                    "%s",
-                    itNack.second.c_str()
-                );
-            }
+            snprintf(
+                info.nackResponseClntData[i].machineName,
+                sizeof(info.nackResponseClntData[i].machineName),
+                "%s",
+                itNack.second.c_str()
+            );
         }
 
-        if (info.unresponsiveClntSize != 0)
+        for (uint32_t i = 0; i < info.unresponsiveClntSize; i++)
         {
-            for (uint32_t i = 0; i < info.unresponsiveClntSize; i++)
-            {
-                auto itUnresp = unresponsiveClients[i];
+            const auto& itUnresp = unresponsiveClients[i];
 
-                TAF_PA_INFO("Client: %s, Machine: %s",
-                        itUnresp.first.c_str(),
-                        itUnresp.second.c_str());
+            TAF_PA_INFO("Client: %s, Machine: %s",
+                    itUnresp.first.c_str(),
+                    itUnresp.second.c_str());
 
-                snprintf(
-                    info.unresponsiveClntData[i].clientName,
-                    sizeof(info.unresponsiveClntData[i].clientName),
-                    "%s",
-                    itUnresp.first.c_str()
-                );
+            snprintf(
+                info.unresponsiveClntData[i].clientName,
+                sizeof(info.unresponsiveClntData[i].clientName),
+                "%s",
+                itUnresp.first.c_str()
+            );
 
-                snprintf(
-                    info.unresponsiveClntData[i].machineName,
-                    sizeof(info.unresponsiveClntData[i].machineName),
-                    "%s",
-                    itUnresp.second.c_str()
-                );
-
-            }
+            snprintf(
+                info.unresponsiveClntData[i].machineName,
+                sizeof(info.unresponsiveClntData[i].machineName),
+                "%s",
+                itUnresp.second.c_str()
+            );
         }
 
         static taf_pa_pms_Event_t ev = {
@@ -532,9 +556,49 @@ static void cb_ServiceStatus
     }
 }
 
-static bool IsOkForCheckingFuture
+// Result of waiting on a manager's init future, distinguishing a
+// genuine timeout (callback still in flight) from a resolved-but-failed
+// status (callback has fully returned, manager is safe to reset()).
+enum class FutureCheckResult
+{
+    OK,       // SERVICE_AVAILABLE confirmed and callback fully unwound -
+              // manager is ready; safe to reset() on any subsequent failure
+    FAILED,   // Future resolved but service reported unavailable -
+              // callback has fully returned, manager is safe to reset()
+    TIMEOUT,  // Future did not resolve within timeoutMs -
+              // callback may still be in flight, do NOT reset() manager
+};
+
+// Waits for both the status future and the done future for a manager's
+// init callback, then classifies the outcome as OK, FAILED, or TIMEOUT.
+//
+// fu     : fulfilled by cb_ServiceStatus() with the ServiceStatus value.
+// doneFu : fulfilled by the init lambda immediately after cb_ServiceStatus()
+//          returns, signalling that the entire SDK callback stack has unwound.
+//
+// Waiting for doneFu on EVERY resolved path (OK and FAILED alike) is
+// required to prevent use-after-free on the manager shared_ptr:
+//
+//   cb_ServiceStatus() calls promise<ServiceStatus>::set_value(), which
+//   unblocks fu.get() on the Init() thread.  At that exact moment the SDK
+//   callback lambda has NOT yet returned: it still has to execute
+//   'd->set_value()' and then unwind back through the SDK's own dispatch
+//   stack.  If Init() calls reset() on a confirmed manager immediately
+//   after fu.get() returns (e.g. because a later init step fails, or
+//   Deinit() runs), the destructor may fire while the SDK thread is still
+//   inside the lambda - a classic use-after-free / SIGSEGV.
+//
+//   Waiting for doneFu guarantees that the lambda - and therefore the
+//   entire SDK callback stack above it - has fully returned before Init()
+//   is permitted to reset() the manager, regardless of whether the
+//   outcome was OK or FAILED.
+//
+//   The wait is always bounded: the done promise is fulfilled
+//   unconditionally at the end of the lambda, so it cannot deadlock.
+static FutureCheckResult CheckManagerFuture
 (
     std::future<telux::common::ServiceStatus> &fu,
+    std::future<void>                         &doneFu,
     uint32_t timeoutMs,
     const char * mgrName
 )
@@ -543,13 +607,11 @@ static bool IsOkForCheckingFuture
 
     if (status == std::future_status::ready)
     {
+        bool serviceAvailable = false;
         try
         {
-            if (fu.get() !=  telux::common::ServiceStatus::SERVICE_AVAILABLE)
-            {
-                TAF_PA_ERROR("Failed to init %s: Service is unavailable", mgrName);
-                return false;
-            }
+            serviceAvailable =
+                (fu.get() == telux::common::ServiceStatus::SERVICE_AVAILABLE);
         }
         catch (const std::future_error& fe)
         {
@@ -558,29 +620,43 @@ static bool IsOkForCheckingFuture
             if (fe.code() == std::make_error_code(future_errc::broken_promise))
             {
                 TAF_PA_ERROR("No provider & can NOT set_value");
-                return false;
             }
             else if (fe.code() == std::make_error_code(future_errc::no_state))
             {
                 TAF_PA_ERROR("Already got the future ever");
-                return false;
             }
             else
             {
                 TAF_PA_ERROR("future_error: %s (%d) - %s",
                         fe.what(), fe.code().value(), fe.code().message().c_str());
-
-                return false;
             }
+            // serviceAvailable remains false - fall through to FAILED path below.
         }
 
-        TAF_PA_INFO("Service [%s] is AVAIABLE", mgrName);
-        return true;
+        // Wait for the done signal so the SDK callback stack has fully
+        // unwound before the caller is allowed to reset() the manager.
+        // This is necessary on both the OK and FAILED paths: fu becoming
+        // ready only means cb_ServiceStatus() called set_value(); the
+        // lambda itself (and the SDK dispatch stack above it) may still
+        // be executing.  reset()-ing the manager while the SDK thread is
+        // still inside the lambda causes a use-after-free.  The done
+        // promise is always fulfilled after cb_ServiceStatus() returns,
+        // so this wait is bounded and cannot deadlock.
+        doneFu.wait();
+
+        if (!serviceAvailable)
+        {
+            TAF_PA_ERROR("Failed to init %s: Service is unavailable", mgrName);
+            return FutureCheckResult::FAILED;
+        }
+
+        TAF_PA_INFO("Service [%s] is AVAILABLE", mgrName);
+        return FutureCheckResult::OK;
     }
     else
     {
         TAF_PA_ERROR("Timeout for preparing the %s [%u](ms)", mgrName, timeoutMs);
-        return false;
+        return FutureCheckResult::TIMEOUT;
     }
 }
 
@@ -603,6 +679,17 @@ taf_pa_result_t taf_pa_pms_Init
     {
         TAF_PA_ERROR("Bad paRefPtr");
         return TAF_PA_FAULT;
+    }
+
+    // Reject retries after a timeout: a timed-out manager's SDK
+    // InitResponseCb may still be in flight, so overwriting the
+    // shared_ptr fields in 'pa' would race the SDK's callback-teardown
+    // path and can SIGSEGV inside the SDK destructor.
+    if (gPmsPaTerminated.load(std::memory_order_acquire))
+    {
+        TAF_PA_ERROR("PMS platform adaptor is in a terminal state due to a "
+                 "previous timeout - process must be restarted");
+        return TAF_PA_TERMINATED;
     }
 
     // Check if already initialized (idempotent pattern)
@@ -637,11 +724,17 @@ taf_pa_result_t taf_pa_pms_Init
         std::promise<
             telux::common::ServiceStatus>> masterMgrWP = masterMgrP;
 
+    auto masterDoneP = std::make_shared<std::promise<void>>();
+    std::weak_ptr<std::promise<void>> masterDoneWP = masterDoneP;
+
     pa.masterMgr_ = powerFactory.getTcuActivityManager(
                     masterConfig,
-                    [masterMgrWP](telux::common::ServiceStatus status)
+                    [masterMgrWP, masterDoneWP](telux::common::ServiceStatus status)
                     {
                         cb_ServiceStatus(masterMgrWP, status, "masterMgr");
+                        // Signal after cb_ServiceStatus() returns so Init() knows
+                        // the full callback stack has unwound before reset().
+                        if (auto d = masterDoneWP.lock()) { d->set_value(); }
                     });
 
     if (nullptr == pa.masterMgr_)
@@ -654,16 +747,31 @@ taf_pa_result_t taf_pa_pms_Init
         return TAF_PA_FAULT;
     }
 
-    std::future<telux::common::ServiceStatus> fuMaster = masterMgrP->get_future();
+    std::future<telux::common::ServiceStatus> fuMaster     = masterMgrP->get_future();
+    std::future<void>                         fuMasterDone = masterDoneP->get_future();
 
-    if (! IsOkForCheckingFuture(fuMaster, timeoutMs, "/masterMgr"))
     {
-        pa.masterMgr_.reset();
+        FutureCheckResult fcr = CheckManagerFuture(fuMaster, fuMasterDone, timeoutMs, "/masterMgr");
+        if (fcr != FutureCheckResult::OK)
         {
-            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
-            SendEvent = NULL;
+            // FAILED: callback has returned, manager is safe to reset().
+            // TIMEOUT: callback may still be in flight, do NOT reset() -
+            //   latch terminal flag to block any future Init() retry.
+            if (fcr == FutureCheckResult::FAILED)
+            {
+                pa.masterMgr_.reset();
+            }
+            else // TIMEOUT
+            {
+                gPmsPaTerminated.store(true, std::memory_order_release);
+                TAF_PA_ERROR("PMS platform adaptor entering terminal state (masterMgr timeout)");
+            }
+            {
+                std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+                SendEvent = NULL;
+            }
+            return (fcr == FutureCheckResult::TIMEOUT) ? TAF_PA_TIMEOUT : TAF_PA_FAULT;
         }
-        return TAF_PA_FAULT;
     }
 
     ClientInstanceConfig slaveConfig;
@@ -680,24 +788,56 @@ taf_pa_result_t taf_pa_pms_Init
         std::promise<
             telux::common::ServiceStatus>> slaveMgrWP = slaveMgrP;
 
+    auto slaveDoneP = std::make_shared<std::promise<void>>();
+    std::weak_ptr<std::promise<void>> slaveDoneWP = slaveDoneP;
+
     pa.slaveMgr_ = powerFactory.getTcuActivityManager(
                     slaveConfig,
-                    [slaveMgrWP](telux::common::ServiceStatus status)
+                    [slaveMgrWP, slaveDoneWP](telux::common::ServiceStatus status)
                     {
                         cb_ServiceStatus(slaveMgrWP, status, "slaveMgr");
+                        // Signal after cb_ServiceStatus() returns so Init() knows
+                        // the full callback stack has unwound before reset().
+                        if (auto d = slaveDoneWP.lock()) { d->set_value(); }
                     });
 
-    std::future<telux::common::ServiceStatus> fuSlave = slaveMgrP->get_future();
-
-    if (! IsOkForCheckingFuture(fuSlave, timeoutMs, "/slaveMgr"))
+    if (nullptr == pa.slaveMgr_)
     {
-        pa.slaveMgr_.reset();
+        TAF_PA_ERROR("Failed to getTcuActivityManager for [slaveMgr]");
         pa.masterMgr_.reset();
         {
             std::lock_guard<std::mutex> lock(pmsSendEventMutex);
             SendEvent = NULL;
         }
         return TAF_PA_FAULT;
+    }
+
+    std::future<telux::common::ServiceStatus> fuSlave     = slaveMgrP->get_future();
+    std::future<void>                         fuSlaveDone = slaveDoneP->get_future();
+
+    {
+        FutureCheckResult fcr = CheckManagerFuture(fuSlave, fuSlaveDone, timeoutMs, "/slaveMgr");
+        if (fcr != FutureCheckResult::OK)
+        {
+            // masterMgr_ confirmed SERVICE_AVAILABLE - safe to reset().
+            // slaveMgr_: reset() only if FAILED (callback returned);
+            //   leave non-null on TIMEOUT (callback may still be in flight).
+            pa.masterMgr_.reset();
+            if (fcr == FutureCheckResult::FAILED)
+            {
+                pa.slaveMgr_.reset();
+            }
+            else // TIMEOUT
+            {
+                gPmsPaTerminated.store(true, std::memory_order_release);
+                TAF_PA_ERROR("PMS platform adaptor entering terminal state (slaveMgr timeout)");
+            }
+            {
+                std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+                SendEvent = NULL;
+            }
+            return (fcr == FutureCheckResult::TIMEOUT) ? TAF_PA_TIMEOUT : TAF_PA_FAULT;
+        }
     }
 
     auto wakeupMgrP =
@@ -709,10 +849,16 @@ taf_pa_result_t taf_pa_pms_Init
         std::promise<
             telux::common::ServiceStatus>> wakeupMgrWP = wakeupMgrP;
 
+    auto wakeupDoneP = std::make_shared<std::promise<void>>();
+    std::weak_ptr<std::promise<void>> wakeupDoneWP = wakeupDoneP;
+
     pa.wakeupMgr_ = powerFactory.getWakeupManager(
-                        [wakeupMgrWP](telux::common::ServiceStatus status)
+                        [wakeupMgrWP, wakeupDoneWP](telux::common::ServiceStatus status)
                         {
                             cb_ServiceStatus(wakeupMgrWP, status, "wakeupMgr");
+                            // Signal after cb_ServiceStatus() returns so Init() knows
+                            // the full callback stack has unwound before reset().
+                            if (auto d = wakeupDoneWP.lock()) { d->set_value(); }
                         });
 
     if (nullptr == pa.wakeupMgr_)
@@ -727,18 +873,34 @@ taf_pa_result_t taf_pa_pms_Init
         return TAF_PA_FAULT;
     }
 
-    std::future<telux::common::ServiceStatus> fuWakeup = wakeupMgrP->get_future();
+    std::future<telux::common::ServiceStatus> fuWakeup     = wakeupMgrP->get_future();
+    std::future<void>                         fuWakeupDone = wakeupDoneP->get_future();
 
-    if (! IsOkForCheckingFuture(fuWakeup, timeoutMs, "/wakeupMgr"))
     {
-        pa.wakeupMgr_.reset();
-        pa.slaveMgr_.reset();
-        pa.masterMgr_.reset();
+        FutureCheckResult fcr = CheckManagerFuture(fuWakeup, fuWakeupDone, timeoutMs, "/wakeupMgr");
+        if (fcr != FutureCheckResult::OK)
         {
-            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
-            SendEvent = NULL;
+            // masterMgr_ and slaveMgr_ both confirmed SERVICE_AVAILABLE -
+            // safe to reset() regardless of FAILED or TIMEOUT.
+            // wakeupMgr_: reset() only if FAILED (callback returned);
+            //   leave non-null on TIMEOUT (callback may still be in flight).
+            pa.slaveMgr_.reset();
+            pa.masterMgr_.reset();
+            if (fcr == FutureCheckResult::FAILED)
+            {
+                pa.wakeupMgr_.reset();
+            }
+            else // TIMEOUT
+            {
+                gPmsPaTerminated.store(true, std::memory_order_release);
+                TAF_PA_ERROR("PMS platform adaptor entering terminal state (wakeupMgr timeout)");
+            }
+            {
+                std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+                SendEvent = NULL;
+            }
+            return (fcr == FutureCheckResult::TIMEOUT) ? TAF_PA_TIMEOUT : TAF_PA_FAULT;
         }
-        return TAF_PA_FAULT;
     }
 
     // All SDK service managers are ready.
@@ -887,8 +1049,57 @@ taf_pa_result_t taf_pa_pms_Deinit
     TAF_PA_DEBUG("PA implementation.");
     std::lock_guard<std::mutex> paLock(gPmsPaMutex);
 
-    // Check if initialized before attempting deinit
-    if (!gPmsPaInitialized.load(std::memory_order_acquire))
+    const bool isInitialized = gPmsPaInitialized.load(std::memory_order_acquire);
+    const bool isTerminated  = gPmsPaTerminated.load(std::memory_order_acquire);
+
+    // Handle the terminal (partial-init timeout) state: release every manager
+    // that confirmed SERVICE_AVAILABLE before the timeout, then return
+    // PA_TERMINAL so the caller knows the process must be restarted.
+    if (isTerminated)
+    {
+        TAF_PA_WARN("Deinit() called in terminal state - releasing confirmed managers");
+
+        // Clear the event callback so no further events are raised.
+        {
+            std::lock_guard<std::mutex> lock(pmsSendEventMutex);
+            SendEvent = NULL;
+        }
+
+        // Init() reset() every manager that confirmed SERVICE_AVAILABLE
+        // before the timeout, leaving those pointers null.  The one
+        // manager that timed out was intentionally left non-null because
+        // its SDK InitResponseCb may still be in flight.
+        //
+        // Rule: reset() a pointer here ONLY if Init() already cleared it
+        // (i.e. it is null).  Never reset() the non-null timed-out one.
+        //
+        // Scenario mapping (Init() cleanup before PA_TIMEOUT return):
+        //   masterMgr_ timeout : Init() reset() nothing.
+        //     masterMgr_ non-null (in-flight) -> skip.
+        //     slaveMgr_  null (never created) -> no-op reset() safe.
+        //     wakeupMgr_ null (never created) -> no-op reset() safe.
+        //
+        //   slaveMgr_ timeout  : Init() reset() masterMgr_.
+        //     masterMgr_ null  (already cleared) -> no-op reset() safe.
+        //     slaveMgr_  non-null (in-flight)    -> skip.
+        //     wakeupMgr_ null  (never created)   -> no-op reset() safe.
+        //
+        //   wakeupMgr_ timeout : Init() reset() masterMgr_ + slaveMgr_.
+        //     masterMgr_ null  (already cleared) -> no-op reset() safe.
+        //     slaveMgr_  null  (already cleared) -> no-op reset() safe.
+        //     wakeupMgr_ non-null (in-flight)    -> skip.
+        //
+        // In all three cases listener shared_ptrs were never allocated,
+        // so there is nothing to deregister.
+        if (pa.masterMgr_ == nullptr) { pa.masterMgr_.reset(); }
+        if (pa.slaveMgr_  == nullptr) { pa.slaveMgr_.reset();  }
+        if (pa.wakeupMgr_ == nullptr) { pa.wakeupMgr_.reset(); }
+
+        return TAF_PA_TERMINATED;
+    }
+
+    // Normal path: reject if Init() was never successfully completed.
+    if (!isInitialized)
     {
         TAF_PA_WARN("Deinit() called before Init() - ignoring deinit request.");
         return TAF_PA_FAULT;
@@ -999,6 +1210,12 @@ taf_pa_result_t taf_pa_pms_SetPowerStateAsMaster
     const char               *name
 )
 {
+    if (!gPmsPaInitialized.load(std::memory_order_acquire) || pa.masterMgr_ == nullptr)
+    {
+        TAF_PA_ERROR("SetPowerStateAsMaster called before Init() or after Deinit()");
+        return TAF_PA_FAULT;
+    }
+
     telux::power::TcuActivityState sdkState = to_SdkPowerState(state);
 
     telux::common::Status status = telux::common::Status::FAILED;
@@ -1053,6 +1270,12 @@ taf_pa_result_t taf_pa_pms_SendAckForStateUpdate
     taf_pa_pms_Ack_t        ack
 )
 {
+    if (!gPmsPaInitialized.load(std::memory_order_acquire) || pa.slaveMgr_ == nullptr)
+    {
+        TAF_PA_ERROR("SendAckForStateUpdate called before Init() or after Deinit()");
+        return TAF_PA_FAULT;
+    }
+
     telux::common::Status status = telux::common::Status::FAILED;
 
     if (state == taf_pa_pms_PwrSts_SUSPEND)
@@ -1110,6 +1333,12 @@ taf_pa_result_t taf_pa_pms_GetAllMachineNames
     std::vector<std::string> &machineNames
 )
 {
+    if (!gPmsPaInitialized.load(std::memory_order_acquire) || pa.masterMgr_ == nullptr)
+    {
+        TAF_PA_ERROR("GetAllMachineNames called before Init() or after Deinit()");
+        return TAF_PA_FAULT;
+    }
+
     telux::common::Status status =
         pa.masterMgr_->getAllMachineNames(machineNames);
 
@@ -1128,9 +1357,16 @@ taf_pa_result_t taf_pa_pms_SetModemWakeupFilter
     uint32_t                  wsBitmask
 )
 {
-    taf_prop_result_t result =
+    if (!gPmsPaInitialized.load(std::memory_order_acquire) || pa.mpssRef == nullptr)
+    {
+        TAF_PA_ERROR("SetModemWakeupFilter called before Init() or after Deinit()");
+        return TAF_PA_FAULT;
+    }
+
+     taf_prop_result_t result =
         taf_prop_pms_SetWsFilter(pa.mpssRef,
                 (taf_prop_pms_ModemWakeupSource_t) wsBitmask);
+
     if (result != TAF_PROP_OK)
     {
         TAF_PA_ERROR("Failed to taf_prop_pms_SetWsFilter");
@@ -1146,14 +1382,25 @@ taf_pa_result_t taf_pa_pms_GetModemWakeupFilter
     uint32_t                 *wsBitmaskPtr
 )
 {
-    taf_prop_result_t result =
+    if (!gPmsPaInitialized.load(std::memory_order_acquire) || pa.mpssRef == nullptr)
+    {
+        if (wsBitmaskPtr != nullptr) { *wsBitmaskPtr = 0; }
+        TAF_PA_ERROR("GetModemWakeupFilter called before Init() or after Deinit()");
+        return TAF_PA_FAULT;
+    }
+
+     taf_prop_result_t result =
         taf_prop_pms_GetWsFilter(pa.mpssRef,
                 (taf_prop_pms_ModemWakeupSource_t *) wsBitmaskPtr);
+
     if (result != TAF_PROP_OK)
     {
-        *wsBitmaskPtr = 0;
-        TAF_PA_ERROR("Failed to taf_prop_pms_GetWsFilter");
-        return PropResultToPaResult(result, TAF_PROP_UNDERLYING_ERR_NONE);
+        if (wsBitmaskPtr != nullptr)
+        {
+            *wsBitmaskPtr = 0;
+        }
+        TAF_PA_ERROR("Failed to taf_prop_pa_pms_GetWsFilter");
+        return TAF_PA_FAULT;
     }
 
     return TAF_PA_OK;

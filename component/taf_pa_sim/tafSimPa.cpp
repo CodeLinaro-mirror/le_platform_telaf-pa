@@ -1916,12 +1916,7 @@ taf_pa_result_t taf_pa_sim_GetIccid(taf_pa_sim_Id_t simId,
         TAF_PA_INFO("simPtr is nullptr");
         return TAF_PA_FAULT;
     }
-    if (simPtr->ICCID[0] != 0)
-    {
-        TAF_PA_INFO("simPtr->iccIdStr");
-        iccIdStr = simPtr->ICCID;
-        return TAF_PA_OK;
-    }
+
     if (!pa.subMgr)
     {
         TAF_PA_ERROR("Subscription manager is not initialized.");
@@ -1984,12 +1979,6 @@ taf_pa_result_t taf_pa_sim_GetSubscriberPhoneNumber(taf_pa_sim_Id_t simId,
     {
         TAF_PA_INFO("simPtr is nullptr");
         return TAF_PA_FAULT;
-    }
-    if (simPtr->phoneNumber[0] != 0)
-    {
-        TAF_PA_INFO("simPtr->iccIdStr");
-		phoneNumber = simPtr->phoneNumber;
-        return TAF_PA_OK;
     }
     if (!pa.subMgr)
     {
@@ -2057,12 +2046,6 @@ taf_pa_result_t taf_pa_sim_GetImsi(taf_pa_sim_Id_t simId,
     {
         TAF_PA_INFO("simPtr is nullptr");
         return TAF_PA_FAULT;
-    }
-    if (simPtr->IMSI[0] != 0)
-    {
-        TAF_PA_INFO("simPtr->IMSI");
-        imsi = simPtr->IMSI;
-        return TAF_PA_OK;
     }
     if (!pa.subMgr)
     {
@@ -2706,8 +2689,8 @@ taf_pa_result_t taf_pa_sim_GetState
     }
     else
     {
-        *state = TAF_PA_SIM_STATE_UNKNOWN;
-        TAF_PA_INFO("TAF_PA_SIM_STATE_UNKNOWN (card is null)");
+        *state = TAF_PA_SIM_ABSENT;
+        TAF_PA_INFO("TAF_PA_SIM_ABSENT (card is null)");
         return TAF_PA_OK;
     }
 }
@@ -3912,5 +3895,22 @@ taf_pa_result_t taf_pa_sim_IsNtnProfileActive
 
     *isActive = card->isNtnProfileActive();
     TAF_PA_INFO("NTN profile active status: %d", (int)*isActive);
+    return TAF_PA_OK;
+}
+
+taf_pa_result_t taf_pa_sim_GetSelectedCard
+(
+    taf_pa_sim_Id_t* simIdPtr
+)
+{
+    TAF_PA_INFO("taf_pa_sim_GetSelectedCard");
+    if (simIdPtr == nullptr)
+    {
+        TAF_PA_ERROR("Invalid parameter: simIdPtr is null");
+        return TAF_PA_BAD_PARAMETER;
+    }
+    auto& pa = PlatformAdaptor::GetInstance();
+    *simIdPtr = pa.GetSelectedCard();
+    TAF_PA_INFO("taf_pa_sim_GetSelectedCard: simId = %d", (int)*simIdPtr);
     return TAF_PA_OK;
 }

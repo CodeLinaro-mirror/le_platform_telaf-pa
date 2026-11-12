@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
@@ -17,7 +17,7 @@
 
 #include "tafInternalCommonPa.h"
 #include "tafMrcPa.hpp"
-#include "tafInternalCommonPa.h"
+#include "taf_pa_abslot.h"
 
 #include "taf_prop_mrc.h"
 
@@ -55,16 +55,17 @@ static std::mutex gMrcPaMutex;
         }                                                                 \
         catch (const exception& e)                                        \
         {                                                                 \
-            TAF_PA_ERROR("Exception in %s callback: %s", #name, e.what());    \
+            TAF_PA_ERROR("Exception in %s callback: %s", #name, e.what());\
         }                                                                 \
         catch (...)                                                       \
         {                                                                 \
-            TAF_PA_ERROR("Unknown error in %s callback.", #name);             \
+            TAF_PA_ERROR("Unknown error in %s callback.", #name);         \
         }                                                                 \
     };
 
 // SERVICE_READY: waits for the service-ready callback fired by getFsManager().
-// Returns TAF_PA_FAULT from the enclosing function on timeout or unavailability
+// Returns TAF_PA_TIMEOUT from the enclosing function on timeout
+// Returns TAF_PA_FAULT from the enclosing function on unavailability
 // so that Init() never succeeds with a null/unready IFsManager.
 #define SERVICE_READY(name)                                               \
     do                                                                    \
@@ -74,16 +75,24 @@ static std::mutex gMrcPaMutex;
             chrono::seconds(SERVICE_TIMEOUT));                            \
         if (future_status::timeout == name##Status)                       \
         {                                                                 \
-            TAF_PA_CRIT("Timeout waiting for %s — aborting Init.", #name);    \
-            return TAF_PA_FAULT;                                              \
+            TAF_PA_CRIT("Timeout waiting for %s — aborting Init.", #name);\
+            {                                                             \
+                std::lock_guard<std::mutex> lock(pa.fsMutex);             \
+                pa.managers.fs.reset();                                   \
+            }                                                             \
+            return TAF_PA_TIMEOUT;                                        \
         }                                                                 \
         ServiceStatus name##ServiceStatus = name##Future.get();           \
         if (name##ServiceStatus != ServiceStatus::SERVICE_AVAILABLE)      \
         {                                                                 \
-            TAF_PA_CRIT("%s is not available — aborting Init.", #name);       \
-            return TAF_PA_FAULT;                                              \
+            TAF_PA_CRIT("%s is not available — aborting Init.", #name);   \
+            {                                                             \
+                std::lock_guard<std::mutex> lock(pa.fsMutex);             \
+                pa.managers.fs.reset();                                   \
+            }                                                             \
+            return TAF_PA_FAULT;                                          \
         }                                                                 \
-        TAF_PA_INFO("%s is available.", #name);                               \
+        TAF_PA_INFO("%s is available.", #name);                           \
     } while (0)
 
 typedef struct
@@ -305,6 +314,14 @@ PlatformAdaptor& PlatformAdaptor::GetInstance
 {
     static PlatformAdaptor instance;
     return instance;
+}
+
+taf_pa_result_t taf_pa_mrc_GetActiveSlot
+(
+    taf_pa_ABSlot_t* slotPtr
+)
+{
+    return taf_pa_abslot_GetActiveSlot(slotPtr);
 }
 
 static void ProcessStatusHandler

@@ -9,6 +9,13 @@
  *
  */
 #include "tafDataUtilsPa.hpp"
+#include "../include/tafInternalCommonPa.h"
+#include "telux/data/DataConnectionManager.hpp"
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <unistd.h>
+#include <cstring>
+#include <utility>
 
 using namespace taf::pa::data;
 
@@ -316,6 +323,104 @@ DataCallStatus_e Utils::ConvertCallStatus
             TAF_PA_WARN("Invalid data call status: %d", TO_INT(status));
             return DataCallStatus_e::UNKNOWN;
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Convert a TelSDK IDataCall into a PA data-call snapshot, including available IPv4/IPv6 address
+ * details. This is used for Start/Stop responses and call-list entries. Listener-only bearer,
+ * end-reason, and bit-rate information is filled separately by the state-event path.
+ *
+ * @return TAF_PA_OK when the snapshot is populated, TAF_PA_BAD_PARAMETER for a null IDataCall, or
+ *         TAF_PA_FAULT if a TelSDK getter throws while parsing.
+ */
+//--------------------------------------------------------------------------------------------------
+taf_pa_result_t Utils::ParseDataCallInfo
+(
+    const std::shared_ptr<telux::data::IDataCall> &iDataCall,
+    PhoneId_e phoneId,
+    DataCallEventInfo_t &eventInfo,
+    telux::data::DataCallStatus *rawCallStatus
+)
+{
+    eventInfo = DataCallEventInfo_t{};
+    if (rawCallStatus)
+    {
+        *rawCallStatus = telux::data::DataCallStatus::INVALID;
+    }
+
+    if (!iDataCall)
+    {
+        return TAF_PA_BAD_PARAMETER;
+    }
+
+    try
+    {
+        const telux::data::DataCallStatus dataCallStatus = iDataCall->getDataCallStatus();
+        const telux::data::IpFamilyInfo ipv4Info = iDataCall->getIpv4Info();
+        const telux::data::IpFamilyInfo ipv6Info = iDataCall->getIpv6Info();
+
+        DataCallEventInfo_t parsedInfo{};
+        parsedInfo.phoneId = phoneId;
+        parsedInfo.slotId = ConvertSlotId(iDataCall->getSlotId());
+        parsedInfo.profileId = static_cast<ProfileId_e>(iDataCall->getProfileId());
+        parsedInfo.callStatus = ConvertCallStatus(dataCallStatus);
+        parsedInfo.ipType = ConvertIpType(iDataCall->getIpFamilyType());
+        parsedInfo.techPref = ConvertTechPref(iDataCall->getTechPreference());
+        parsedInfo.hostIfName = iDataCall->getInterfaceName();
+
+        const auto fillIpFamilyInfo = [](
+            const telux::data::IpFamilyInfo &teluxInfo,
+            DataCallInfo_t &paInfo,
+            const char *ipFamily)
+        {
+            paInfo.callStatus = ConvertCallStatus(teluxInfo.status);
+            if (telux::data::DataCallStatus::NET_CONNECTED == teluxInfo.status ||
+                telux::data::DataCallStatus::NET_RECONFIGURED == teluxInfo.status ||
+                telux::data::DataCallStatus::NET_NEWADDR == teluxInfo.status)
+            {
+                TAF_PA_DEBUG("Fill in %s call info.", ipFamily);
+                paInfo.ipAddr = teluxInfo.addr.ifAddress;
+                paInfo.ipAddrMask = teluxInfo.addr.ifMask;
+                paInfo.gwAddr = teluxInfo.addr.gwAddress;
+                paInfo.gwAddrMask = teluxInfo.addr.gwMask;
+                paInfo.dnsAddrPrimary = teluxInfo.addr.primaryDnsAddress;
+                paInfo.dnsAddrSecondary = teluxInfo.addr.secondaryDnsAddress;
+
+                // MTU comes directly from the SDK IpAddrInfo (1.1 behaviour), not an ioctl lookup.
+                if (teluxInfo.addr.mtu > 0)
+                {
+                    paInfo.mtu = static_cast<int32_t>(teluxInfo.addr.mtu);
+                    TAF_PA_DEBUG("%s MTU: %d", ipFamily, paInfo.mtu);
+                }
+                else
+                {
+                    TAF_PA_WARN("MTU not available in %s IpAddrInfo", ipFamily);
+                }
+            }
+        };
+
+        fillIpFamilyInfo(ipv4Info, parsedInfo.ipv4DataCallInfo, "IPv4");
+        fillIpFamilyInfo(ipv6Info, parsedInfo.ipv6DataCallInfo, "IPv6");
+
+        if (rawCallStatus)
+        {
+            *rawCallStatus = dataCallStatus;
+        }
+        eventInfo = std::move(parsedInfo);
+    }
+    catch (const std::exception &error)
+    {
+        TAF_PA_ERROR("Failed to parse TelSDK data-call info: %s", error.what());
+        return TAF_PA_FAULT;
+    }
+    catch (...)
+    {
+        TAF_PA_ERROR("Unknown exception while parsing TelSDK data-call info");
+        return TAF_PA_FAULT;
+    }
+
+    return TAF_PA_OK;
 }
 
 taf_pa_result_t Utils::ConvertProfileInfo
@@ -817,4 +922,128 @@ void Utils::ConvertThroughputInfo
 
     // Convert downlink info
     ConvertDownlinkThroughputInfo(sdkInfo.dlThroughput, paInfo.dlThroughput);
+}
+
+taf_pa_result_t Utils::ConvertStatus(telux::common::Status status)
+{
+    switch (status)
+    {
+    case telux::common::Status::SUCCESS:
+        return TAF_PA_OK;
+    case telux::common::Status::INVALIDPARAM:
+        return TAF_PA_BAD_PARAMETER;
+    case telux::common::Status::NOTALLOWED:
+    case telux::common::Status::ACCESSDENIED:
+        return TAF_PA_NOT_PERMITTED;
+    case telux::common::Status::NOTIMPLEMENTED:
+        return TAF_PA_NOT_IMPLEMENTED;
+    case telux::common::Status::NOTSUPPORTED:
+        return TAF_PA_UNSUPPORTED;
+    case telux::common::Status::NOTREADY:
+    case telux::common::Status::NOCONNECTION:
+    case telux::common::Status::CONNECTIONLOST:
+        return TAF_PA_UNAVAILABLE;
+    case telux::common::Status::EXPIRED:
+        return TAF_PA_TIMEOUT;
+    case telux::common::Status::ALREADY:
+        return TAF_PA_DUPLICATE;
+    case telux::common::Status::NOSUCH:
+        return TAF_PA_NOT_FOUND;
+    case telux::common::Status::NOMEMORY:
+        return TAF_PA_NO_MEMORY;
+    case telux::common::Status::INVALIDSTATE:
+        return TAF_PA_NOT_POSSIBLE;
+    case telux::common::Status::NOSUBSCRIPTION:
+        return TAF_PA_UNAVAILABLE;
+    case telux::common::Status::FAILED:
+    default:
+        return TAF_PA_FAULT;
+    }
+}
+
+taf_pa_result_t Utils::ConvertErrorCode(telux::common::ErrorCode errorCode)
+{
+    switch (errorCode)
+    {
+    case telux::common::ErrorCode::SUCCESS:
+        return TAF_PA_OK;
+    case telux::common::ErrorCode::INVALID_ARGUMENTS:
+    case telux::common::ErrorCode::INVALID_ARG:
+    case telux::common::ErrorCode::PARAM_ERROR:
+    case telux::common::ErrorCode::MISSING_ARGUMENTS:
+    case telux::common::ErrorCode::MISSING_ARG:
+    case telux::common::ErrorCode::OUT_PARAMETER_NULL:
+    case telux::common::ErrorCode::UNEXPECTED_NULL_PTR:
+    case telux::common::ErrorCode::INVALID_IP_FAMILY_PREF:
+    case telux::common::ErrorCode::INVALID_HANDLE:
+    case telux::common::ErrorCode::INVALID_MCAST_HANDLE:
+    case telux::common::ErrorCode::INVAL_OPERATION_HNDL:
+    case telux::common::ErrorCode::INVALID_ID:
+    case telux::common::ErrorCode::INVALID_CLIENT_ID:
+    case telux::common::ErrorCode::INVALID_CLIENT:
+        return TAF_PA_BAD_PARAMETER;
+    case telux::common::ErrorCode::NO_MEMORY:
+    case telux::common::ErrorCode::NO_RESOURCES:
+    case telux::common::ErrorCode::ALLOCATION_FAILURE:
+    case telux::common::ErrorCode::CLIENT_IDS_EXHAUSTED:
+        return TAF_PA_NO_MEMORY;
+    case telux::common::ErrorCode::REQUEST_NOT_SUPPORTED:
+    case telux::common::ErrorCode::NOT_SUPPORTED:
+    case telux::common::ErrorCode::MODE_NOT_SUPPORTED:
+    case telux::common::ErrorCode::OP_DEVICE_UNSUPPORTED:
+    case telux::common::ErrorCode::OP_NETWORK_UNSUPPORTED:
+        return TAF_PA_UNSUPPORTED;
+    case telux::common::ErrorCode::OPERATION_NOT_ALLOWED:
+    case telux::common::ErrorCode::NO_PERMISSION:
+    case telux::common::ErrorCode::ACCESS_DENIED:
+        return TAF_PA_NOT_PERMITTED;
+    case telux::common::ErrorCode::RADIO_NOT_AVAILABLE:
+    case telux::common::ErrorCode::SUBSYSTEM_UNAVAILABLE:
+    case telux::common::ErrorCode::DEVICE_NOT_READY:
+    case telux::common::ErrorCode::INFO_UNAVAILABLE:
+    case telux::common::ErrorCode::NETWORK_NOT_READY:
+    case telux::common::ErrorCode::INVALID_MODEM_STATE:
+        return TAF_PA_UNAVAILABLE;
+    case telux::common::ErrorCode::TIMEOUT_ERROR:
+    case telux::common::ErrorCode::OPERATION_TIMEOUT:
+        return TAF_PA_TIMEOUT;
+    case telux::common::ErrorCode::ALREADY:
+        return TAF_PA_DUPLICATE;
+    case telux::common::ErrorCode::NO_SUCH_ELEMENT:
+    case telux::common::ErrorCode::NO_SUCH_ENTRY:
+    case telux::common::ErrorCode::NO_ENTRY:
+        return TAF_PA_NOT_FOUND;
+    case telux::common::ErrorCode::INVALID_STATE:
+    case telux::common::ErrorCode::INCOMPATIBLE_STATE:
+    case telux::common::ErrorCode::INVALID_OPERATION:
+    case telux::common::ErrorCode::SESSION_INACTIVE:
+    case telux::common::ErrorCode::SESSION_INVALID:
+    case telux::common::ErrorCode::DISABLED:
+    case telux::common::ErrorCode::NO_EFFECT:
+        return TAF_PA_NOT_POSSIBLE;
+    case telux::common::ErrorCode::OP_IN_PROGRESS:
+        return TAF_PA_IN_PROGRESS;
+    case telux::common::ErrorCode::CANCELLED:
+    case telux::common::ErrorCode::ABORTED:
+        return TAF_PA_TERMINATED;
+    case telux::common::ErrorCode::REQUEST_RATE_LIMITED:
+    case telux::common::ErrorCode::DEVICE_IN_USE:
+    case telux::common::ErrorCode::SIM_BUSY:
+    case telux::common::ErrorCode::TRANSPORT_BUSY_ERROR:
+        return TAF_PA_BUSY;
+    case telux::common::ErrorCode::NETWORK_ERR:
+    case telux::common::ErrorCode::NETWORK_REJECT:
+    case telux::common::ErrorCode::NETWORK_ABORTED:
+    case telux::common::ErrorCode::TRANSPORT_ERROR:
+    case telux::common::ErrorCode::SERVICE_ERROR:
+        return TAF_PA_COMM_ERROR;
+    case telux::common::ErrorCode::INTERNAL_ERR:
+    case telux::common::ErrorCode::SYSTEM_ERR:
+    case telux::common::ErrorCode::MODEM_ERR:
+    case telux::common::ErrorCode::INTERNAL:
+    case telux::common::ErrorCode::INTERNAL_ERROR:
+    case telux::common::ErrorCode::GENERIC_FAILURE:
+    default:
+        return TAF_PA_FAULT;
+    }
 }

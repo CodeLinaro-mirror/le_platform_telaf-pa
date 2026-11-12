@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+﻿cmake_minimum_required(VERSION 3.10)
 project(telaf_pa_all)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -41,6 +41,7 @@ set(CMAKE_INSTALL_RPATH "$ORIGIN:")
 set(MODULE_LIST
     component/stub
     component/taf_pa_common
+    component/taf_pa_abslot_common
     component/taf_pa_voicecall
     component/taf_pa_sms
     component/taf_pa_deviceinfo

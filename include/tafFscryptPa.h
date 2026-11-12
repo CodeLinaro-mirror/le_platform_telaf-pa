@@ -8,6 +8,10 @@
 
 #include "tafCommonPa.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //--------------------------------------------------------------------------------------------------
 /**
  * FS-Crypt key definitions
@@ -80,5 +84,9 @@ TAF_PA_SHARED taf_pa_result_t taf_pa_fsc_DeleteKey
     int clientSessionFd,                    ///< [IN] Client session Fd
     KeyMgt_KeyFileRef_t keyFileRef          ///< [IN] Key file reference
 );
+
+#ifdef __cplusplus
+}
+#endif // extern "C"
 
 #endif // TAF_FSCRYPT_PA_H

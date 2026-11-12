@@ -14,6 +14,7 @@
 #include <vector>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <bitset>
 
@@ -1179,8 +1180,9 @@ struct DataCallInfo_t
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Data call events that are provided back to the service.
- * Use the phone Id and profile Id to uniquely identify a data session.
+ * Snapshot of a data call, including status and IP-family information. Used by data-call event,
+ * list, and Start/Stop operation-result callbacks. Use the phone Id and profile Id to identify a
+ * data session.
  */
 //--------------------------------------------------------------------------------------------------
 struct DataCallEventInfo_t
@@ -1199,6 +1201,49 @@ struct DataCallEventInfo_t
     uint64_t               maxRxBitRate;        ///< The maximum receive data rate in bits/second.
     uint64_t               maxTxBitRate;        ///< The maximum transmit data rate in bits/second.
 };
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Type of operation represented by a per-request result callback.
+ */
+//--------------------------------------------------------------------------------------------------
+enum class DataCallOperationType : uint8_t
+{
+    START = 0,
+    STOP,
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Result of one accepted Start or Stop request. result is TAF_PA_OK when the TelSDK operation
+ * succeeds. A non-success TelSDK error, a null IDataCall (including when TelSDK reports success),
+ * or a failure to retrieve or parse call information is reported as TAF_PA_FAULT through this
+ * callback. The specific TelSDK error code is not preserved.
+ *
+ * dataCallInfo is populated only when the overall data-call status is CONNECTED; otherwise it
+ * remains default-initialized. This snapshot is not a state indication. Its maximum bit-rate
+ * fields are not queried by the operation callback and remain at their default values. State
+ * changes are reported separately through taf_pa_data_CallEventsCb.
+ */
+//--------------------------------------------------------------------------------------------------
+struct DataCallOperationResult_t
+{
+    DataCallOperationType operationType{DataCallOperationType::START};
+    taf_pa_result_t result{TAF_PA_FAULT};
+    DataCallEventInfo_t dataCallInfo{}; ///< Snapshot from the operation response, if available.
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Per-request Start/Stop result callback.
+ */
+//--------------------------------------------------------------------------------------------------
+using taf_pa_data_OperationCb =
+    std::function<void
+                    (
+                        const DataCallOperationResult_t &result,
+                        std::shared_ptr<void> context
+                    )>;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -1267,6 +1312,150 @@ struct UplinkThroughputInfo_t
     uint32_t queueSize = 0;         ///< Number of bytes pending in the uplink queue.
 };
 
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Data restrict filter mode.
+ */
+//--------------------------------------------------------------------------------------------------
+enum class FilterMode_e : uint8_t
+{
+    UNKNOWN = 0, ///< Unknown or invalid mode.
+    DISABLE = 1, ///< Disable data restrict filtering.
+    ENABLE = 2   ///< Enable data restrict filtering.
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * PA-owned IP protocol values used by data restrict filters.
+ */
+//--------------------------------------------------------------------------------------------------
+enum class IpProtocol_e : uint8_t
+{
+    UNKNOWN = 0xFF,
+    ICMP = 1,
+    TCP = 6,
+    UDP = 17,
+    ESP = 50
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Data restrict mode and auto-exit setting.
+ */
+//--------------------------------------------------------------------------------------------------
+struct FilterModeInfo_t
+{
+    FilterMode_e filterMode = FilterMode_e::UNKNOWN;
+    FilterMode_e filterAutoExit = FilterMode_e::DISABLE;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Port and range match. Range is the number of ports following port.
+ */
+//--------------------------------------------------------------------------------------------------
+struct PortInfo_t
+{
+    uint16_t port = 0;
+    uint16_t range = 0;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * IPv4 address and subnet mask match.
+ */
+//--------------------------------------------------------------------------------------------------
+struct Ipv4Address_t
+{
+    std::string address;
+    std::string subnetMask;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * IPv6 address and prefix length match.
+ */
+//--------------------------------------------------------------------------------------------------
+struct Ipv6Address_t
+{
+    std::string address;
+    uint8_t prefixLength = 128;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * IPv4 filter fields.
+ */
+//--------------------------------------------------------------------------------------------------
+struct Ipv4Filter_t
+{
+    std::optional<Ipv4Address_t> source;
+    std::optional<Ipv4Address_t> destination;
+    std::optional<uint8_t> typeOfServiceValue;
+    std::optional<uint8_t> typeOfServiceMask;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * IPv6 filter fields.
+ */
+//--------------------------------------------------------------------------------------------------
+struct Ipv6Filter_t
+{
+    std::optional<Ipv6Address_t> source;
+    std::optional<Ipv6Address_t> destination;
+    std::optional<uint8_t> trafficClassValue;
+    std::optional<uint8_t> trafficClassMask;
+    std::optional<uint32_t> flowLabel;
+    std::optional<uint8_t> natEnabled;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * ICMP filter fields.
+ */
+//--------------------------------------------------------------------------------------------------
+struct IcmpInfo_t
+{
+    uint8_t type = 0;
+    uint8_t code = 0;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * ESP filter fields.
+ */
+//--------------------------------------------------------------------------------------------------
+struct EspInfo_t
+{
+    uint32_t spi = 0;
+};
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * PA-owned IP filter description.
+ *
+ * The current TelSDK NAO filter API is global. Filters without profileId or ipFamilyType apply to
+ * all active data calls. A request containing either optional scoping field returns
+ * PA_UNSUPPORTED until the target platform provides a non-deprecated scoped API. Filters can be
+ * added before data restrict mode is enabled. Duplicate filters are rejected by the PA with
+ * PA_DUPLICATE.
+ */
+//--------------------------------------------------------------------------------------------------
+struct IpFilter_t
+{
+    std::optional<ProfileId_e> profileId;
+    std::optional<IpType_e> ipFamilyType;
+    IpProtocol_e protocol = IpProtocol_e::UNKNOWN;
+    std::optional<Ipv4Filter_t> ipv4;
+    std::optional<Ipv6Filter_t> ipv6;
+    std::optional<PortInfo_t> sourcePort;
+    std::optional<PortInfo_t> destinationPort;
+    std::optional<IcmpInfo_t> icmp;
+    std::optional<EspInfo_t> esp;
+};
+
 //--------------------------------------------------------------------------------------------------
 /**
  * Downlink throughput information for a data profile.
@@ -1295,6 +1484,24 @@ struct ThroughputInfo_t
     DownlinkThroughputInfo_t  dlThroughput;                   ///< Downlink throughput details.
 };
 
+using TcpMonitorHandle_t = uint32_t;
+using TcpKeepAliveOffloadHandle_t = uint32_t;
+
+static constexpr TcpMonitorHandle_t INVALID_TCP_MONITOR_HANDLE = 0;
+static constexpr TcpKeepAliveOffloadHandle_t INVALID_TCP_KEEP_ALIVE_OFFLOAD_HANDLE = 0;
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * TCP connection tuple used for TCP keep-alive monitor/offload APIs.
+ */
+//--------------------------------------------------------------------------------------------------
+struct TcpKeepAliveParams_t
+{
+    std::string sourceAddress;      ///< Source IPv4 or IPv6 address.
+    std::string destinationAddress; ///< Destination IPv4 or IPv6 address.
+    uint16_t sourcePort = 0;        ///< Source TCP port.
+    uint16_t destinationPort = 0;   ///< Destination TCP port.
+};
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -1318,6 +1525,7 @@ TAF_PA_SHARED taf_pa_result_t Init
 //--------------------------------------------------------------------------------------------------
 /**
  * Deinitialize the Telux data PA state.
+ * Active data calls should be stopped and cleaned up by the caller before invoking PA Deinit.
  *
  * @return
  *  - TAF_PA_OK              PA completely initialized
@@ -1326,6 +1534,133 @@ TAF_PA_SHARED taf_pa_result_t Init
 TAF_PA_SHARED taf_pa_result_t Deinit
 (
 
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Enable a TCP monitor for the supplied TCP connection tuple.
+ *
+ * @return
+ *  - PA_OK             Monitor enabled and handle populated.
+ *  - PA_BAD_PARAMETER  Invalid address, port, or output handle parameter.
+ *  - PA_UNAVAILABLE    Keep-alive manager is unavailable.
+ *  - PA_UNSUPPORTED    Operation is not supported by the target.
+ *  - PA_FAULT          Platform failure.
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t EnableTCPMonitor
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    const TcpKeepAliveParams_t &tcpKaParams,
+    ///< [IN] TCP keep-alive parameters.
+    TcpMonitorHandle_t &monHandle
+    ///< [OUT] TCP monitor handle.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Disable and release a TCP monitor. If keep-alive offload is active for this monitor, the PA
+ * stops the offload before disabling the monitor.
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t DisableTCPMonitor
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    TcpMonitorHandle_t monHandle
+    ///< [IN] TCP monitor handle.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Start TCP keep-alive offload for an enabled TCP monitor.
+ *
+ * A monitor can have only one active offload through this PA at a time. Repeated starts for the
+ * same monitor return PA_DUPLICATE until the offload is stopped.
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t StartTCPKeepAliveOffload
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    TcpMonitorHandle_t monHandle,
+    ///< [IN] TCP monitor handle.
+    uint32_t interval,
+    ///< [IN] Keep-alive interval in milliseconds.
+    TcpKeepAliveOffloadHandle_t &handle
+    ///< [OUT] TCP keep-alive offload handle.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Stop a TCP keep-alive offload.
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t StopTCPKeepAliveOffload
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    TcpKeepAliveOffloadHandle_t handle
+    ///< [IN] TCP keep-alive offload handle.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set data restrict mode for active data calls.
+ *
+ * Null callbacks are accepted. If validation fails before a platform request is issued and a
+ * callback was supplied, the PA invokes the callback immediately with the same error returned by
+ * this function. PA-owned callbacks are not invoked after Deinit() completes.
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t SetDataRestrictMode
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    FilterModeInfo_t mode
+    ///< [IN] Data restrict mode.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Request current data restrict mode.
+ *
+ * The callback must be non-null because the mode is returned asynchronously.
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t RequestDataRestrictMode
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    FilterModeInfo_t &mode
+    ///< [OUT] Data restrict mode.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Add a data restrict filter rule.
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t AddDataRestrictFilter
+(
+    SlotId_e slotID,
+    ///< [IN] The SIM slot ID.
+    const IpFilter_t &filter
+    ///< [IN] Data restrict filter.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Remove all configured data restrict filter rules.
+ *
+ * Removing filters when no filters are configured is accepted and forwarded to the platform.
+ */
+//--------------------------------------------------------------------------------------------------
+TAF_PA_SHARED taf_pa_result_t RemoveAllDataRestrictFilters
+(
+    SlotId_e slotID
+    ///< [IN] The SIM slot ID.
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -1561,30 +1896,56 @@ TAF_PA_SHARED taf_pa_result_t RemoveDataCallEventsCallback
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Start a data session. Events will be provided via taf_pa_data_CallEventsCb that is registered
- * via AddDataCallEventsCallback()
+ * Start a data session with a request-specific operation result callback.
+ * The callback is invoked only if this API returns TAF_PA_OK. If this API returns any other
+ * result, the callback is not invoked and the return value is the final operation result.
+ * TAF_PA_UNAVAILABLE is returned if the phone or connection manager is not ready; an immediate
+ * TelSDK dispatch failure returns TAF_PA_FAULT.
  *
- * @return TAF_PA_OK on success. Wait for callback for final status.
+ * The operation-result callback's dataCallInfo snapshot is populated only when the overall
+ * data-call status is CONNECTED; otherwise it remains default-initialized. The snapshot is not a
+ * state event. Use RequestDataCallsListAsync() when the current list of active calls is required.
+ *
+ * The context pointer is not interpreted by PA. It is present for callback API consistency and is
+ * passed back unchanged to the operation-result callback.
+ *
+ * State changes are delivered independently through taf_pa_data_CallEventsCb. OSS is responsible
+ * for managing its own operation timer and should wait up to 10 seconds for the CONNECTED event
+ * for this data call.
  */
 //--------------------------------------------------------------------------------------------------
 TAF_PA_SHARED taf_pa_result_t StartDataSessionAsync
 (
-    const DataCallStartStopParams_t& params
-                ///< [IN] The data call parameters.
+    const DataCallStartStopParams_t& params,
+    taf_pa_data_OperationCb callBack,
+    std::shared_ptr<void> context
 );
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Stop a data session. Events will be provided via taf_pa_data_CallEventsCb that is registered
- * via RegisterDataCallEventsCallback()
+ * Stop a data session with a request-specific operation result callback.
+ * The callback is invoked only if this API returns TAF_PA_OK. If this API returns any other
+ * result, the callback is not invoked and the return value is the final operation result.
+ * TAF_PA_UNAVAILABLE is returned if the phone or connection manager is not ready; an immediate
+ * TelSDK dispatch failure returns TAF_PA_FAULT.
  *
- * @return TAF_PA_OK on success. Wait for callback for final status.
+ * The operation-result callback's dataCallInfo snapshot is populated only when the overall
+ * data-call status is CONNECTED; otherwise it remains default-initialized. The snapshot is not a
+ * state event. Use RequestDataCallsListAsync() when the current list of active calls is required.
+ *
+ * The context pointer is not interpreted by PA. It is present for callback API consistency and is
+ * passed back unchanged to the operation-result callback.
+ *
+ * State changes are delivered independently through taf_pa_data_CallEventsCb. OSS is responsible
+ * for managing its own operation timer and should wait up to 10 seconds for the DISCONNECTED event
+ * for this data call.
  */
 //--------------------------------------------------------------------------------------------------
 TAF_PA_SHARED taf_pa_result_t StopDataSessionAsync
 (
-    const DataCallStartStopParams_t &params
-                ///< [IN] The data call parameters.
+    const DataCallStartStopParams_t &params,
+    taf_pa_data_OperationCb callBack,
+    std::shared_ptr<void> context
 );
 
 //--------------------------------------------------------------------------------------------------
@@ -1605,8 +1966,17 @@ using taf_pa_data_RequestCallListCb =
 //--------------------------------------------------------------------------------------------------
 /**
  * Request list of all active data calls. Events will be provided via taf_pa_data_RequestCallListCb.
+ * Multiple requests may be pending concurrently. Each TelSDK response is delivered to the callback
+ * for its corresponding request; responses may arrive in any order, and callbacks for different
+ * requests may run concurrently on TelSDK callback threads. Callback implementations must be
+ * thread-safe and must not assume they run on the thread that issued the request.
  *
- * @return TAF_PA_OK on success. Wait for callback for final status.
+ * @return TAF_PA_OK if the request was accepted; wait for its callback for the final status. An
+ * immediate error return means the callback will not be invoked. PA does not impose an operation
+ * timeout; the caller is responsible for timeout handling. A caller-side timeout does not cancel
+ * the request, so its callback may still arrive later and should be ignored if no longer relevant.
+ * PA does not coordinate outstanding requests with Deinit; whether their callbacks arrive depends
+ * on TelSDK behavior.
  */
 //--------------------------------------------------------------------------------------------------
 TAF_PA_SHARED taf_pa_result_t RequestDataCallsListAsync

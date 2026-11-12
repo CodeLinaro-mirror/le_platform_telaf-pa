@@ -5,8 +5,6 @@
 
 #include "tafFilePa.h"
 #include "tafInternalCommonPa.h"
-#include <stdatomic.h>
-#include <stdbool.h>
 #include <sys/sendfile.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -70,7 +68,7 @@ static bool Initialized = false;
 static char BackupStorage[TAF_PA_FILE_MAX_BACKUP_DIR] = {0};
 static uint32_t MaxFileSize = TAF_PA_FILE_DEFAULT_MAX_SIZE;
 static uint16_t MaxFileCount = TAF_PA_FILE_DEFAULT_MAX_COUNT;
-static taf_pa_file_ErrorHandler_t ErrorHandlerFunc = NULL;
+static taf_pa_file_ErrorHandler_t ErrorHandlerFunc = nullptr;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -250,7 +248,7 @@ static taf_pa_result_t CalculateFileCRC32C
             break;
         }
 
-        crc = UpdateCRC32C(crc, buffer, (size_t)bytesRead);
+        crc = UpdateCRC32C(crc, buffer, static_cast<size_t>(bytesRead));
     }
 
     close(fd);
@@ -310,7 +308,7 @@ static taf_pa_result_t CalculateFdCRC32C
             return TAF_PA_FAULT;
         }
 
-        crc = UpdateCRC32C(crc, buffer, (size_t)bytesRead);
+        crc = UpdateCRC32C(crc, buffer, static_cast<size_t>(bytesRead));
         offset += bytesRead;
     }
 
@@ -477,7 +475,7 @@ static uint16_t CountBackupFiles
     }
 
     struct dirent* entryPtr;
-    while ((entryPtr = readdir(dirPtr)) != NULL)
+    while ((entryPtr = readdir(dirPtr)) != nullptr)
     {
         // Skip "*.tmp" leftovers from a CopyFileContent() that got interrupted (crash/power loss)
         // before its final rename(): they are not valid backups and must not count against
@@ -673,7 +671,7 @@ static taf_pa_result_t CopySELinuxContext
     const char* targetPathPtr
 )
 {
-    char* secContextPtr = NULL;
+    char* secContextPtr = nullptr;
     errno = 0;
     int contextLength = fgetfilecon(sourceFd, &secContextPtr);
     if (contextLength < 0)
@@ -690,13 +688,12 @@ static taf_pa_result_t CopySELinuxContext
     taf_pa_result_t result = TAF_PA_OK;
     if (fsetfilecon(targetFd, secContextPtr) < 0)
     {
-        TAF_PA_ERROR("Failed to set SELinux context on %s from %s, errno: %d",
+        TAF_PA_WARN("Failed to set SELinux context on %s from %s, errno: %d",
                  targetPathPtr, sourcePathPtr, errno);
-        result = TAF_PA_FAULT;
     }
 
     freecon(secContextPtr);
-    return result;
+    return TAF_PA_OK;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -813,7 +810,7 @@ static taf_pa_result_t CopyFileContent
 
     while (remaining > 0)
     {
-        ssize_t copied = sendfile(outputFd, inputFd, &offset, (size_t)remaining);
+        ssize_t copied = sendfile(outputFd, inputFd, &offset, static_cast<size_t>(remaining));
         if (copied < 0)
         {
             if (errno == EINTR)
@@ -970,7 +967,7 @@ static taf_pa_result_t BackUpFileAndSELinuxContext
  *       backup creation are two separate steps with no lock spanning them, so two concurrent
  *       callers could each see room for one more backup and both create one, exceeding
  *       MaxFileCount by one. Not addressed here: see the single-threaded-caller note above
- *       taf_pa_file_Init() in tafFilePa.h - this module has exactly one caller and it never
+ *       taf_pa_file_Init() in tafFilePa.hpp - this module has exactly one caller and it never
  *       invokes these entry points concurrently, so this window cannot be hit in practice.
  */
 //--------------------------------------------------------------------------------------------------
@@ -1506,7 +1503,7 @@ int taf_pa_file_Open
             // and failing - a restore.
             TAF_PA_DEBUG("No checksum tracked yet for %s, creating its initial backup",
                      filePathPtr);
-            if (BackupFileToStorage(filePathPtr, NULL) != TAF_PA_OK)
+            if (BackupFileToStorage(filePathPtr, nullptr) != TAF_PA_OK)
             {
                 TAF_PA_ERROR("Failed to create initial backup for %s", filePathPtr);
                 ReportError(TAF_PA_FILE_ERR_BACKUP, filePathPtr);
@@ -1641,7 +1638,7 @@ int taf_pa_file_Close
     // falls back to a path-based checksum right after close() below. The window this opens
     // between close() and the path-based re-read is not a concurrency hazard here: this PA is
     // only ever driven by the single-threaded KeyStore service (see the note above
-    // taf_pa_file_Init() in tafFilePa.h), so no other thread/caller can touch actualPath in
+    // taf_pa_file_Init() in tafFilePa.hpp), so no other thread/caller can touch actualPath in
     // between.
     char crcStr[TAF_PA_FILE_CRC_STR_SIZE] = {0};
     taf_pa_result_t crcResult = TAF_PA_FAULT;

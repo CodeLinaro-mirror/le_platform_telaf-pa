@@ -16,15 +16,22 @@
 
 #include "telux/data/DataDefines.hpp"
 #include "telux/data/DataFactory.hpp"
+#include "telux/data/DataFilterManager.hpp"
+#include "telux/data/IpFilter.hpp"
+#include "telux/data/KeepAliveManager.hpp"
 #include "telux/common/CommonDefines.hpp"
 #include "telux/common/Utils.hpp"
 
 #include <map>
 #include <mutex>
+#include <set>
 #include <future>
 #include <atomic>
-#include <chrono>
 #include <shared_mutex>
+#include <condition_variable>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
 
 namespace taf
 {
@@ -71,10 +78,19 @@ namespace data
         std::shared_ptr<void> context;
     };
 
-    struct RequestDataCallListCallbackEntry_t
+    // Callback state is owned by the TelSDK lambda for this individual request. Keeping it
+    // request-local replaces the former shared callback slot and allows concurrent requests to
+    // complete independently. This is not a registry used to coordinate requests with Deinit.
+    struct DataCallListRequestContext_t
     {
         taf_pa_data_RequestCallListCb callback;
         std::shared_ptr<void> context;
+        // The query is issued on the manager for this phone, and the stateless parser needs the
+        // phone ID to populate each returned call snapshot.
+        PhoneId_e phoneId = PhoneId_e::INVALID;
+        // Suppress duplicate TelSDK responses for this request only; this does not track its
+        // lifetime relative to Deinit.
+        std::atomic<bool> completed = {false};
     };
 
     // Class to handle TelSDK callbacks.
@@ -94,7 +110,7 @@ namespace data
         void onServiceStatusChange(telux::common::ServiceStatus status) override;
         void onThroughputInfoAvailable(
             const std::vector<telux::data::ThroughputInfo> &info) override;
-        void ParseIDataCall(
+        taf_pa_result_t ParseIDataCall(
             const std::shared_ptr<telux::data::IDataCall> &iCall,
             DataCallEventInfo_t &dataCallInfo);
 
@@ -126,6 +142,87 @@ namespace data
         );
     };
 
+    class TafPaTeluxKeepAlive
+    {
+    public:
+        TafPaTeluxKeepAlive(const TafPaTeluxKeepAlive &) = delete;
+        TafPaTeluxKeepAlive &operator=(const TafPaTeluxKeepAlive &) = delete;
+
+        static TafPaTeluxKeepAlive &GetInstance();
+
+        taf_pa_result_t Init();
+        taf_pa_result_t Deinit();
+
+        taf_pa_result_t PaEnableTCPMonitor(
+            taf::pa::data::SlotId_e slotId,
+            const TcpKeepAliveParams_t &tcpKaParams,
+            TcpMonitorHandle_t &monHandle);
+        taf_pa_result_t PaDisableTCPMonitor(taf::pa::data::SlotId_e slotId, TcpMonitorHandle_t monHandle);
+        taf_pa_result_t PaStartTCPKeepAliveOffload(
+            taf::pa::data::SlotId_e slotId,
+            TcpMonitorHandle_t monHandle,
+            uint32_t interval,
+            TcpKeepAliveOffloadHandle_t &handle);
+        taf_pa_result_t PaStopTCPKeepAliveOffload(taf::pa::data::SlotId_e slotId, TcpKeepAliveOffloadHandle_t handle);
+
+    private:
+        TafPaTeluxKeepAlive() = default;
+
+        static bool IsValidTcpKaParams(const TcpKeepAliveParams_t &tcpKaParams);
+        static telux::data::TCPKAParams ConvertTcpKaParams(const TcpKeepAliveParams_t &tcpKaParams);
+
+        std::mutex mutex_;
+        bool initialized_ = false;
+        std::map<SlotId, std::shared_ptr<telux::data::IKeepAliveManager>> keepAliveManagersMap_;
+        std::set<TcpMonitorHandle_t> monitorHandles_;
+        std::map<TcpKeepAliveOffloadHandle_t, TcpMonitorHandle_t> offloadHandles_;
+    };
+
+    class TafPaTeluxDataFilter
+    {
+    public:
+        TafPaTeluxDataFilter(const TafPaTeluxDataFilter &) = delete;
+        TafPaTeluxDataFilter &operator=(const TafPaTeluxDataFilter &) = delete;
+
+        static TafPaTeluxDataFilter &GetInstance();
+
+         taf_pa_result_t Init();
+         taf_pa_result_t Deinit();
+
+         taf_pa_result_t PaSetDataRestrictMode(
+             taf::pa::data::SlotId_e  slotId,
+             FilterModeInfo_t mode);
+         taf_pa_result_t PaRequestDataRestrictMode(taf::pa::data::SlotId_e  slotId, FilterModeInfo_t &mode);
+         taf_pa_result_t PaAddDataRestrictFilter(
+             taf::pa::data::SlotId_e  slotId,
+             const IpFilter_t &filter);
+         taf_pa_result_t PaRemoveAllDataRestrictFilters(taf::pa::data::SlotId_e  slotId);
+
+    private:
+        TafPaTeluxDataFilter() = default;
+
+        taf_pa_result_t ConvertFilter(
+            const IpFilter_t &filter,
+            std::shared_ptr<telux::data::IIpFilter> &sdkFilter) const;
+        void RemoveFilterKey(const std::string &key);
+
+        static bool IsValidMode(FilterMode_e mode);
+        static bool IsValidDataRestrictMode(const FilterModeInfo_t &mode);
+        static bool IsValidFilter(const IpFilter_t &filter);
+        static bool IsValidPortInfo(const PortInfo_t &portInfo);
+        static std::string BuildFilterKey(const IpFilter_t &filter);
+        static telux::data::DataRestrictMode ConvertDataRestrictMode(
+            const FilterModeInfo_t &mode);
+        static FilterModeInfo_t ConvertDataRestrictMode(
+            const telux::data::DataRestrictMode &mode);
+
+         std::mutex mutex_;
+         bool initialized_ = false;
+         std::atomic<bool> callbacksEnabled_ = {false};
+         std::map<SlotId, std::shared_ptr<telux::data::IDataFilterManager>> dataFilterManagersMap_;
+         std::vector<std::string> configuredFilterKeys_;
+    };
+
     class TafPaTeluxDataConnection
     {
     public:
@@ -155,11 +252,15 @@ namespace data
 
         taf_pa_result_t PaStartDataSessionAsync
         (
-            const DataCallStartStopParams_t& params
+            const DataCallStartStopParams_t& params,
+            taf_pa_data_OperationCb callback,
+            std::shared_ptr<void> context
         );
         taf_pa_result_t PaStopDataSessionAsync
         (
-            const DataCallStartStopParams_t& params
+            const DataCallStartStopParams_t& params,
+            taf_pa_data_OperationCb callback,
+            std::shared_ptr<void> context
         );
         taf_pa_result_t PaRequestDataCallsListAsync
         (
@@ -279,8 +380,6 @@ namespace data
             std::vector<ThroughputInfo_t> &throughputInfoList
         );
 
-        void resetCallListClientEntry();
-
         taf_pa_result_t PaGetMtuByInterfaceName
         (
             const std::string& interfaceName,
@@ -323,20 +422,14 @@ namespace data
                                                                          dataConnectionManagersMap_;
         std::map<SlotId, std::shared_ptr<telux::data::IDataConnectionListener>>
                                                                         dataConnectionListenersMap_;
-        std::map<SlotId, std::shared_ptr<TafPaTeluxDataConnectionListener>>
-                                                              tafPaTeluxDataConnectionListenersMap_;
 
         // List data calls management.
         static void onRequestDataCallList
         (
+            const std::shared_ptr<DataCallListRequestContext_t> &request,
             const std::vector<std::shared_ptr<telux::data::IDataCall>> &dataCalls,
             telux::common::ErrorCode error
         );
-        std::atomic<bool> bRequestCallListInProgress_ = false;
-        RequestDataCallListCallbackEntry_t requestCallListClientEntry_ = {nullptr,nullptr};
-        // Mutex protecting requestCallListClientEntry_:
-        // ensures the entry write and the atomic flag set are atomic w.r.t. the SB read.
-        std::mutex requestCallListMutex_;
 
         // Used to track if connection listeners are registered or not.
         bool bDataConnectionListenersRegistered_[MAX_SLOT_NUM] = {false,false};
@@ -347,18 +440,11 @@ namespace data
         // Mutex for protecting dataConnectionManagersSubsysStateMap_ (NB reads, SB writes).
         std::shared_mutex dataConnSubsysStateMapMtx_;
 
-        // Functions
-        // The callback fuction for TelSDK startDataCall()
-        static void startDataCallCallback
+        void invokeDataCallOperationCallback
         (
-            const std::shared_ptr<telux::data::IDataCall> &iCall,
-            telux::common::ErrorCode errorCode
-        );
-        // The callback fuction for TelSDK stoptDataCall()
-        static void stopDataCallCallback
-        (
-            const std::shared_ptr<telux::data::IDataCall> &iCall,
-            telux::common::ErrorCode errorCode
+            taf_pa_data_OperationCb callback,
+            std::shared_ptr<void> context,
+            const DataCallOperationResult_t &result
         );
 
         void initDataConnectionManagers();

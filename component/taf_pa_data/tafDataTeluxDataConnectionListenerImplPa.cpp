@@ -172,12 +172,20 @@ taf_pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::updateBitRate
     return TAF_PA_FAULT;
 }
 
-void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
+taf_pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
 (
     const std::shared_ptr<telux::data::IDataCall> &iDataCall,
     DataCallEventInfo_t &eventInfo
 )
+try
 {
+    eventInfo = DataCallEventInfo_t{};
+    if (!iDataCall)
+    {
+        TAF_PA_WARN("Cannot parse null SDK IDataCall");
+        return TAF_PA_FAULT;
+    }
+
     auto &teluxPaData = TafPaTeluxData::GetInstance();
     taf::pa::data::PhoneId_e phoneId;
 
@@ -186,8 +194,12 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
     eventInfo.slotId = taf::pa::data::Utils::ConvertSlotId(iDataCall->getSlotId());
 
     taf_pa_result_t result = teluxPaData.PaGetPhoneIdFromSlotId(eventInfo.slotId, phoneId);
-    TAF_PA_ERROR_IF_RET_NIL(TAF_PA_OK != result, "PaGetPhoneIdFromSlotId err: %d. Dropping event",
-                                                                                          result);
+    if (TAF_PA_OK != result)
+    {
+        TAF_PA_ERROR("PaGetPhoneIdFromSlotId err: %d. Dropping data-call info", result);
+        eventInfo = DataCallEventInfo_t{};
+        return result;
+    }
     telux::data::IpFamilyInfo IPv4Info = iDataCall->getIpv4Info();
     telux::data::IpFamilyInfo IPv6Info = iDataCall->getIpv6Info();
 
@@ -328,6 +340,20 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::ParseIDataCall
         TAF_PA_DEBUG("iDataCall(%p) removed from callStatusMap_. Size: %zu", rawPtr,
                                                                             callStatusMap_.size());
     }
+
+    return TAF_PA_OK;
+}
+catch (const std::exception &error)
+{
+    TAF_PA_ERROR("Failed to parse TelSDK data-call info: %s", error.what());
+    eventInfo = DataCallEventInfo_t{};
+    return TAF_PA_FAULT;
+}
+catch (...)
+{
+    TAF_PA_ERROR("Unknown exception while parsing TelSDK data-call info");
+    eventInfo = DataCallEventInfo_t{};
+    return TAF_PA_FAULT;
 }
 
 taf_pa_result_t taf::pa::data::TafPaTeluxDataConnectionListener::GetMtuByInterfaceName
@@ -375,11 +401,29 @@ void taf::pa::data::TafPaTeluxDataConnectionListener::onDataCallInfoChanged
     SET_SDK_THREAD_NAME();
     TAF_PA_INFO("Slot ID: %d", TO_INT(slotId_));
 
-    taf::pa::data::TafPaTeluxDataConnection::LogDataCallInfo(iDataCall, __func__);
+    if (!iDataCall)
+    {
+        TAF_PA_WARN("Ignoring null IDataCall info-change callback");
+        return;
+    }
+
+    try
+    {
+        taf::pa::data::TafPaTeluxDataConnection::LogDataCallInfo(iDataCall, __func__);
+    }
+    catch (...)
+    {
+        TAF_PA_WARN("Failed to log IDataCall info-change callback");
+    }
     DataCallEventInfo_t eventInfo;
     // Parse IDataCall into call data info structure.
     // Note: ParseIDataCall() handles mutex locking internally for callStatusMap_ access
-    ParseIDataCall(iDataCall, eventInfo);
+    const taf_pa_result_t parseResult = ParseIDataCall(iDataCall, eventInfo);
+    if (TAF_PA_OK != parseResult)
+    {
+        TAF_PA_WARN("Failed to parse IDataCall info-change callback: %d", parseResult);
+        return;
+    }
     // Send the data call event info to registered clients
     auto &teluxPaDataConn = taf::pa::data::TafPaTeluxDataConnection::GetInstance();
     teluxPaDataConn.PaSendDataCallEventInfoToClients(eventInfo);
